@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Skyfall Mage2 - WebGPU Material Field Test</title>
+    <link rel="icon" href="data:," />
+    <style>
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: #050507;
+        color: #d7e4ff;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        touch-action: none;
+        user-select: none;
+      }
+
+      canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+        background: #050507;
+      }
+
+      .unsupported {
+        position: fixed;
+        inset: 0;
+        display: none;
+        place-items: center;
+        padding: 24px;
+        background: #050507;
+        color: #d7e4ff;
+        text-align: center;
+        line-height: 1.6;
+      }
+
+      .unsupported.is-visible {
+        display: grid;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="fieldCanvas" aria-label="WebGPU material field test"></canvas>
+    <div id="unsupported" class="unsupported">
+      <div>
+        <strong>WebGPU를 사용할 수 없습니다.</strong><br />
+        최신 Chrome 또는 Edge에서 HTTPS/GitHub Pages로 실행해 주세요.
+      </div>
+    </div>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
