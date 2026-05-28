@@ -446,14 +446,16 @@ fn materialColor(cell: u32, x: u32, y: u32) -> vec4<f32> {
     return vec4<f32>(0.08 + n * 0.04, 0.30 + n * 0.08, 0.85 + n * 0.13, 1.0);
   }
   if (mat == FIRE) {
-    return vec4<f32>(1.0, 0.18 + l * 0.70, 0.02 + n * 0.12, 1.0);
+    let heat = clamp(l * 2.6 + n * 0.22, 0.0, 1.0);
+    return vec4<f32>(1.35 + heat * 1.35, 0.32 + heat * 1.25, 0.03 + heat * 0.22 + n * 0.08, 1.0);
   }
   if (mat == SMOKE) {
     let a = 0.22 + l * 0.48;
     return vec4<f32>(a + n * 0.06, a + n * 0.05, a + n * 0.04, 1.0);
   }
   if (mat == SPARK) {
-    return vec4<f32>(1.0, 0.88 + n * 0.12, 0.28 + l * 0.5, 1.0);
+    let heat = clamp(0.8 + l * 0.8 + n * 0.25, 0.0, 1.8);
+    return vec4<f32>(2.2 + heat * 1.2, 1.55 + heat * 0.85, 0.45 + heat * 0.35, 1.0);
   }
 
   let sky = 0.025 + f32(y) / f32(max(params.height, 1u)) * 0.035;

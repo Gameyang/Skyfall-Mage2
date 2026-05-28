@@ -51,7 +51,7 @@ fn sampleBox(tex: texture_2d<f32>, uv: vec2<f32>, radius: f32) -> vec3<f32> {
 
 fn bloomMask(color: vec3<f32>) -> f32 {
   let luma = max(max(color.r, color.g), color.b);
-  return smoothstep(params.threshold, 1.0, luma);
+  return smoothstep(params.threshold, params.threshold + 1.25, luma);
 }
 
 @fragment

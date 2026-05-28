@@ -53,4 +53,4 @@ This is a GPU material simulation experiment, not the final v2 battle renderer.
 
 ## Bloom Postprocessing
 
-Bloom lives in `bloomPostProcess.js` and `bloomPostProcess.wgsl`. Runtime tuning is intentionally limited to the `BLOOM_CONFIG` constant in `main.js` so this tech test stays focused on the render chain instead of UI controls.
+Bloom lives in `bloomPostProcess.js` and `bloomPostProcess.wgsl`. The scene and bloom chain use `rgba16float` so fire and spark colors can exceed `1.0` before the final canvas composite. Runtime tuning is intentionally limited to the `BLOOM_CONFIG` constant in `main.js` so this tech test stays focused on the render chain instead of UI controls.

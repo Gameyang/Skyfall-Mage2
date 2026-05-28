@@ -4,7 +4,7 @@ const DEFAULT_OPTIONS = {
   intensity: 0.75,
   radius: 1.0,
   levels: 5,
-  bloomFormat: 'rgba8unorm',
+  bloomFormat: 'rgba16float',
   clearColor: { r: 0.02, g: 0.02, b: 0.03, a: 1 },
 };
 

@@ -17,13 +17,15 @@ const TOUCH_WATER_RADIUS = 6;
 const EXPLOSION_RADIUS = 18;
 const EXPLOSION_FRAMES = 5;
 const DPR_LIMIT = 2;
+const HDR_SCENE_FORMAT = 'rgba16float';
 const SCENE_CLEAR_COLOR = { r: 0.02, g: 0.02, b: 0.03, a: 1 };
 const BLOOM_CONFIG = Object.freeze({
   enabled: true,
-  threshold: 0.72,
-  intensity: 0.75,
+  threshold: 1.05,
+  intensity: 0.58,
   radius: 1.0,
   levels: 5,
+  bloomFormat: HDR_SCENE_FORMAT,
   clearColor: SCENE_CLEAR_COLOR,
 });
 
@@ -292,7 +294,7 @@ function resizeRenderTargets(state) {
     state.sceneTexture.destroy();
   }
 
-  state.sceneTexture = createSceneTexture(state.device, state.format, width, height);
+  state.sceneTexture = createSceneTexture(state.device, state.sceneFormat, width, height);
   state.sceneTextureView = state.sceneTexture.createView();
   state.renderTargetWidth = width;
   state.renderTargetHeight = height;
@@ -402,7 +404,7 @@ async function createWebGpuState() {
   const { computePipeline, renderPipeline } = await createPipelines(
     device,
     shaderModule,
-    format,
+    HDR_SCENE_FORMAT,
     computeBindGroupLayout,
     renderBindGroupLayout,
   );
@@ -454,6 +456,7 @@ async function createWebGpuState() {
     device,
     context,
     format,
+    sceneFormat: HDR_SCENE_FORMAT,
     computePipeline,
     renderPipeline,
     computeBindGroups,
