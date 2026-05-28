@@ -1,3 +1,5 @@
+import { createBloomPostProcess } from './bloomPostProcess.js';
+
 const GRID_WIDTH = 256;
 const GRID_HEIGHT = 144;
 const WORKGROUP_SIZE = 8;
@@ -15,6 +17,15 @@ const TOUCH_WATER_RADIUS = 6;
 const EXPLOSION_RADIUS = 18;
 const EXPLOSION_FRAMES = 5;
 const DPR_LIMIT = 2;
+const SCENE_CLEAR_COLOR = { r: 0.02, g: 0.02, b: 0.03, a: 1 };
+const BLOOM_CONFIG = Object.freeze({
+  enabled: true,
+  threshold: 0.72,
+  intensity: 0.75,
+  radius: 1.0,
+  levels: 5,
+  clearColor: SCENE_CLEAR_COLOR,
+});
 
 const MATERIAL = {
   EMPTY: 0,
@@ -263,6 +274,31 @@ async function createPipelines(device, shaderModule, format, computeBindGroupLay
   };
 }
 
+function createSceneTexture(device, format, width, height) {
+  return device.createTexture({
+    label: 'material-scene-texture',
+    size: { width, height },
+    format,
+    usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+  });
+}
+
+function resizeRenderTargets(state) {
+  const width = Math.max(1, canvas.width);
+  const height = Math.max(1, canvas.height);
+  if (state.renderTargetWidth === width && state.renderTargetHeight === height) return;
+
+  if (state.sceneTexture) {
+    state.sceneTexture.destroy();
+  }
+
+  state.sceneTexture = createSceneTexture(state.device, state.format, width, height);
+  state.sceneTextureView = state.sceneTexture.createView();
+  state.renderTargetWidth = width;
+  state.renderTargetHeight = height;
+  state.bloom.resize(width, height);
+}
+
 async function createWebGpuState() {
   if (!navigator.gpu) {
     throw new Error('WebGPU is required. This test does not include a CPU, Canvas2D, or WebGL fallback.');
@@ -370,6 +406,7 @@ async function createWebGpuState() {
     computeBindGroupLayout,
     renderBindGroupLayout,
   );
+  const bloom = await createBloomPostProcess(device, format, BLOOM_CONFIG);
 
   const computeBindGroups = [
     device.createBindGroup({
@@ -416,12 +453,18 @@ async function createWebGpuState() {
   return {
     device,
     context,
+    format,
     computePipeline,
     renderPipeline,
     computeBindGroups,
     renderBindGroups,
     paramsBuffer,
     emitterBuffer,
+    bloom,
+    sceneTexture: null,
+    sceneTextureView: null,
+    renderTargetWidth: 0,
+    renderTargetHeight: 0,
     currentBufferIndex: 0,
     frame: 0,
   };
@@ -444,6 +487,7 @@ function writeFrameData(state, emitterPayload) {
 
 function renderFrame(state) {
   resizeCanvas();
+  resizeRenderTargets(state);
 
   const emitterPayload = buildEmitterBuffer();
   writeFrameData(state, emitterPayload);
@@ -460,13 +504,12 @@ function renderFrame(state) {
 
   state.currentBufferIndex = 1 - state.currentBufferIndex;
 
-  const textureView = state.context.getCurrentTexture().createView();
   const renderPass = encoder.beginRenderPass({
     label: 'material-render-pass',
     colorAttachments: [
       {
-        view: textureView,
-        clearValue: { r: 0.02, g: 0.02, b: 0.03, a: 1 },
+        view: state.sceneTextureView,
+        clearValue: SCENE_CLEAR_COLOR,
         loadOp: 'clear',
         storeOp: 'store',
       },
@@ -476,6 +519,9 @@ function renderFrame(state) {
   renderPass.setBindGroup(0, state.renderBindGroups[state.currentBufferIndex]);
   renderPass.draw(3, 1, 0, 0);
   renderPass.end();
+
+  const canvasView = state.context.getCurrentTexture().createView();
+  state.bloom.render(encoder, state.sceneTextureView, canvasView);
 
   state.device.queue.submit([encoder.finish()]);
   state.frame += 1;

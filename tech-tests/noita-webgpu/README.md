@@ -44,8 +44,13 @@ https://{account}.github.io/{repo}/tech-tests/noita-webgpu/
 ## Current Scope
 
 - WebGPU compute pass updates the material grid on GPU storage buffers.
-- WebGPU render pass draws the storage-buffer result directly to a full-screen canvas.
+- WebGPU render pass draws the storage-buffer result into an offscreen scene texture.
+- Bloom postprocessing extracts bright fire/spark pixels, builds a mip-chain blur, and composites back to the canvas.
 - Emitters are packed into a GPU storage buffer each frame.
 - Materials: empty, solid, sand, water, fire, smoke, spark.
 
 This is a GPU material simulation experiment, not the final v2 battle renderer.
+
+## Bloom Postprocessing
+
+Bloom lives in `bloomPostProcess.js` and `bloomPostProcess.wgsl`. Runtime tuning is intentionally limited to the `BLOOM_CONFIG` constant in `main.js` so this tech test stays focused on the render chain instead of UI controls.
