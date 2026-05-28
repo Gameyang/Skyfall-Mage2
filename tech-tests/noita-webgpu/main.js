@@ -162,12 +162,13 @@ function buildEmitterBuffer() {
 
   for (const pointer of activePointers.values()) {
     const touchWater = pointer.pointerType === 'touch' && pointerCount > 1;
+    const waterBrush = touchWater || pointer.material === MATERIAL.WATER;
     count = pushEmitter(words, count, {
       material: touchWater ? MATERIAL.WATER : pointer.material,
       x: pointer.x,
       y: pointer.y,
-      radius: touchWater ? TOUCH_WATER_RADIUS : BRUSH_RADIUS,
-      strength: touchWater ? 255 : 222,
+      radius: waterBrush ? TOUCH_WATER_RADIUS : BRUSH_RADIUS,
+      strength: waterBrush ? 255 : 222,
       seed: pointer.seed,
       flags: 0,
     });

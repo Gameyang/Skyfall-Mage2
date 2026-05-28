@@ -139,6 +139,25 @@ fn sandTarget(x: i32, y: i32) -> vec2<i32> {
   return vec2<i32>(x, y);
 }
 
+fn waterPressure(x: i32, y: i32) -> u32 {
+  var pressure = 0u;
+
+  if (material(getCell(x, y - 1)) == WATER) {
+    pressure += 1u;
+  }
+  if (material(getCell(x, y - 2)) == WATER) {
+    pressure += 1u;
+  }
+  if (material(getCell(x - 1, y - 1)) == WATER) {
+    pressure += 1u;
+  }
+  if (material(getCell(x + 1, y - 1)) == WATER) {
+    pressure += 1u;
+  }
+
+  return pressure;
+}
+
 fn waterTarget(x: i32, y: i32) -> vec2<i32> {
   let below = material(getCell(x, y + 1));
   if (canFluidEnter(below)) {
@@ -147,7 +166,11 @@ fn waterTarget(x: i32, y: i32) -> vec2<i32> {
 
   let supported = canSupportWater(below);
   let flowRoll = randByte(x, y, 22u);
-  if (supported && flowRoll < 112u && material(getCell(x, y - 1)) != WATER) {
+  let pressure = waterPressure(x, y);
+  if (supported && pressure == 0u && flowRoll < 232u) {
+    return vec2<i32>(x, y);
+  }
+  if (supported && pressure == 1u && flowRoll < 76u) {
     return vec2<i32>(x, y);
   }
 
@@ -161,7 +184,7 @@ fn waterTarget(x: i32, y: i32) -> vec2<i32> {
   let firstMat = material(getCell(x + first, y));
   if (canFluidEnter(firstMat)) {
     let firstBelow = material(getCell(x + first, y + 1));
-    if (!supported || canSupportWater(firstBelow) || flowRoll > 206u) {
+    if (!supported || canSupportWater(firstBelow) || pressure > 1u || flowRoll > 236u) {
       return vec2<i32>(x + first, y);
     }
   }
@@ -169,7 +192,7 @@ fn waterTarget(x: i32, y: i32) -> vec2<i32> {
   let secondMat = material(getCell(x + second, y));
   if (canFluidEnter(secondMat)) {
     let secondBelow = material(getCell(x + second, y + 1));
-    if (!supported || canSupportWater(secondBelow) || flowRoll > 226u) {
+    if (!supported || canSupportWater(secondBelow) || pressure > 1u || flowRoll > 242u) {
       return vec2<i32>(x + second, y);
     }
   }
@@ -471,7 +494,7 @@ fn materialColor(cell: u32, x: u32, y: u32) -> vec4<f32> {
   }
   if (mat == FIRE) {
     let heat = clamp(l * 2.6 + n * 0.22, 0.0, 1.0);
-    return vec4<f32>(1.65 + heat * 1.75, 0.42 + heat * 1.50, 0.04 + heat * 0.30 + n * 0.08, 1.0);
+    return vec4<f32>(2.15 + heat * 2.35, 0.24 + heat * 0.95, 0.02 + heat * 0.16 + n * 0.04, 1.0);
   }
   if (mat == SMOKE) {
     let a = 0.22 + l * 0.48;
