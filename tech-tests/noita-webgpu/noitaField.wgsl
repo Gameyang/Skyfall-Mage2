@@ -5,6 +5,7 @@ const WATER: u32 = 3u;
 const FIRE: u32 = 4u;
 const SMOKE: u32 = 5u;
 const SPARK: u32 = 6u;
+const STEAM: u32 = 7u;
 const EMITTER_FLAG_EXPLOSION: u32 = 1u;
 
 struct SimParams {
@@ -91,11 +92,11 @@ fn randByteWithSeed(x: i32, y: i32, salt: u32, seed: u32) -> u32 {
 }
 
 fn canSandEnter(mat: u32) -> bool {
-  return mat == EMPTY || mat == WATER || mat == SMOKE || mat == FIRE;
+  return mat == EMPTY || mat == WATER || mat == SMOKE || mat == FIRE || mat == STEAM;
 }
 
 fn canFluidEnter(mat: u32) -> bool {
-  return mat == EMPTY || mat == SMOKE || mat == FIRE;
+  return mat == EMPTY || mat == SMOKE || mat == FIRE || mat == STEAM;
 }
 
 fn canSupportWater(mat: u32) -> bool {
@@ -104,6 +105,13 @@ fn canSupportWater(mat: u32) -> bool {
 
 fn canSmokeEnter(mat: u32) -> bool {
   return mat == EMPTY || mat == FIRE;
+}
+
+fn isFireNear(x: i32, y: i32) -> bool {
+  return material(getCell(x - 1, y)) == FIRE ||
+    material(getCell(x + 1, y)) == FIRE ||
+    material(getCell(x, y - 1)) == FIRE ||
+    material(getCell(x, y + 1)) == FIRE;
 }
 
 fn isWetNear(x: i32, y: i32) -> bool {
@@ -246,6 +254,10 @@ fn applyCurrentOutgoing(cell: u32, x: i32, y: i32) -> u32 {
   }
 
   if (mat == WATER) {
+    if (isFireNear(x, y) && randByte(x, y, 35u) < 168u) {
+      return pack(STEAM, 50u + (randByte(x, y, 36u) & 31u), randByte(x, y, 37u));
+    }
+
     let moveTo = waterTarget(x, y);
     if (!targetMatches(moveTo, x, y)) {
       return pack(EMPTY, 0u, 0u);
@@ -253,21 +265,31 @@ fn applyCurrentOutgoing(cell: u32, x: i32, y: i32) -> u32 {
     return cell;
   }
 
-  if (mat == SMOKE) {
+  if (mat == SMOKE || mat == STEAM) {
     let age = life(cell);
     if (age <= 1u) {
+      if (mat == STEAM && randByte(x, y, 38u) < 96u) {
+        return pack(WATER, 0u, randByte(x, y, 39u));
+      }
       return pack(EMPTY, 0u, 0u);
     }
     let moveTo = smokeTarget(x, y);
     if (!targetMatches(moveTo, x, y)) {
       return pack(EMPTY, 0u, 0u);
     }
+    if (mat == STEAM) {
+      let nextAge = age - 1u;
+      if (nextAge < 10u && randByte(x, y, 40u) < 28u) {
+        return pack(WATER, 0u, randByte(x, y, 41u));
+      }
+      return pack(STEAM, nextAge, aux(cell));
+    }
     return pack(SMOKE, age - 1u, aux(cell));
   }
 
   if (mat == FIRE) {
     if (isWetNear(x, y)) {
-      return pack(SMOKE, 44u + (randByte(x, y, 41u) & 15u), 0u);
+      return pack(STEAM, 52u + (randByte(x, y, 41u) & 31u), randByte(x, y, 45u));
     }
     let age = life(cell);
     if (age <= 1u) {
@@ -298,7 +320,7 @@ fn applyIncoming(outCell: u32, x: i32, y: i32) -> u32 {
   var out = outCell;
   let outMat = material(out);
 
-  if (outMat == EMPTY || outMat == SMOKE || outMat == WATER || outMat == FIRE) {
+  if (outMat == EMPTY || outMat == SMOKE || outMat == WATER || outMat == FIRE || outMat == STEAM) {
     let above = getCell(x, y - 1);
     if (material(above) == SAND && targetMatches(sandTarget(x, y - 1), x, y)) {
       return pack(SAND, 0u, aux(above));
@@ -320,7 +342,7 @@ fn applyIncoming(outCell: u32, x: i32, y: i32) -> u32 {
     }
   }
 
-  if (outMat == EMPTY || outMat == SMOKE || outMat == FIRE) {
+  if (outMat == EMPTY || outMat == SMOKE || outMat == FIRE || outMat == STEAM) {
     let waterAbove = getCell(x, y - 1);
     if (material(waterAbove) == WATER && targetMatches(waterTarget(x, y - 1), x, y)) {
       out = pack(WATER, 0u, aux(waterAbove));
@@ -338,9 +360,10 @@ fn applyIncoming(outCell: u32, x: i32, y: i32) -> u32 {
   }
 
   if (material(out) == EMPTY || material(out) == FIRE) {
-    let smokeBelow = getCell(x, y + 1);
-    if (material(smokeBelow) == SMOKE && targetMatches(smokeTarget(x, y + 1), x, y)) {
-      out = pack(SMOKE, max(life(smokeBelow), 1u) - 1u, randByte(x, y, 71u));
+    let gasBelow = getCell(x, y + 1);
+    let gasBelowMat = material(gasBelow);
+    if ((gasBelowMat == SMOKE || gasBelowMat == STEAM) && targetMatches(smokeTarget(x, y + 1), x, y)) {
+      out = pack(gasBelowMat, max(life(gasBelow), 1u) - 1u, randByte(x, y, 71u));
     }
 
     let fireBelow = getCell(x, y + 1);
@@ -374,6 +397,9 @@ fn applyBrushEmitter(cell: u32, emitter: Emitter, x: i32, y: i32) -> u32 {
   }
   if (emitter.material == SMOKE) {
     return pack(SMOKE, 42u + (roll & 47u), roll);
+  }
+  if (emitter.material == STEAM) {
+    return pack(STEAM, 42u + (roll & 47u), roll);
   }
   if (emitter.material == SPARK) {
     return pack(SPARK, 16u + (roll & 23u), roll);
@@ -503,6 +529,10 @@ fn materialColor(cell: u32, x: u32, y: u32) -> vec4<f32> {
   if (mat == SPARK) {
     let heat = clamp(0.8 + l * 0.8 + n * 0.25, 0.0, 1.8);
     return vec4<f32>(2.8 + heat * 1.45, 1.85 + heat * 1.05, 0.55 + heat * 0.45, 1.0);
+  }
+  if (mat == STEAM) {
+    let a = 0.36 + l * 0.44;
+    return vec4<f32>(a * 0.82 + n * 0.04, a * 0.94 + n * 0.05, a + n * 0.08, 1.0);
   }
 
   let sky = 0.025 + f32(y) / f32(max(params.height, 1u)) * 0.035;

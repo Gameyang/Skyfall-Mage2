@@ -37,6 +37,7 @@ const MATERIAL = {
   FIRE: 4,
   SMOKE: 5,
   SPARK: 6,
+  STEAM: 7,
 };
 
 const canvas = document.getElementById('fieldCanvas');

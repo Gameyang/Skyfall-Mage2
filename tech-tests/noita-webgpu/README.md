@@ -47,7 +47,8 @@ https://{account}.github.io/{repo}/tech-tests/noita-webgpu/
 - WebGPU render pass draws the storage-buffer result into an offscreen scene texture.
 - Bloom postprocessing extracts bright fire/spark pixels, builds a mip-chain blur, and composites back to the canvas.
 - Emitters are packed into a GPU storage buffer each frame.
-- Materials: empty, solid, sand, water, fire, smoke, spark.
+- Materials: empty, solid, sand, water, fire, smoke, spark, steam.
+- First-pass reactions: water/fire contact creates steam, and old steam can condense back into water.
 
 This is a GPU material simulation experiment, not the final v2 battle renderer.
 
