@@ -26,7 +26,7 @@
         background: #050507;
       }
 
-      .unsupported {
+      .fatal {
         position: fixed;
         inset: 0;
         display: none;
@@ -38,17 +38,23 @@
         line-height: 1.6;
       }
 
-      .unsupported.is-visible {
+      .fatal.is-visible {
         display: grid;
+      }
+
+      .fatal span {
+        display: block;
+        max-width: 560px;
+        margin-top: 8px;
       }
     </style>
   </head>
   <body>
     <canvas id="fieldCanvas" aria-label="WebGPU material field test"></canvas>
-    <div id="unsupported" class="unsupported">
+    <div id="fatal" class="fatal" role="alert">
       <div>
-        <strong>WebGPU를 사용할 수 없습니다.</strong><br />
-        최신 Chrome 또는 Edge에서 HTTPS/GitHub Pages로 실행해 주세요.
+        <strong>WebGPU is required</strong>
+        <span>This page intentionally has no CPU, Canvas2D, or WebGL fallback.</span>
       </div>
     </div>
     <script type="module" src="./main.js"></script>

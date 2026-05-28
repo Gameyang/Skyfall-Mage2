@@ -4,6 +4,18 @@ const WORKGROUP_SIZE = 8;
 const CELL_COUNT = GRID_WIDTH * GRID_HEIGHT;
 const CELL_BYTES = Uint32Array.BYTES_PER_ELEMENT;
 
+const PARAM_WORDS = 16;
+const MAX_EMITTERS = 32;
+const EMITTER_WORDS = 8;
+const EMITTER_FLAG_EXPLOSION = 1;
+const EMITTER_BYTES = MAX_EMITTERS * EMITTER_WORDS * Uint32Array.BYTES_PER_ELEMENT;
+
+const BRUSH_RADIUS = 5;
+const TOUCH_WATER_RADIUS = 6;
+const EXPLOSION_RADIUS = 18;
+const EXPLOSION_FRAMES = 5;
+const DPR_LIMIT = 2;
+
 const MATERIAL = {
   EMPTY: 0,
   SOLID: 1,
@@ -14,54 +26,67 @@ const MATERIAL = {
   SPARK: 6,
 };
 
-const BRUSH_RADIUS = 5;
-const EXPLOSION_RADIUS = 18;
-
 const canvas = document.getElementById('fieldCanvas');
-const unsupported = document.getElementById('unsupported');
+const fatal = document.getElementById('fatal');
+const activePointers = new Map();
+const burstEmitters = [];
 
-const pointer = {
-  active: false,
+let selectedMaterial = MATERIAL.FIRE;
+let lastGrid = {
   x: Math.floor(GRID_WIDTH * 0.5),
   y: Math.floor(GRID_HEIGHT * 0.35),
-  material: MATERIAL.FIRE,
+};
+let lastTap = {
+  time: 0,
+  x: lastGrid.x,
+  y: lastGrid.y,
 };
 
-let explosionFrames = 0;
-let explosionX = Math.floor(GRID_WIDTH * 0.5);
-let explosionY = Math.floor(GRID_HEIGHT * 0.5);
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
 
 function pack(material, life = 0, aux = 0) {
   return (material & 0xff) | ((life & 0xff) << 8) | ((aux & 0xff) << 16);
 }
 
-function showUnsupported(message) {
-  unsupported.classList.add('is-visible');
-  unsupported.querySelector('div').innerHTML = message;
+function randomSeed() {
+  return Math.floor(Math.random() * 0xffffffff) >>> 0;
+}
+
+function showFatal(title, detail) {
+  fatal.classList.add('is-visible');
+  fatal.querySelector('strong').textContent = title;
+  fatal.querySelector('span').textContent = detail;
 }
 
 function resizeCanvas() {
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const dpr = Math.min(window.devicePixelRatio || 1, DPR_LIMIT);
   const width = Math.max(1, Math.floor(window.innerWidth * dpr));
   const height = Math.max(1, Math.floor(window.innerHeight * dpr));
+
   if (canvas.width !== width || canvas.height !== height) {
     canvas.width = width;
     canvas.height = height;
   }
 }
 
-function pointerToGrid(event) {
+function eventToGrid(event) {
   const rect = canvas.getBoundingClientRect();
-  const nx = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
-  const ny = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
-  pointer.x = Math.max(0, Math.min(GRID_WIDTH - 1, Math.floor(nx * GRID_WIDTH)));
-  pointer.y = Math.max(0, Math.min(GRID_HEIGHT - 1, Math.floor(ny * GRID_HEIGHT)));
+  const nx = clamp((event.clientX - rect.left) / Math.max(rect.width, 1), 0, 1);
+  const ny = clamp((event.clientY - rect.top) / Math.max(rect.height, 1), 0, 1);
+
+  return {
+    x: clamp(Math.floor(nx * GRID_WIDTH), 0, GRID_WIDTH - 1),
+    y: clamp(Math.floor(ny * GRID_HEIGHT), 0, GRID_HEIGHT - 1),
+  };
 }
 
-function pickPointerMaterial(event) {
+function pickPointerMaterial(event, nextPointerCount) {
+  if (event.pointerType === 'touch' && nextPointerCount > 1) return MATERIAL.WATER;
   if (event.button === 2 || event.shiftKey) return MATERIAL.WATER;
   if (event.altKey) return MATERIAL.SAND;
-  return pointer.material;
+  return selectedMaterial;
 }
 
 function seedInitialField() {
@@ -71,7 +96,8 @@ function seedInitialField() {
     for (let x = 0; x < GRID_WIDTH; x += 1) {
       const index = y * GRID_WIDTH + x;
       const terrain =
-        GRID_HEIGHT - 10 -
+        GRID_HEIGHT -
+        10 -
         Math.floor(Math.sin(x * 0.055) * 4) -
         Math.floor(Math.sin(x * 0.017) * 5);
 
@@ -100,24 +126,163 @@ function seedInitialField() {
   return cells;
 }
 
-async function createWebGpuState() {
-  if (!navigator.gpu) {
-    showUnsupported('<strong>WebGPU를 사용할 수 없습니다.</strong><br />최신 Chrome 또는 Edge에서 HTTPS/GitHub Pages로 실행해 주세요.');
-    return null;
+function pushEmitter(words, count, emitter) {
+  if (count >= MAX_EMITTERS) return count;
+
+  const offset = count * EMITTER_WORDS;
+  words[offset] = emitter.material >>> 0;
+  words[offset + 1] = clamp(emitter.x, 0, GRID_WIDTH - 1) >>> 0;
+  words[offset + 2] = clamp(emitter.y, 0, GRID_HEIGHT - 1) >>> 0;
+  words[offset + 3] = clamp(emitter.radius, 1, 64) >>> 0;
+  words[offset + 4] = clamp(emitter.strength, 0, 255) >>> 0;
+  words[offset + 5] = emitter.seed >>> 0;
+  words[offset + 6] = emitter.flags >>> 0;
+  words[offset + 7] = 0;
+
+  return count + 1;
+}
+
+function buildEmitterBuffer() {
+  const words = new Uint32Array(MAX_EMITTERS * EMITTER_WORDS);
+  let count = 0;
+  const pointerCount = activePointers.size;
+
+  for (const pointer of activePointers.values()) {
+    const touchWater = pointer.pointerType === 'touch' && pointerCount > 1;
+    count = pushEmitter(words, count, {
+      material: touchWater ? MATERIAL.WATER : pointer.material,
+      x: pointer.x,
+      y: pointer.y,
+      radius: touchWater ? TOUCH_WATER_RADIUS : BRUSH_RADIUS,
+      strength: touchWater ? 255 : 222,
+      seed: pointer.seed,
+      flags: 0,
+    });
   }
 
-  const adapter = await navigator.gpu.requestAdapter();
+  for (const burst of burstEmitters) {
+    count = pushEmitter(words, count, {
+      material: burst.material,
+      x: burst.x,
+      y: burst.y,
+      radius: burst.radius,
+      strength: burst.strength,
+      seed: burst.seed,
+      flags: burst.flags,
+    });
+  }
+
+  return { words, count };
+}
+
+function addExplosion(x, y) {
+  burstEmitters.push({
+    material: MATERIAL.FIRE,
+    x,
+    y,
+    radius: EXPLOSION_RADIUS,
+    strength: 255,
+    seed: randomSeed(),
+    flags: EMITTER_FLAG_EXPLOSION,
+    frames: EXPLOSION_FRAMES,
+  });
+
+  while (burstEmitters.length > 12) {
+    burstEmitters.shift();
+  }
+}
+
+function ageBurstEmitters() {
+  for (let index = burstEmitters.length - 1; index >= 0; index -= 1) {
+    burstEmitters[index].frames -= 1;
+    burstEmitters[index].radius = Math.max(4, burstEmitters[index].radius - 1);
+    if (burstEmitters[index].frames <= 0) {
+      burstEmitters.splice(index, 1);
+    }
+  }
+}
+
+async function loadShader(device) {
+  const response = await fetch('./noitaField.wgsl');
+  if (!response.ok) {
+    throw new Error(`Failed to load shader: HTTP ${response.status}`);
+  }
+
+  const shaderSource = await response.text();
+  return device.createShaderModule({
+    label: 'noita-material-field-shader',
+    code: shaderSource,
+  });
+}
+
+async function createPipelines(device, shaderModule, format, computeBindGroupLayout, renderBindGroupLayout) {
+  device.pushErrorScope('validation');
+
+  const computePipelinePromise = device.createComputePipelineAsync({
+    label: 'material-simulation-pipeline',
+    layout: device.createPipelineLayout({ bindGroupLayouts: [computeBindGroupLayout] }),
+    compute: {
+      module: shaderModule,
+      entryPoint: 'simulate',
+    },
+  });
+
+  const renderPipelinePromise = device.createRenderPipelineAsync({
+    label: 'material-render-pipeline',
+    layout: device.createPipelineLayout({ bindGroupLayouts: [renderBindGroupLayout] }),
+    vertex: {
+      module: shaderModule,
+      entryPoint: 'vertexMain',
+    },
+    fragment: {
+      module: shaderModule,
+      entryPoint: 'fragmentMain',
+      targets: [{ format }],
+    },
+    primitive: {
+      topology: 'triangle-list',
+    },
+  });
+
+  let pipelines;
+  try {
+    pipelines = await Promise.all([computePipelinePromise, renderPipelinePromise]);
+  } catch (error) {
+    await device.popErrorScope();
+    throw error;
+  }
+
+  const validationError = await device.popErrorScope();
+  if (validationError) {
+    throw new Error(validationError.message);
+  }
+
+  return {
+    computePipeline: pipelines[0],
+    renderPipeline: pipelines[1],
+  };
+}
+
+async function createWebGpuState() {
+  if (!navigator.gpu) {
+    throw new Error('WebGPU is required. This test does not include a CPU, Canvas2D, or WebGL fallback.');
+  }
+
+  const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
   if (!adapter) {
-    showUnsupported('<strong>WebGPU adapter를 찾지 못했습니다.</strong><br />브라우저 설정 또는 GPU 드라이버 상태를 확인해 주세요.');
-    return null;
+    throw new Error('No WebGPU adapter was found for this browser/device.');
   }
 
   const device = await adapter.requestDevice();
   device.lost.then((info) => {
-    showUnsupported(`<strong>WebGPU device lost.</strong><br />${info.message || '브라우저에서 GPU 장치를 잃었습니다.'}`);
+    showFatal('WebGPU device lost', info.message || 'The browser released the GPU device.');
   });
 
   const context = canvas.getContext('webgpu');
+  if (!context) {
+    throw new Error('The canvas could not create a WebGPU context.');
+  }
+
   const format = navigator.gpu.getPreferredCanvasFormat();
   context.configure({
     device,
@@ -125,12 +290,7 @@ async function createWebGpuState() {
     alphaMode: 'opaque',
   });
 
-  const shaderSource = await fetch('./noitaField.wgsl').then((response) => {
-    if (!response.ok) throw new Error(`Failed to load shader: ${response.status}`);
-    return response.text();
-  });
-  const shaderModule = device.createShaderModule({ code: shaderSource });
-
+  const shaderModule = await loadShader(device);
   const initialCells = seedInitialField();
   const bufferSize = CELL_COUNT * CELL_BYTES;
 
@@ -151,8 +311,14 @@ async function createWebGpuState() {
 
   const paramsBuffer = device.createBuffer({
     label: 'simulation-params',
-    size: Uint32Array.BYTES_PER_ELEMENT * 16,
+    size: Uint32Array.BYTES_PER_ELEMENT * PARAM_WORDS,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+  });
+
+  const emitterBuffer = device.createBuffer({
+    label: 'material-emitters',
+    size: EMITTER_BYTES,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
   });
 
   const computeBindGroupLayout = device.createBindGroupLayout({
@@ -173,6 +339,11 @@ async function createWebGpuState() {
         visibility: GPUShaderStage.COMPUTE,
         buffer: { type: 'uniform' },
       },
+      {
+        binding: 3,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: { type: 'read-only-storage' },
+      },
     ],
   });
 
@@ -192,31 +363,13 @@ async function createWebGpuState() {
     ],
   });
 
-  const computePipeline = device.createComputePipeline({
-    label: 'material-simulation-pipeline',
-    layout: device.createPipelineLayout({ bindGroupLayouts: [computeBindGroupLayout] }),
-    compute: {
-      module: shaderModule,
-      entryPoint: 'simulate',
-    },
-  });
-
-  const renderPipeline = device.createRenderPipeline({
-    label: 'material-render-pipeline',
-    layout: device.createPipelineLayout({ bindGroupLayouts: [renderBindGroupLayout] }),
-    vertex: {
-      module: shaderModule,
-      entryPoint: 'vertexMain',
-    },
-    fragment: {
-      module: shaderModule,
-      entryPoint: 'fragmentMain',
-      targets: [{ format }],
-    },
-    primitive: {
-      topology: 'triangle-list',
-    },
-  });
+  const { computePipeline, renderPipeline } = await createPipelines(
+    device,
+    shaderModule,
+    format,
+    computeBindGroupLayout,
+    renderBindGroupLayout,
+  );
 
   const computeBindGroups = [
     device.createBindGroup({
@@ -226,6 +379,7 @@ async function createWebGpuState() {
         { binding: 0, resource: { buffer: cellBuffers[0] } },
         { binding: 1, resource: { buffer: cellBuffers[1] } },
         { binding: 2, resource: { buffer: paramsBuffer } },
+        { binding: 3, resource: { buffer: emitterBuffer } },
       ],
     }),
     device.createBindGroup({
@@ -235,6 +389,7 @@ async function createWebGpuState() {
         { binding: 0, resource: { buffer: cellBuffers[1] } },
         { binding: 1, resource: { buffer: cellBuffers[0] } },
         { binding: 2, resource: { buffer: paramsBuffer } },
+        { binding: 3, resource: { buffer: emitterBuffer } },
       ],
     }),
   ];
@@ -266,36 +421,35 @@ async function createWebGpuState() {
     computeBindGroups,
     renderBindGroups,
     paramsBuffer,
+    emitterBuffer,
     currentBufferIndex: 0,
     frame: 0,
   };
 }
 
-function writeParams(state) {
-  const params = new Uint32Array(16);
+function writeFrameData(state, emitterPayload) {
+  const params = new Uint32Array(PARAM_WORDS);
   params[0] = GRID_WIDTH;
   params[1] = GRID_HEIGHT;
   params[2] = state.frame;
-  params[3] = pointer.active ? 1 : 0;
-  params[4] = pointer.x;
-  params[5] = pointer.y;
-  params[6] = BRUSH_RADIUS;
-  params[7] = pointer.material;
-  params[8] = explosionFrames > 0 ? 1 : 0;
-  params[9] = explosionX;
-  params[10] = explosionY;
-  params[11] = EXPLOSION_RADIUS;
-  params[12] = canvas.width;
-  params[13] = canvas.height;
+  params[3] = emitterPayload.count;
+  params[4] = canvas.width;
+  params[5] = canvas.height;
+  params[6] = MAX_EMITTERS;
+  params[7] = performance.now() >>> 0;
+
   state.device.queue.writeBuffer(state.paramsBuffer, 0, params);
+  state.device.queue.writeBuffer(state.emitterBuffer, 0, emitterPayload.words);
 }
 
-function frame(state) {
+function renderFrame(state) {
   resizeCanvas();
-  writeParams(state);
+
+  const emitterPayload = buildEmitterBuffer();
+  writeFrameData(state, emitterPayload);
 
   const encoder = state.device.createCommandEncoder();
-  const computePass = encoder.beginComputePass();
+  const computePass = encoder.beginComputePass({ label: 'material-simulation-pass' });
   computePass.setPipeline(state.computePipeline);
   computePass.setBindGroup(0, state.computeBindGroups[state.currentBufferIndex]);
   computePass.dispatchWorkgroups(
@@ -308,6 +462,7 @@ function frame(state) {
 
   const textureView = state.context.getCurrentTexture().createView();
   const renderPass = encoder.beginRenderPass({
+    label: 'material-render-pass',
     colorAttachments: [
       {
         view: textureView,
@@ -324,46 +479,87 @@ function frame(state) {
 
   state.device.queue.submit([encoder.finish()]);
   state.frame += 1;
-  if (explosionFrames > 0) explosionFrames -= 1;
+  ageBurstEmitters();
 
-  requestAnimationFrame(() => frame(state));
+  requestAnimationFrame(() => renderFrame(state));
+}
+
+function updatePointer(event) {
+  const grid = eventToGrid(event);
+  lastGrid = grid;
+
+  const pointer = activePointers.get(event.pointerId);
+  if (!pointer) return grid;
+
+  pointer.x = grid.x;
+  pointer.y = grid.y;
+  pointer.material = pickPointerMaterial(event, activePointers.size);
+  return grid;
+}
+
+function maybeAddDoubleTapExplosion(event, grid) {
+  if (event.pointerType !== 'touch') return;
+
+  const now = performance.now();
+  const dx = grid.x - lastTap.x;
+  const dy = grid.y - lastTap.y;
+  if (now - lastTap.time < 320 && dx * dx + dy * dy < 144) {
+    addExplosion(grid.x, grid.y);
+    lastTap.time = 0;
+    return;
+  }
+
+  lastTap = {
+    time: now,
+    x: grid.x,
+    y: grid.y,
+  };
 }
 
 function setupInput() {
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
 
   canvas.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
     canvas.setPointerCapture(event.pointerId);
-    pointerToGrid(event);
-    pointer.material = pickPointerMaterial(event);
-    pointer.active = true;
+
+    const grid = eventToGrid(event);
+    lastGrid = grid;
+    maybeAddDoubleTapExplosion(event, grid);
+
+    const nextPointerCount = activePointers.size + 1;
+    activePointers.set(event.pointerId, {
+      x: grid.x,
+      y: grid.y,
+      material: pickPointerMaterial(event, nextPointerCount),
+      pointerType: event.pointerType,
+      seed: randomSeed(),
+    });
   });
 
   canvas.addEventListener('pointermove', (event) => {
-    pointerToGrid(event);
-    if (pointer.active) {
-      pointer.material = pickPointerMaterial(event);
-    }
+    event.preventDefault();
+    updatePointer(event);
   });
 
-  canvas.addEventListener('pointerup', (event) => {
-    pointerToGrid(event);
-    pointer.active = false;
-  });
+  const endPointer = (event) => {
+    event.preventDefault();
+    updatePointer(event);
+    activePointers.delete(event.pointerId);
+  };
 
-  canvas.addEventListener('pointercancel', () => {
-    pointer.active = false;
-  });
+  canvas.addEventListener('pointerup', endPointer);
+  canvas.addEventListener('pointercancel', endPointer);
+  window.addEventListener('blur', () => activePointers.clear());
 
   window.addEventListener('keydown', (event) => {
-    if (event.code === 'Digit1') pointer.material = MATERIAL.FIRE;
-    if (event.code === 'Digit2') pointer.material = MATERIAL.WATER;
-    if (event.code === 'Digit3') pointer.material = MATERIAL.SAND;
+    if (event.code === 'Digit1') selectedMaterial = MATERIAL.FIRE;
+    if (event.code === 'Digit2') selectedMaterial = MATERIAL.WATER;
+    if (event.code === 'Digit3') selectedMaterial = MATERIAL.SAND;
+
     if (event.code === 'Space') {
       event.preventDefault();
-      explosionX = pointer.x;
-      explosionY = pointer.y;
-      explosionFrames = 4;
+      addExplosion(lastGrid.x, lastGrid.y);
     }
   });
 }
@@ -374,11 +570,10 @@ async function main() {
 
   try {
     const state = await createWebGpuState();
-    if (!state) return;
-    requestAnimationFrame(() => frame(state));
+    requestAnimationFrame(() => renderFrame(state));
   } catch (error) {
     console.error(error);
-    showUnsupported(`<strong>WebGPU 테스트 초기화 실패</strong><br />${String(error.message || error)}`);
+    showFatal('WebGPU-only test failed', String(error.message || error));
   }
 }
 

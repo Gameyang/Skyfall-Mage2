@@ -5,32 +5,45 @@ const WATER: u32 = 3u;
 const FIRE: u32 = 4u;
 const SMOKE: u32 = 5u;
 const SPARK: u32 = 6u;
+const EMITTER_FLAG_EXPLOSION: u32 = 1u;
 
 struct SimParams {
   width: u32,
   height: u32,
   frame: u32,
-  emitterActive: u32,
-  emitterX: u32,
-  emitterY: u32,
-  emitterRadius: u32,
-  emitterMaterial: u32,
-  explosionActive: u32,
-  explosionX: u32,
-  explosionY: u32,
-  explosionRadius: u32,
+  emitterCount: u32,
   canvasWidth: u32,
   canvasHeight: u32,
+  maxEmitters: u32,
+  timeMs: u32,
   pad0: u32,
   pad1: u32,
+  pad2: u32,
+  pad3: u32,
+  pad4: u32,
+  pad5: u32,
+  pad6: u32,
+  pad7: u32,
+};
+
+struct Emitter {
+  material: u32,
+  x: u32,
+  y: u32,
+  radius: u32,
+  strength: u32,
+  seed: u32,
+  flags: u32,
+  pad0: u32,
 };
 
 @group(0) @binding(0) var<storage, read> src: array<u32>;
 @group(0) @binding(1) var<storage, read_write> dst: array<u32>;
 @group(0) @binding(2) var<uniform> params: SimParams;
+@group(0) @binding(3) var<storage, read> emitters: array<Emitter>;
 
-fn pack(material: u32, life: u32, aux: u32) -> u32 {
-  return (material & 255u) | ((life & 255u) << 8u) | ((aux & 255u) << 16u);
+fn pack(materialValue: u32, lifeValue: u32, auxValue: u32) -> u32 {
+  return (materialValue & 255u) | ((lifeValue & 255u) << 8u) | ((auxValue & 255u) << 16u);
 }
 
 fn material(cell: u32) -> u32 {
@@ -47,10 +60,6 @@ fn aux(cell: u32) -> u32 {
 
 fn indexOf(x: u32, y: u32) -> u32 {
   return y * params.width + x;
-}
-
-fn inBounds(x: i32, y: i32) -> bool {
-  return x >= 0 && y >= 0 && x < i32(params.width) && y < i32(params.height);
 }
 
 fn getCell(x: i32, y: i32) -> u32 {
@@ -75,6 +84,10 @@ fn randBit(x: i32, y: i32, salt: u32) -> bool {
 
 fn randByte(x: i32, y: i32, salt: u32) -> u32 {
   return hash(u32(max(x, 0)), u32(max(y, 0)), params.frame + salt) & 255u;
+}
+
+fn randByteWithSeed(x: i32, y: i32, salt: u32, seed: u32) -> u32 {
+  return hash(u32(max(x, 0)), u32(max(y, 0)), params.frame + salt + seed) & 255u;
 }
 
 fn canSandEnter(mat: u32) -> bool {
@@ -300,28 +313,23 @@ fn applyIncoming(outCell: u32, x: i32, y: i32) -> u32 {
   return out;
 }
 
-fn applyEmitter(cell: u32, x: i32, y: i32) -> u32 {
-  if (params.emitterActive == 0u) {
+fn applyBrushEmitter(cell: u32, emitter: Emitter, x: i32, y: i32) -> u32 {
+  let roll = randByteWithSeed(x, y, 91u + emitter.material * 17u, emitter.seed);
+  if (roll > emitter.strength) {
     return cell;
   }
 
-  let dx = x - i32(params.emitterX);
-  let dy = y - i32(params.emitterY);
-  let radius = i32(params.emitterRadius);
-  if (dx * dx + dy * dy > radius * radius) {
-    return cell;
-  }
-
-  let roll = randByte(x, y, 91u);
-  if (roll > 210u) {
-    return cell;
-  }
-
-  if (params.emitterMaterial == WATER) {
+  if (emitter.material == WATER) {
     return pack(WATER, 0u, roll);
   }
-  if (params.emitterMaterial == SAND) {
+  if (emitter.material == SAND) {
     return pack(SAND, 0u, roll);
+  }
+  if (emitter.material == SMOKE) {
+    return pack(SMOKE, 42u + (roll & 47u), roll);
+  }
+  if (emitter.material == SPARK) {
+    return pack(SPARK, 16u + (roll & 23u), roll);
   }
 
   if (roll < 58u) {
@@ -333,26 +341,21 @@ fn applyEmitter(cell: u32, x: i32, y: i32) -> u32 {
   return pack(FIRE, 34u + (roll & 63u), roll);
 }
 
-fn applyExplosion(cell: u32, x: i32, y: i32) -> u32 {
-  if (params.explosionActive == 0u) {
+fn applyExplosionEmitter(cell: u32, emitter: Emitter, x: i32, y: i32, dist2: i32) -> u32 {
+  let radius = i32(emitter.radius);
+  let radius2 = radius * radius;
+
+  if (material(cell) == SOLID && dist2 > radius2 / 3) {
     return cell;
   }
 
-  let dx = x - i32(params.explosionX);
-  let dy = y - i32(params.explosionY);
-  let radius = i32(params.explosionRadius);
-  let dist2 = dx * dx + dy * dy;
-  if (dist2 > radius * radius) {
+  let roll = randByteWithSeed(x, y, 101u, emitter.seed);
+  if (roll > emitter.strength && dist2 > radius2 / 6) {
     return cell;
   }
 
-  if (material(cell) == SOLID && dist2 > (radius * radius) / 3) {
-    return cell;
-  }
-
-  let roll = randByte(x, y, 101u);
-  if (dist2 < (radius * radius) / 5) {
-    if (roll < 90u) {
+  if (dist2 < radius2 / 5) {
+    if (roll < 92u) {
       return pack(EMPTY, 0u, 0u);
     }
     return pack(FIRE, 48u + (roll & 31u), roll);
@@ -370,6 +373,29 @@ fn applyExplosion(cell: u32, x: i32, y: i32) -> u32 {
   return pack(SAND, 0u, roll);
 }
 
+fn applyEmitters(cell: u32, x: i32, y: i32) -> u32 {
+  var out = cell;
+  let count = min(params.emitterCount, params.maxEmitters);
+
+  for (var i = 0u; i < count; i = i + 1u) {
+    let emitter = emitters[i];
+    let dx = x - i32(emitter.x);
+    let dy = y - i32(emitter.y);
+    let radius = i32(emitter.radius);
+    let dist2 = dx * dx + dy * dy;
+
+    if (dist2 <= radius * radius) {
+      if ((emitter.flags & EMITTER_FLAG_EXPLOSION) != 0u) {
+        out = applyExplosionEmitter(out, emitter, x, y, dist2);
+      } else {
+        out = applyBrushEmitter(out, emitter, x, y);
+      }
+    }
+  }
+
+  return out;
+}
+
 @compute @workgroup_size(8, 8, 1)
 fn simulate(@builtin(global_invocation_id) globalId: vec3<u32>) {
   if (globalId.x >= params.width || globalId.y >= params.height) {
@@ -383,8 +409,7 @@ fn simulate(@builtin(global_invocation_id) globalId: vec3<u32>) {
 
   var out = applyCurrentOutgoing(current, x, y);
   out = applyIncoming(out, x, y);
-  out = applyExplosion(out, x, y);
-  out = applyEmitter(out, x, y);
+  out = applyEmitters(out, x, y);
 
   dst[index] = out;
 }
