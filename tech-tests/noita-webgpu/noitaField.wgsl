@@ -98,6 +98,10 @@ fn canFluidEnter(mat: u32) -> bool {
   return mat == EMPTY || mat == SMOKE || mat == FIRE;
 }
 
+fn canSupportWater(mat: u32) -> bool {
+  return mat == SOLID || mat == SAND || mat == WATER;
+}
+
 fn canSmokeEnter(mat: u32) -> bool {
   return mat == EMPTY || mat == FIRE;
 }
@@ -141,6 +145,12 @@ fn waterTarget(x: i32, y: i32) -> vec2<i32> {
     return vec2<i32>(x, y + 1);
   }
 
+  let supported = canSupportWater(below);
+  let flowRoll = randByte(x, y, 22u);
+  if (supported && flowRoll < 112u && material(getCell(x, y - 1)) != WATER) {
+    return vec2<i32>(x, y);
+  }
+
   var first = -1;
   var second = 1;
   if (randBit(x, y, 21u)) {
@@ -150,12 +160,18 @@ fn waterTarget(x: i32, y: i32) -> vec2<i32> {
 
   let firstMat = material(getCell(x + first, y));
   if (canFluidEnter(firstMat)) {
-    return vec2<i32>(x + first, y);
+    let firstBelow = material(getCell(x + first, y + 1));
+    if (!supported || canSupportWater(firstBelow) || flowRoll > 206u) {
+      return vec2<i32>(x + first, y);
+    }
   }
 
   let secondMat = material(getCell(x + second, y));
   if (canFluidEnter(secondMat)) {
-    return vec2<i32>(x + second, y);
+    let secondBelow = material(getCell(x + second, y + 1));
+    if (!supported || canSupportWater(secondBelow) || flowRoll > 226u) {
+      return vec2<i32>(x + second, y);
+    }
   }
 
   return vec2<i32>(x, y);
