@@ -21,10 +21,10 @@ const HDR_SCENE_FORMAT = 'rgba16float';
 const SCENE_CLEAR_COLOR = { r: 0.02, g: 0.02, b: 0.03, a: 1 };
 const BLOOM_CONFIG = Object.freeze({
   enabled: true,
-  threshold: 1.05,
-  intensity: 0.58,
-  radius: 1.0,
-  levels: 5,
+  threshold: 0.98,
+  intensity: 0.95,
+  radius: 1.35,
+  levels: 6,
   bloomFormat: HDR_SCENE_FORMAT,
   clearColor: SCENE_CLEAR_COLOR,
 });

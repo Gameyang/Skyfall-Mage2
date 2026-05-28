@@ -69,7 +69,7 @@ fn downsampleFragment(in: VertexOut) -> @location(0) vec4<f32> {
 fn upsampleFragment(in: VertexOut) -> @location(0) vec4<f32> {
   let high = textureSample(primaryTexture, linearSampler, in.uv).rgb;
   let low = sampleBox(secondaryTexture, in.uv, params.radius * 1.35);
-  return vec4<f32>(high + low * 0.72, 1.0);
+  return vec4<f32>(high + low * 0.88, 1.0);
 }
 
 @fragment
