@@ -314,12 +314,20 @@ fn applyIncoming(outCell: u32, x: i32, y: i32) -> u32 {
 }
 
 fn applyBrushEmitter(cell: u32, emitter: Emitter, x: i32, y: i32) -> u32 {
+  let cellMat = material(cell);
   let roll = randByteWithSeed(x, y, 91u + emitter.material * 17u, emitter.seed);
   if (roll > emitter.strength) {
     return cell;
   }
 
+  if (cellMat == SOLID) {
+    return cell;
+  }
+
   if (emitter.material == WATER) {
+    if (cellMat == SAND) {
+      return cell;
+    }
     return pack(WATER, 0u, roll);
   }
   if (emitter.material == SAND) {
