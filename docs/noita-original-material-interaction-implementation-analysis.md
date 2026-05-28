@@ -696,3 +696,99 @@ WebGPU shader는 원작 material 전체를 switch로 직접 작성하지 말고,
 - 원작 충실도를 높이는 작업과 `Skyfall-Mage2` 게임성을 높이는 작업을 분리한다.
 
 이 문서 기준으로 다음 작업은 `materials.xml` fixture parser와 CPU reference simulator 설계 문서 또는 prototype을 만드는 것이다.
+
+## 15. 현재 `tech-tests/noita-webgpu` 구현과 비교
+
+현재 구현은 원작 material system의 전체 재현이 아니라, WebGPU에서 falling-sand 계열 field가 실시간으로 돌아가는지 확인하는 기술 검증이다. 원작 지향 모델과 비교하면 "데이터 기반 재료 엔진"이 아니라 "소수 재료를 shader 함수로 직접 처리하는 시각 효과 레이어"에 가깝다.
+
+### 15.1 현재 구현 요약
+
+현재 코드 기준 주요 구조:
+
+- Grid: `256x144`, 총 `36,864` cell. `main.js`의 `GRID_WIDTH`, `GRID_HEIGHT`에 고정되어 있다.
+- Material enum: `empty`, `solid`, `sand`, `water`, `fire`, `smoke`, `spark` 7종만 있다.
+- Cell packing: `u32` 하나에 `material 8bit`, `life 8bit`, `aux 8bit`를 저장한다.
+- GPU buffer: material grid storage buffer 2개를 ping-pong한다.
+- Emitter: pointer/폭발 입력을 `Emitter` storage buffer로 매 frame 전달한다.
+- Compute pass: `simulate()` 한 번으로 outgoing, incoming, emitter를 모두 처리한다.
+- Render pass: storage buffer를 fullscreen triangle fragment shader에서 직접 읽어 색을 만든다.
+- Postprocess: fire/spark 고휘도 값을 `rgba16float` scene texture에 그리고 bloom chain으로 합성한다.
+
+관련 위치:
+
+- `tech-tests/noita-webgpu/main.js`: grid/config/material enum은 3-40행, 초기 terrain/water 배치는 105행, emitter packing은 158행, WebGPU 초기화는 305행, frame loop는 492행 부근이다.
+- `tech-tests/noita-webgpu/noitaField.wgsl`: material enum은 1-7행, cell packing은 45행, water pressure 근사는 142행, water movement는 161행, outgoing/incoming 처리는 233행과 297행, compute entry는 447행, 색상 렌더링은 481행 부근이다.
+
+### 15.2 원작 지향 모델 대비 구현 상태
+
+| 항목 | 원작 지향 목표 | 현재 구현 | 상태 |
+| --- | --- | --- | --- |
+| Material 수 | `materials.xml` 기반 수백 종 material | 7종 하드코딩 | 초기 prototype |
+| Material 정의 | `CellData`, `CellDataChild` 상속과 tag | JS/WGSL enum 직접 선언 | 미구현 |
+| Reaction | XML `Reaction` table, tag selector, probability | shader if문으로 water/fire, wet/fire 정도만 근사 | 매우 제한적 |
+| Movement | density, gravity, flow speed, viscosity, static sand | sand/water/smoke/fire/spark 전용 target 함수 | 부분 구현 |
+| Liquid pressure | density/flow/압력성 움직임 | `waterPressure()`로 상부 water 개수만 보는 근사 | 실험적 구현 |
+| Density layering | oil/water/lava/acid 등 밀도 교환 | sand가 water와 swap하는 정도 | 대부분 미구현 |
+| Fire/heat | burnable, fire_hp, smoke, temperature, oxygen | fire life 감소, water 인접 시 smoke | 부분 구현 |
+| Gas/vapor | steam, smoke, acid gas, poison gas, lifetime/condensation | smoke 1종, lifetime 감소, 상승 | 부분 구현 |
+| Terrain | static terrain, corrodible, meltable, durability | `SOLID` 1종, 폭발 중심부만 일부 제거 | 초기 prototype |
+| Explosion | material별 파괴/연소/압력/파편 | radius 안에서 empty/fire/smoke/spark/sand 생성 | 시각 효과 수준 |
+| Entity coupling | damage, stain, polymorph, teleport, suffocation | entity 없음 | 미구현 |
+| Electrical | conductivity, electric event 확산 | 없음 | 미구현 |
+| Data pipeline | 로컬 `materials.xml` 파싱 후 generated registry | 없음 | 미구현 |
+| CPU reference | deterministic reference simulator | 없음 | 미구현 |
+| GPU architecture | multi-pass proposal/resolve/reaction/fire | single compute pass gather-style | prototype |
+| Integration | v2 battle renderer overlay/fallback | standalone WebGPU page | 독립 실험 |
+
+### 15.3 현재 구현이 이미 잘 검증한 것
+
+현재 실험이 증명한 부분은 명확하다.
+
+- WebGPU storage buffer ping-pong으로 material grid를 매 frame 갱신할 수 있다.
+- 브라우저에서 compute pass와 render pass를 한 frame 안에 연결할 수 있다.
+- CPU readback 없이 GPU buffer 결과를 바로 렌더링할 수 있다.
+- pointer/touch 입력을 emitter storage buffer로 packing해서 shader에 전달할 수 있다.
+- `sand`, `water`, `smoke` 같은 기본 falling-sand 이동 규칙을 gather-style로 구현할 수 있다.
+- fire/spark의 HDR 색상과 bloom postprocess가 WebGPU chain에서 동작한다.
+- WebGPU 미지원/adapter 실패를 fatal overlay로 처리하는 최소 경로가 있다.
+
+즉 현재 코드는 "원작 Noita 재료 시스템 구현"이라기보다 "v2 전투 화면 위에 얹을 GPU material effect layer의 가능성 검증"이다.
+
+### 15.4 현재 구현과 원작의 핵심 차이
+
+가장 큰 차이는 데이터 중심성이다. 원작은 material property와 reaction이 데이터로 정의되고, tag로 반응 범위를 넓힌다. 현재 구현은 `canSandEnter`, `canFluidEnter`, `isWetNear`, `applyCurrentOutgoing` 같은 shader 함수에 규칙이 직접 들어간다. material이 7종을 넘기 시작하면 이 방식은 빠르게 유지보수가 어려워진다.
+
+두 번째 차이는 update pass다. 원작 수준의 액체/분말/반응은 movement, reaction, heat, lifetime, entity sampling을 분리해야 한다. 현재는 `simulate()`에서 한 cell 기준으로 outgoing, incoming, emitter를 순서대로 적용한다. 구현은 단순하고 빠르지만, 여러 material의 동시 반응, 확률 reaction, density swap, 다중 입력 alchemy를 넣기 어렵다.
+
+세 번째 차이는 gameplay 연결이다. 현재 field는 화면에 보이는 독립 simulation이다. 원작처럼 material이 player/enemy에게 damage, stain, suffocation, polymorph, teleport, heal을 주려면 CPU gameplay state가 material coverage를 sampling하고 event로 반영해야 한다.
+
+### 15.5 현재 구현에서 원작 방향으로 확장할 때의 최소 변경 순서
+
+현재 코드를 버리지 않고 이어가려면 다음 순서가 가장 안전하다.
+
+1. `MATERIAL` enum을 `MaterialDef` registry로 감싸고, 현재 7종을 registry fixture로 옮긴다.
+2. `canSandEnter`, `canFluidEnter`, `canSmokeEnter`를 material property lookup 기반으로 바꾼다.
+3. `SOLID`를 `STATIC_TERRAIN`, `CORRODIBLE`, `WOOD`, `METAL`, `ICE` 같은 1차 지형군으로 쪼갠다.
+4. reaction pass를 별도 함수로 분리해서 water/fire/steam, acid/corrodible, lava/water부터 넣는다.
+5. CPU reference simulator를 같은 registry로 작성해서 shader 결과 비교 기준을 만든다.
+6. `materials.xml` parser는 원작 full import 전에 작은 fixture XML로 먼저 만든다.
+7. GPU는 single pass를 유지하다가 reaction 수가 늘어난 뒤 multi-pass로 쪼갠다.
+
+### 15.6 현재 구현 유지 시 권장 목표
+
+현재 `tech-tests/noita-webgpu`는 계속 "전투용 material visual prototype"으로 두는 편이 좋다. 여기에 원작 전체를 바로 얹으면 shader가 비대해지고, v2 게임 본체와의 경계도 흐려진다.
+
+권장 분리:
+
+```text
+tech-tests/noita-webgpu
+  목적: WebGPU material field, emitter, bloom, 입력 실험
+
+src/features/material-sim 또는 tech-tests/noita-reference
+  목적: 원작 지향 CPU reference simulator, registry, reaction parser 실험
+
+docs/
+  목적: 원작 분석, 현재 구현 비교, 단계별 이식 계획 유지
+```
+
+이 기준이면 현재 구현은 계속 가볍게 유지하면서, 원작 충실도 작업은 별도의 data-driven simulator로 안전하게 키울 수 있다.
