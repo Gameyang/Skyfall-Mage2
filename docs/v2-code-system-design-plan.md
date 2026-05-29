@@ -62,15 +62,12 @@ Skyfall-Mage2/
 ├── docs/
 │   ├── baseline-game-analysis.md
 │   └── v2-code-system-design-plan.md
-├── public/
+├── src/
 │   ├── assets/
 │   │   ├── items/
 │   │   ├── enemies/
 │   │   ├── skins/
-│   │   ├── audio/
-│   │   └── shaders/
-│   └── favicon.svg
-├── src/
+│   │   └── projectiles/
 │   ├── app/
 │   │   ├── bootstrap.ts
 │   │   ├── createApp.ts
@@ -497,8 +494,8 @@ Vite 설정:
 
 - `base`는 repository name 배포를 고려해 환경 변수로 설정 가능하게 둔다.
 - 빌드 산출물은 `dist/`
-- shader와 대량 이미지 자산은 `public/assets` 기준으로 관리한다.
-- 앱 내부 asset URL은 `platform/assets.ts`에서 생성한다.
+- Gameplay image art is managed under `src/assets` as 64x64 WebP files.
+- App-facing asset URLs are generated in `platform/assets.ts`.
 
 필수 npm scripts:
 
