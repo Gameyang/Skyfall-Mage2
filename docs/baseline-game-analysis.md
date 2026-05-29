@@ -443,3 +443,7 @@ v2는 처음부터 다음 계층을 분리하는 것이 좋다.
 - `docs/v2-content-migration.md`: 기준 게임에서 어떤 기능/데이터/자산을 어떤 순서로 옮길지 정리
 
 v2 초기 구현은 작은 vertical slice로 시작하는 것이 좋다. 전투 캔버스, 플레이어 이동, 적 1종 스폰, 드랍 아이템 1종, 인벤토리 패널 1개까지를 먼저 완성한 뒤 장비/스킬트리/상점을 붙이는 순서가 안전하다.
+
+## V2 responsive layout reference
+
+UI/layout 구현 전에는 `sandbox/v2-responsive-layout-test/README.md`와 `sandbox/v2-responsive-layout-test/index.html`을 확인한다. 이 샌드박스가 desktop landscape, mobile landscape, portrait rotate notice, 입력 소유권, v1식 오른쪽 패널, 4 equipment slots + 5 x 4 bag grid의 현재 기준이다.

@@ -406,3 +406,7 @@ src/tests/combatField/
 - `features`와 `render` 경계를 넘나드는 import가 생기지 않았는가?
 - 테스트할 수 있는 pure logic은 render/platform 밖에 있는가?
 - AGNET.md 책임과 충돌하지 않는가?
+
+## V2 responsive layout reference
+
+UI/layout 구현 전에는 `sandbox/v2-responsive-layout-test/README.md`와 `sandbox/v2-responsive-layout-test/index.html`을 확인한다. 이 샌드박스가 desktop landscape, mobile landscape, portrait rotate notice, 입력 소유권, v1식 오른쪽 패널, 4 equipment slots + 5 x 4 bag grid의 현재 기준이다.

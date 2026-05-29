@@ -374,3 +374,7 @@ Remove-Item -Recurse -Force tech-tests\noita-webgpu
 - HDR bloom visual chain
 
 정식 구현은 이 세 가지를 TypeScript/WebGPU 모듈로 재구성하고, tech-test UI와 standalone entry는 삭제한다.
+
+## V2 responsive layout reference
+
+UI/layout 구현 전에는 `sandbox/v2-responsive-layout-test/README.md`와 `sandbox/v2-responsive-layout-test/index.html`을 확인한다. 이 샌드박스가 desktop landscape, mobile landscape, portrait rotate notice, 입력 소유권, v1식 오른쪽 패널, 4 equipment slots + 5 x 4 bag grid의 현재 기준이다.

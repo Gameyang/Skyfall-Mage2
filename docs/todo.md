@@ -294,3 +294,7 @@
 
 - GitHub Pages preview에서 앱이 base path 문제 없이 실행된다.
 - 저장, asset, shader 경로가 local과 Pages에서 모두 동작한다.
+
+## V2 responsive layout reference
+
+UI/layout 구현 전에는 `sandbox/v2-responsive-layout-test/README.md`와 `sandbox/v2-responsive-layout-test/index.html`을 확인한다. 이 샌드박스가 desktop landscape, mobile landscape, portrait rotate notice, 입력 소유권, v1식 오른쪽 패널, 4 equipment slots + 5 x 4 bag grid의 현재 기준이다.

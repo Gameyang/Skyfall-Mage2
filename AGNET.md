@@ -8,3 +8,7 @@
 - GPU resource, DOM node, renderer instance는 serializable game state에 넣지 않는다.
 - `AGNET.md`는 사용자 요청에 맞춘 폴더 책임 문서다.
 - 코드 파일을 추가하기 전에는 `docs/code-file-tree.md`의 예정 위치와 네이밍 규칙을 확인한다.
+
+## V2 responsive layout reference
+
+UI/layout 구현 전에는 `sandbox/v2-responsive-layout-test/README.md`와 `sandbox/v2-responsive-layout-test/index.html`을 확인한다. 이 샌드박스가 desktop landscape, mobile landscape, portrait rotate notice, 입력 소유권, v1식 오른쪽 패널, 4 equipment slots + 5 x 4 bag grid의 현재 기준이다.
