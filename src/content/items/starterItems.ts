@@ -1,0 +1,106 @@
+// Responsibility: Provide starter item definitions for the first vertical slice.
+// Owner: content/items
+
+import { assetUrls } from "../../platform/assets";
+import type { ItemDefinition } from "./ItemDefinition";
+
+export const starterItems: readonly ItemDefinition[] = [
+  {
+    id: "fire-staff",
+    name: "Fire Staff",
+    kind: "weapon",
+    rarity: "common",
+    iconUrl: assetUrls.items.fireStaff,
+    equipmentSlot: "weapon",
+    fieldModifiers: { emitterStrength: 1.1, emitterRadius: 1.04, heatScale: 1.15 },
+    materialAffinity: "fire",
+  },
+  {
+    id: "blizzard-staff",
+    name: "Blizzard Staff",
+    kind: "weapon",
+    rarity: "rare",
+    iconUrl: assetUrls.items.blizzardStaff,
+    equipmentSlot: "weapon",
+    fieldModifiers: { emitterStrength: 1.05, waterResistance: 0.08, heatScale: 0.85 },
+    materialAffinity: "ice",
+  },
+  {
+    id: "chain-lightning-staff",
+    name: "Chain Staff",
+    kind: "weapon",
+    rarity: "rare",
+    iconUrl: assetUrls.items.chainLightningStaff,
+    equipmentSlot: "weapon",
+    fieldModifiers: { emitterStrength: 1.18, forceScale: 1.12 },
+    materialAffinity: "spark",
+  },
+  {
+    id: "hp-potion",
+    name: "HP Potion",
+    kind: "consumable",
+    rarity: "common",
+    iconUrl: assetUrls.items.hpPotion,
+  },
+  {
+    id: "mp-potion",
+    name: "MP Potion",
+    kind: "consumable",
+    rarity: "common",
+    iconUrl: assetUrls.items.mpPotion,
+  },
+  {
+    id: "coin",
+    name: "Coin",
+    kind: "currency",
+    rarity: "common",
+    iconUrl: assetUrls.items.coin,
+  },
+  {
+    id: "gem",
+    name: "Gem",
+    kind: "currency",
+    rarity: "uncommon",
+    iconUrl: assetUrls.items.gem,
+  },
+  {
+    id: "skill-book",
+    name: "Skill Book",
+    kind: "consumable",
+    rarity: "rare",
+    iconUrl: assetUrls.items.gem,
+  },
+  {
+    id: "blinkstep-boots",
+    name: "Blinkstep",
+    kind: "armor",
+    rarity: "uncommon",
+    iconUrl: assetUrls.items.blinkstepBoots,
+    equipmentSlot: "feet",
+    stats: { moveSpeed: 0.04 },
+    fieldModifiers: { forceScale: 1.08 },
+    materialAffinity: "force",
+  },
+  {
+    id: "mana-regen-cap",
+    name: "Mana Cap",
+    kind: "armor",
+    rarity: "uncommon",
+    iconUrl: assetUrls.items.manaRegenCap,
+    equipmentSlot: "head",
+    stats: { maxMana: 10, manaRegen: 0.2 },
+  },
+  {
+    id: "mana-pulse-armor",
+    name: "Pulse Armor",
+    kind: "armor",
+    rarity: "rare",
+    iconUrl: assetUrls.items.manaPulseArmor,
+    equipmentSlot: "body",
+    stats: { maxMana: 16, maxHp: 8 },
+    fieldModifiers: { forceScale: 1.14, fireResistance: 0.08 },
+    materialAffinity: "force",
+  },
+];
+
+export const starterItemById = new Map(starterItems.map((item) => [item.id, item]));

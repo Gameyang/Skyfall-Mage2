@@ -1,0 +1,6 @@
+<materials>
+  <material id="water" density="4" motion="liquid" heatCapacity="1" color="68,128,202,255" />
+  <material id="fire" density="1" motion="energy" heatCapacity="0.15" color="230,82,44,255" />
+  <material id="steam" density="1" motion="gas" heatCapacity="0.38" color="194,211,214,160" />
+  <reaction id="water-fire-steam" inputA="water" inputB="fire" resultA="steam" resultB="steam" heatDelta="0.45" life="16" />
+</materials>

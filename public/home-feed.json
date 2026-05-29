@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "project": {
+    "id": "skyfall-mage2",
+    "title": "Skyfall Mage2",
+    "description": "A non-commercial WebGPU action RPG prototype focused on material-field combat, responsive UI, and deterministic gameplay systems.",
+    "pageUrl": "https://gameyang.github.io/Skyfall-Mage2/",
+    "sourceUrl": "https://github.com/Gameyang/Skyfall-Mage2",
+    "tags": ["AI", "Game", "WebGPU", "Non-commercial"]
+  },
+  "posts": [
+    {
+      "id": "2026-05-29-v2-field-slice",
+      "date": "2026-05-29",
+      "type": "embed",
+      "title": "V2 Material Field Slice",
+      "text": "Responsive game UI, WebGPU field rendering, CPU material reactions, save/load, progression, shop, skill, and fusion systems are now wired into the playable prototype.",
+      "url": "https://gameyang.github.io/Skyfall-Mage2/",
+      "linkLabel": "Open prototype",
+      "tags": ["WebGPU", "Prototype", "RPG"]
+    }
+  ]
+}

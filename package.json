@@ -1,0 +1,23 @@
+{
+  "name": "skyfall-mage2",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "verify:webgpu": "node scripts/verify-webgpu-small-grid.mjs",
+    "verify:browser": "node scripts/verify-browser-combat.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "@types/node": "^25.9.1",
+    "@webgpu/types": "^0.1.44",
+    "typescript": "^5.5.4",
+    "vite": "^8.0.14",
+    "vitest": "^4.1.7"
+  }
+}
