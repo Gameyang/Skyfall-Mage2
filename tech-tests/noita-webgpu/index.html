@@ -15,7 +15,6 @@
         background: #050507;
         color: #d7e4ff;
         font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        touch-action: none;
         user-select: none;
       }
 
@@ -24,6 +23,78 @@
         width: 100vw;
         height: 100vh;
         background: #050507;
+        touch-action: none;
+      }
+
+      .material-hub {
+        position: fixed;
+        top: max(10px, env(safe-area-inset-top));
+        left: 0;
+        right: 0;
+        z-index: 2;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        padding: 0 12px 8px;
+        scrollbar-width: thin;
+        touch-action: pan-x;
+      }
+
+      .material-slot {
+        flex: 0 0 auto;
+        min-width: 76px;
+        height: 52px;
+        display: grid;
+        grid-template-columns: 16px 1fr;
+        grid-template-rows: 1fr 1fr;
+        column-gap: 8px;
+        align-items: center;
+        padding: 8px 10px;
+        border: 1px solid rgba(215, 228, 255, 0.18);
+        border-radius: 8px;
+        background: rgba(8, 10, 16, 0.68);
+        color: #edf4ff;
+        font: inherit;
+        text-align: left;
+        backdrop-filter: blur(12px);
+        cursor: pointer;
+        touch-action: pan-x;
+      }
+
+      .material-slot.is-selected {
+        border-color: rgba(255, 255, 255, 0.72);
+        background: rgba(26, 31, 42, 0.82);
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.22), 0 8px 28px rgba(0, 0, 0, 0.32);
+      }
+
+      .material-slot:focus-visible {
+        outline: 2px solid #ffffff;
+        outline-offset: 2px;
+      }
+
+      .material-swatch {
+        grid-row: 1 / 3;
+        width: 14px;
+        height: 32px;
+        border-radius: 999px;
+        background: var(--slot-color, #ffffff);
+        box-shadow: 0 0 18px var(--slot-glow, transparent);
+      }
+
+      .material-name {
+        font-size: 13px;
+        font-weight: 700;
+        line-height: 1.1;
+        white-space: nowrap;
+      }
+
+      .material-key {
+        color: #aab7cf;
+        font-size: 11px;
+        line-height: 1.1;
+        white-space: nowrap;
       }
 
       .fatal {
@@ -36,6 +107,7 @@
         color: #d7e4ff;
         text-align: center;
         line-height: 1.6;
+        z-index: 4;
       }
 
       .fatal.is-visible {
@@ -51,6 +123,7 @@
   </head>
   <body>
     <canvas id="fieldCanvas" aria-label="WebGPU material field test"></canvas>
+    <nav id="materialHub" class="material-hub" aria-label="Material brush slots"></nav>
     <div id="fatal" class="fatal" role="alert">
       <div>
         <strong>WebGPU is required</strong>

@@ -6,6 +6,7 @@ const FIRE: u32 = 4u;
 const SMOKE: u32 = 5u;
 const SPARK: u32 = 6u;
 const STEAM: u32 = 7u;
+const WET_SAND: u32 = 8u;
 const EMITTER_FLAG_EXPLOSION: u32 = 1u;
 
 struct SimParams {
@@ -91,20 +92,49 @@ fn randByteWithSeed(x: i32, y: i32, salt: u32, seed: u32) -> u32 {
   return hash(u32(max(x, 0)), u32(max(y, 0)), params.frame + salt + seed) & 255u;
 }
 
-fn canSandEnter(mat: u32) -> bool {
-  return mat == EMPTY || mat == WATER || mat == SMOKE || mat == FIRE || mat == STEAM;
+fn materialDensity(mat: u32) -> u32 {
+  if (mat == SOLID) {
+    return 255u;
+  }
+  if (mat == WET_SAND) {
+    return 76u;
+  }
+  if (mat == SAND) {
+    return 68u;
+  }
+  if (mat == WATER) {
+    return 42u;
+  }
+  if (mat == SPARK) {
+    return 24u;
+  }
+  if (mat == FIRE || mat == SMOKE || mat == STEAM) {
+    return 8u;
+  }
+  return 0u;
+}
+
+fn canPowderEnter(moverMat: u32, targetMat: u32) -> bool {
+  if (targetMat == SOLID || targetMat == SAND || targetMat == WET_SAND) {
+    return false;
+  }
+  return materialDensity(moverMat) > materialDensity(targetMat);
 }
 
 fn canFluidEnter(mat: u32) -> bool {
-  return mat == EMPTY || mat == SMOKE || mat == FIRE || mat == STEAM;
+  return mat != SOLID && materialDensity(WATER) > materialDensity(mat);
 }
 
 fn canSupportWater(mat: u32) -> bool {
-  return mat == SOLID || mat == SAND || mat == WATER;
+  return mat == SOLID || mat == SAND || mat == WET_SAND || mat == WATER;
 }
 
 fn canSmokeEnter(mat: u32) -> bool {
   return mat == EMPTY || mat == FIRE;
+}
+
+fn canFireEnter(mat: u32) -> bool {
+  return mat == EMPTY || mat == SMOKE || mat == STEAM || mat == FIRE;
 }
 
 fn isFireNear(x: i32, y: i32) -> bool {
@@ -114,16 +144,31 @@ fn isFireNear(x: i32, y: i32) -> bool {
     material(getCell(x, y + 1)) == FIRE;
 }
 
+fn isHeatNear(x: i32, y: i32) -> bool {
+  return material(getCell(x - 1, y)) == FIRE ||
+    material(getCell(x + 1, y)) == FIRE ||
+    material(getCell(x, y - 1)) == FIRE ||
+    material(getCell(x, y + 1)) == FIRE ||
+    material(getCell(x - 1, y)) == SPARK ||
+    material(getCell(x + 1, y)) == SPARK ||
+    material(getCell(x, y - 1)) == SPARK ||
+    material(getCell(x, y + 1)) == SPARK;
+}
+
 fn isWetNear(x: i32, y: i32) -> bool {
   return material(getCell(x - 1, y)) == WATER ||
     material(getCell(x + 1, y)) == WATER ||
     material(getCell(x, y - 1)) == WATER ||
-    material(getCell(x, y + 1)) == WATER;
+    material(getCell(x, y + 1)) == WATER ||
+    material(getCell(x - 1, y)) == WET_SAND ||
+    material(getCell(x + 1, y)) == WET_SAND ||
+    material(getCell(x, y - 1)) == WET_SAND ||
+    material(getCell(x, y + 1)) == WET_SAND;
 }
 
-fn sandTarget(x: i32, y: i32) -> vec2<i32> {
+fn sandTarget(x: i32, y: i32, moverMat: u32) -> vec2<i32> {
   let below = material(getCell(x, y + 1));
-  if (canSandEnter(below)) {
+  if (canPowderEnter(moverMat, below)) {
     return vec2<i32>(x, y + 1);
   }
 
@@ -135,16 +180,117 @@ fn sandTarget(x: i32, y: i32) -> vec2<i32> {
   }
 
   let firstMat = material(getCell(x + first, y + 1));
-  if (canSandEnter(firstMat)) {
+  if (canPowderEnter(moverMat, firstMat)) {
     return vec2<i32>(x + first, y + 1);
   }
 
   let secondMat = material(getCell(x + second, y + 1));
-  if (canSandEnter(secondMat)) {
+  if (canPowderEnter(moverMat, secondMat)) {
     return vec2<i32>(x + second, y + 1);
   }
 
   return vec2<i32>(x, y);
+}
+
+fn settledSandAbsorbTarget(x: i32, y: i32) -> vec2<i32> {
+  if (randByte(x, y, 14u) > 192u) {
+    return vec2<i32>(x, y);
+  }
+
+  var first = -1;
+  var second = 1;
+  if (randBit(x, y, 15u)) {
+    first = 1;
+    second = -1;
+  }
+
+  if (material(getCell(x + first, y)) == WATER) {
+    return vec2<i32>(x + first, y);
+  }
+  if (material(getCell(x + second, y)) == WATER) {
+    return vec2<i32>(x + second, y);
+  }
+  if (material(getCell(x, y - 1)) == WATER) {
+    return vec2<i32>(x, y - 1);
+  }
+  if (material(getCell(x, y + 1)) == WATER) {
+    return vec2<i32>(x, y + 1);
+  }
+
+  return vec2<i32>(x, y);
+}
+
+fn settledSandAbsorbsCell(sandX: i32, sandY: i32, waterX: i32, waterY: i32) -> bool {
+  let moveTo = sandTarget(sandX, sandY, SAND);
+  if (moveTo.x != sandX || moveTo.y != sandY) {
+    return false;
+  }
+
+  let absorbFrom = settledSandAbsorbTarget(sandX, sandY);
+  return absorbFrom.x == waterX && absorbFrom.y == waterY;
+}
+
+fn waterIsAbsorbedBySettledSand(x: i32, y: i32) -> bool {
+  let sandBelow = getCell(x, y + 1);
+  if (material(sandBelow) == SAND && settledSandAbsorbsCell(x, y + 1, x, y)) {
+    return true;
+  }
+
+  let sandLeft = getCell(x - 1, y);
+  if (material(sandLeft) == SAND && settledSandAbsorbsCell(x - 1, y, x, y)) {
+    return true;
+  }
+
+  let sandRight = getCell(x + 1, y);
+  if (material(sandRight) == SAND && settledSandAbsorbsCell(x + 1, y, x, y)) {
+    return true;
+  }
+
+  let sandAbove = getCell(x, y - 1);
+  if (material(sandAbove) == SAND && settledSandAbsorbsCell(x, y - 1, x, y)) {
+    return true;
+  }
+
+  return false;
+}
+
+fn wetSandContactScore(x: i32, y: i32) -> u32 {
+  var score = 0u;
+
+  if (material(getCell(x - 1, y)) == WET_SAND) {
+    score += 2u;
+  }
+  if (material(getCell(x + 1, y)) == WET_SAND) {
+    score += 2u;
+  }
+  if (material(getCell(x, y - 1)) == WET_SAND) {
+    score += 1u;
+  }
+  if (material(getCell(x, y + 1)) == WET_SAND) {
+    score += 3u;
+  }
+  if (material(getCell(x - 1, y + 1)) == WET_SAND) {
+    score += 1u;
+  }
+  if (material(getCell(x + 1, y + 1)) == WET_SAND) {
+    score += 1u;
+  }
+
+  return score;
+}
+
+fn shouldSpreadWetSand(x: i32, y: i32) -> bool {
+  let score = wetSandContactScore(x, y);
+  if (score == 0u) {
+    return false;
+  }
+
+  let phase = hash(u32(max(x, 0)), u32(max(y, 0)), 20u) & 3u;
+  if ((params.frame & 3u) != phase) {
+    return false;
+  }
+
+  return randByte(x, y, 19u) < min(18u, score * 3u);
 }
 
 fn waterPressure(x: i32, y: i32) -> u32 {
@@ -172,16 +318,6 @@ fn waterTarget(x: i32, y: i32) -> vec2<i32> {
     return vec2<i32>(x, y + 1);
   }
 
-  let supported = canSupportWater(below);
-  let flowRoll = randByte(x, y, 22u);
-  let pressure = waterPressure(x, y);
-  if (supported && pressure == 0u && flowRoll < 232u) {
-    return vec2<i32>(x, y);
-  }
-  if (supported && pressure == 1u && flowRoll < 76u) {
-    return vec2<i32>(x, y);
-  }
-
   var first = -1;
   var second = 1;
   if (randBit(x, y, 21u)) {
@@ -189,10 +325,31 @@ fn waterTarget(x: i32, y: i32) -> vec2<i32> {
     second = -1;
   }
 
+  let firstDownMat = material(getCell(x + first, y + 1));
+  if (canFluidEnter(firstDownMat)) {
+    return vec2<i32>(x + first, y + 1);
+  }
+
+  let secondDownMat = material(getCell(x + second, y + 1));
+  if (canFluidEnter(secondDownMat)) {
+    return vec2<i32>(x + second, y + 1);
+  }
+
+  let supported = canSupportWater(below);
+  let flowRoll = randByte(x, y, 22u);
+  let pressure = waterPressure(x, y);
+
+  if (supported && pressure > 0u && flowRoll < 252u) {
+    return vec2<i32>(x, y);
+  }
+  if (supported && pressure == 0u && flowRoll < 48u) {
+    return vec2<i32>(x, y);
+  }
+
   let firstMat = material(getCell(x + first, y));
   if (canFluidEnter(firstMat)) {
     let firstBelow = material(getCell(x + first, y + 1));
-    if (!supported || canSupportWater(firstBelow) || pressure > 1u || flowRoll > 236u) {
+    if (!supported || canSupportWater(firstBelow)) {
       return vec2<i32>(x + first, y);
     }
   }
@@ -200,7 +357,7 @@ fn waterTarget(x: i32, y: i32) -> vec2<i32> {
   let secondMat = material(getCell(x + second, y));
   if (canFluidEnter(secondMat)) {
     let secondBelow = material(getCell(x + second, y + 1));
-    if (!supported || canSupportWater(secondBelow) || pressure > 1u || flowRoll > 242u) {
+    if (!supported || canSupportWater(secondBelow)) {
       return vec2<i32>(x + second, y);
     }
   }
@@ -234,27 +391,86 @@ fn smokeTarget(x: i32, y: i32) -> vec2<i32> {
   return vec2<i32>(x, y);
 }
 
+fn fireTarget(x: i32, y: i32) -> vec2<i32> {
+  if (randByte(x, y, 32u) < 64u) {
+    return vec2<i32>(x, y);
+  }
+
+  let up = material(getCell(x, y - 1));
+  if (canFireEnter(up)) {
+    return vec2<i32>(x, y - 1);
+  }
+
+  var first = -1;
+  var second = 1;
+  if (randBit(x, y, 33u)) {
+    first = 1;
+    second = -1;
+  }
+
+  let firstMat = material(getCell(x + first, y - 1));
+  if (canFireEnter(firstMat)) {
+    return vec2<i32>(x + first, y - 1);
+  }
+
+  let secondMat = material(getCell(x + second, y - 1));
+  if (canFireEnter(secondMat)) {
+    return vec2<i32>(x + second, y - 1);
+  }
+
+  return vec2<i32>(x, y);
+}
+
+fn sparkTarget(x: i32, y: i32) -> vec2<i32> {
+  return sandTarget(x, y, SPARK);
+}
+
 fn targetMatches(moveTo: vec2<i32>, x: i32, y: i32) -> bool {
   return moveTo.x == x && moveTo.y == y;
+}
+
+fn powderIncomingCell(sourceCell: u32, targetMat: u32, x: i32, y: i32, salt: u32) -> u32 {
+  let sourceMat = material(sourceCell);
+  if (sourceMat == SAND && targetMat == WATER) {
+    return pack(WET_SAND, 0u, randByte(x, y, salt));
+  }
+  return pack(sourceMat, 0u, aux(sourceCell));
 }
 
 fn applyCurrentOutgoing(cell: u32, x: i32, y: i32) -> u32 {
   let mat = material(cell);
 
-  if (mat == SAND) {
-    let moveTo = sandTarget(x, y);
+  if (mat == SAND || mat == WET_SAND) {
+    if (mat == WET_SAND && isHeatNear(x, y) && randByte(x, y, 17u) < 34u) {
+      return pack(SAND, 0u, randByte(x, y, 18u));
+    }
+
+    let moveTo = sandTarget(x, y, mat);
     if (!targetMatches(moveTo, x, y)) {
       let moveToMat = material(getCell(moveTo.x, moveTo.y));
-      if (moveToMat == WATER) {
+      if (mat == WET_SAND && moveToMat == WATER) {
         return pack(WATER, 0u, aux(cell));
       }
       return pack(EMPTY, 0u, 0u);
+    }
+    if (mat == SAND) {
+      let absorbFrom = settledSandAbsorbTarget(x, y);
+      if (!targetMatches(absorbFrom, x, y)) {
+        return pack(WET_SAND, 0u, randByte(x, y, 16u));
+      }
+      if (shouldSpreadWetSand(x, y)) {
+        return pack(WET_SAND, 0u, randByte(x, y, 20u));
+      }
     }
     return cell;
   }
 
   if (mat == WATER) {
-    if (isFireNear(x, y) && randByte(x, y, 35u) < 168u) {
+    if (waterIsAbsorbedBySettledSand(x, y)) {
+      return pack(EMPTY, 0u, 0u);
+    }
+
+    if (isHeatNear(x, y) && randByte(x, y, 35u) < 168u) {
       return pack(STEAM, 50u + (randByte(x, y, 36u) & 31u), randByte(x, y, 37u));
     }
 
@@ -295,22 +511,38 @@ fn applyCurrentOutgoing(cell: u32, x: i32, y: i32) -> u32 {
     if (age <= 1u) {
       return pack(SMOKE, 36u + (randByte(x, y, 42u) & 31u), 0u);
     }
-    if (randByte(x, y, 43u) < 48u && canSmokeEnter(material(getCell(x, y - 1)))) {
+    let moveTo = fireTarget(x, y);
+    if (!targetMatches(moveTo, x, y)) {
+      if (randByte(x, y, 43u) < 76u) {
+        return pack(SMOKE, 20u + (randByte(x, y, 44u) & 31u), randByte(x, y, 45u));
+      }
       return pack(EMPTY, 0u, 0u);
     }
-    return pack(FIRE, age - 1u, randByte(x, y, 44u));
+    if (randByte(x, y, 46u) < 24u && canSmokeEnter(material(getCell(x, y - 1)))) {
+      return pack(SMOKE, 22u + (randByte(x, y, 47u) & 31u), randByte(x, y, 48u));
+    }
+    return pack(FIRE, age - 1u, randByte(x, y, 49u));
   }
 
   if (mat == SPARK) {
     let age = life(cell);
-    if (age <= 1u) {
-      return pack(FIRE, 12u, randByte(x, y, 51u));
-    }
-    let moveTo = sandTarget(x, y);
-    if (!targetMatches(moveTo, x, y)) {
+    if (isWetNear(x, y)) {
+      if (randByte(x, y, 50u) < 172u) {
+        return pack(STEAM, 18u + (randByte(x, y, 51u) & 23u), randByte(x, y, 52u));
+      }
       return pack(EMPTY, 0u, 0u);
     }
-    return pack(SPARK, age - 1u, randByte(x, y, 52u));
+    if (age <= 1u) {
+      return pack(FIRE, 10u + (randByte(x, y, 53u) & 15u), randByte(x, y, 54u));
+    }
+    let moveTo = sparkTarget(x, y);
+    if (!targetMatches(moveTo, x, y)) {
+      if (randByte(x, y, 55u) < 72u) {
+        return pack(FIRE, 5u + (randByte(x, y, 56u) & 11u), randByte(x, y, 57u));
+      }
+      return pack(EMPTY, 0u, 0u);
+    }
+    return pack(SPARK, age - 1u, randByte(x, y, 58u));
   }
 
   return cell;
@@ -322,23 +554,33 @@ fn applyIncoming(outCell: u32, x: i32, y: i32) -> u32 {
 
   if (outMat == EMPTY || outMat == SMOKE || outMat == WATER || outMat == FIRE || outMat == STEAM) {
     let above = getCell(x, y - 1);
-    if (material(above) == SAND && targetMatches(sandTarget(x, y - 1), x, y)) {
-      return pack(SAND, 0u, aux(above));
+    if ((material(above) == SAND || material(above) == WET_SAND) && targetMatches(sandTarget(x, y - 1, material(above)), x, y)) {
+      return powderIncomingCell(above, outMat, x, y, 61u);
     }
 
     let aboveLeft = getCell(x - 1, y - 1);
-    if (material(aboveLeft) == SAND && targetMatches(sandTarget(x - 1, y - 1), x, y)) {
-      return pack(SAND, 0u, aux(aboveLeft));
+    if ((material(aboveLeft) == SAND || material(aboveLeft) == WET_SAND) && targetMatches(sandTarget(x - 1, y - 1, material(aboveLeft)), x, y)) {
+      return powderIncomingCell(aboveLeft, outMat, x, y, 62u);
     }
 
     let aboveRight = getCell(x + 1, y - 1);
-    if (material(aboveRight) == SAND && targetMatches(sandTarget(x + 1, y - 1), x, y)) {
-      return pack(SAND, 0u, aux(aboveRight));
+    if ((material(aboveRight) == SAND || material(aboveRight) == WET_SAND) && targetMatches(sandTarget(x + 1, y - 1, material(aboveRight)), x, y)) {
+      return powderIncomingCell(aboveRight, outMat, x, y, 63u);
     }
 
     let sparkAbove = getCell(x, y - 1);
-    if (material(sparkAbove) == SPARK && targetMatches(sandTarget(x, y - 1), x, y)) {
-      return pack(SPARK, max(life(sparkAbove), 8u), randByte(x, y, 61u));
+    if (material(sparkAbove) == SPARK && life(sparkAbove) > 1u && targetMatches(sparkTarget(x, y - 1), x, y)) {
+      return pack(SPARK, life(sparkAbove) - 1u, randByte(x, y, 61u));
+    }
+
+    let sparkAboveLeft = getCell(x - 1, y - 1);
+    if (material(sparkAboveLeft) == SPARK && life(sparkAboveLeft) > 1u && targetMatches(sparkTarget(x - 1, y - 1), x, y)) {
+      return pack(SPARK, life(sparkAboveLeft) - 1u, randByte(x, y, 62u));
+    }
+
+    let sparkAboveRight = getCell(x + 1, y - 1);
+    if (material(sparkAboveRight) == SPARK && life(sparkAboveRight) > 1u && targetMatches(sparkTarget(x + 1, y - 1), x, y)) {
+      return pack(SPARK, life(sparkAboveRight) - 1u, randByte(x, y, 63u));
     }
   }
 
@@ -346,6 +588,16 @@ fn applyIncoming(outCell: u32, x: i32, y: i32) -> u32 {
     let waterAbove = getCell(x, y - 1);
     if (material(waterAbove) == WATER && targetMatches(waterTarget(x, y - 1), x, y)) {
       out = pack(WATER, 0u, aux(waterAbove));
+    }
+
+    let waterAboveLeft = getCell(x - 1, y - 1);
+    if (material(waterAboveLeft) == WATER && targetMatches(waterTarget(x - 1, y - 1), x, y)) {
+      out = pack(WATER, 0u, aux(waterAboveLeft));
+    }
+
+    let waterAboveRight = getCell(x + 1, y - 1);
+    if (material(waterAboveRight) == WATER && targetMatches(waterTarget(x + 1, y - 1), x, y)) {
+      out = pack(WATER, 0u, aux(waterAboveRight));
     }
 
     let waterLeft = getCell(x - 1, y);
@@ -359,7 +611,7 @@ fn applyIncoming(outCell: u32, x: i32, y: i32) -> u32 {
     }
   }
 
-  if (material(out) == EMPTY || material(out) == FIRE) {
+  if (material(out) == EMPTY || material(out) == FIRE || material(out) == SMOKE || material(out) == STEAM) {
     let gasBelow = getCell(x, y + 1);
     let gasBelowMat = material(gasBelow);
     if ((gasBelowMat == SMOKE || gasBelowMat == STEAM) && targetMatches(smokeTarget(x, y + 1), x, y)) {
@@ -367,8 +619,18 @@ fn applyIncoming(outCell: u32, x: i32, y: i32) -> u32 {
     }
 
     let fireBelow = getCell(x, y + 1);
-    if (material(fireBelow) == FIRE && randByte(x, y, 72u) < 54u) {
+    if (material(fireBelow) == FIRE && life(fireBelow) > 1u && targetMatches(fireTarget(x, y + 1), x, y)) {
       out = pack(FIRE, max(life(fireBelow), 24u) - 1u, randByte(x, y, 73u));
+    }
+
+    let fireBelowLeft = getCell(x - 1, y + 1);
+    if (material(fireBelowLeft) == FIRE && life(fireBelowLeft) > 1u && targetMatches(fireTarget(x - 1, y + 1), x, y)) {
+      out = pack(FIRE, max(life(fireBelowLeft), 20u) - 1u, randByte(x, y, 74u));
+    }
+
+    let fireBelowRight = getCell(x + 1, y + 1);
+    if (material(fireBelowRight) == FIRE && life(fireBelowRight) > 1u && targetMatches(fireTarget(x + 1, y + 1), x, y)) {
+      out = pack(FIRE, max(life(fireBelowRight), 20u) - 1u, randByte(x, y, 75u));
     }
   }
 
@@ -382,18 +644,34 @@ fn applyBrushEmitter(cell: u32, emitter: Emitter, x: i32, y: i32) -> u32 {
     return cell;
   }
 
+  if (emitter.material == EMPTY) {
+    return pack(EMPTY, 0u, 0u);
+  }
+  if (emitter.material == SOLID) {
+    return pack(SOLID, 255u, roll);
+  }
+
   if (cellMat == SOLID) {
     return cell;
   }
 
   if (emitter.material == WATER) {
     if (cellMat == SAND) {
+      return pack(WET_SAND, 0u, roll);
+    }
+    if (cellMat == WET_SAND) {
       return cell;
     }
     return pack(WATER, 0u, roll);
   }
   if (emitter.material == SAND) {
+    if (cellMat == WATER) {
+      return pack(WET_SAND, 0u, roll);
+    }
     return pack(SAND, 0u, roll);
+  }
+  if (emitter.material == WET_SAND) {
+    return pack(WET_SAND, 0u, roll);
   }
   if (emitter.material == SMOKE) {
     return pack(SMOKE, 42u + (roll & 47u), roll);
@@ -515,8 +793,12 @@ fn materialColor(cell: u32, x: u32, y: u32) -> vec4<f32> {
   if (mat == SAND) {
     return vec4<f32>(0.78 + n * 0.12, 0.58 + n * 0.08, 0.28 + n * 0.06, 1.0);
   }
+  if (mat == WET_SAND) {
+    return vec4<f32>(0.46 + n * 0.07, 0.34 + n * 0.05, 0.20 + n * 0.04, 1.0);
+  }
   if (mat == WATER) {
-    return vec4<f32>(0.08 + n * 0.04, 0.30 + n * 0.08, 0.85 + n * 0.13, 1.0);
+    let still = f32((hash(x, y, aux(cell) + 17u) & 31u)) / 31.0;
+    return vec4<f32>(0.08 + still * 0.04, 0.30 + still * 0.08, 0.85 + still * 0.13, 1.0);
   }
   if (mat == FIRE) {
     let heat = clamp(l * 2.6 + n * 0.22, 0.0, 1.0);

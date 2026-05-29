@@ -30,12 +30,19 @@ https://{account}.github.io/{repo}/tech-tests/noita-webgpu/
 
 ## Controls
 
+- Top scrollable slot hub: select any implemented brush.
 - Drag: emit current material.
 - Right click or Shift+drag: water.
 - Alt+drag: sand.
 - `1`: fire brush.
 - `2`: water brush.
 - `3`: sand brush.
+- `4`: smoke brush.
+- `5`: steam brush.
+- `6`: spark brush.
+- `7`: rock brush.
+- `8`: wet sand brush.
+- `0`: erase brush.
 - `Space`: explosion at the last pointer position.
 - Mobile one-finger drag: fire/current material.
 - Mobile two-finger drag: water.
@@ -47,8 +54,9 @@ https://{account}.github.io/{repo}/tech-tests/noita-webgpu/
 - WebGPU render pass draws the storage-buffer result into an offscreen scene texture.
 - Bloom postprocessing extracts bright fire/spark pixels, builds a mip-chain blur, and composites back to the canvas.
 - Emitters are packed into a GPU storage buffer each frame.
-- Materials: empty, solid, sand, water, fire, smoke, spark, steam.
-- First-pass reactions: water/fire contact creates steam, and old steam can condense back into water.
+- Materials: empty, solid, sand, wet sand, water, fire, smoke, spark, steam.
+- First-pass reactions: water/fire contact creates steam, old steam can condense back into water, dry sand can absorb adjacent water into wet sand, wet sand slowly spreads moisture into nearby settled dry sand, and nearby heat can dry wet sand.
+- Fire rises through empty/gas cells, leaves smoke, and is quenched by water or wet sand; sparks are short-lived falling heat particles that leave small fire trails and flash to steam when wet.
 
 This is a GPU material simulation experiment, not the final v2 battle renderer.
 

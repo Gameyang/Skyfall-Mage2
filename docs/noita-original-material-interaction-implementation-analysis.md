@@ -706,7 +706,7 @@ WebGPU shader는 원작 material 전체를 switch로 직접 작성하지 말고,
 현재 코드 기준 주요 구조:
 
 - Grid: `256x144`, 총 `36,864` cell. `main.js`의 `GRID_WIDTH`, `GRID_HEIGHT`에 고정되어 있다.
-- Material enum: `empty`, `solid`, `sand`, `water`, `fire`, `smoke`, `spark` 7종만 있다.
+- Material enum: `empty`, `solid`, `sand`, `wet sand`, `water`, `fire`, `smoke`, `spark`, `steam` 9종만 있다.
 - Cell packing: `u32` 하나에 `material 8bit`, `life 8bit`, `aux 8bit`를 저장한다.
 - GPU buffer: material grid storage buffer 2개를 ping-pong한다.
 - Emitter: pointer/폭발 입력을 `Emitter` storage buffer로 매 frame 전달한다.
@@ -717,20 +717,20 @@ WebGPU shader는 원작 material 전체를 switch로 직접 작성하지 말고,
 관련 위치:
 
 - `tech-tests/noita-webgpu/main.js`: grid/config/material enum은 3-40행, 초기 terrain/water 배치는 105행, emitter packing은 158행, WebGPU 초기화는 305행, frame loop는 492행 부근이다.
-- `tech-tests/noita-webgpu/noitaField.wgsl`: material enum은 1-7행, cell packing은 45행, water pressure 근사는 142행, water movement는 161행, outgoing/incoming 처리는 233행과 297행, compute entry는 447행, 색상 렌더링은 481행 부근이다.
+- `tech-tests/noita-webgpu/noitaField.wgsl`: material enum은 파일 상단, cell packing은 `pack/material/life/aux`, water movement는 `waterTarget()`, outgoing/incoming 처리는 `applyCurrentOutgoing()`과 `applyIncoming()`, compute entry는 `simulate()`, 색상 렌더링은 `materialColor()`에 있다.
 
 ### 15.2 원작 지향 모델 대비 구현 상태
 
 | 항목 | 원작 지향 목표 | 현재 구현 | 상태 |
 | --- | --- | --- | --- |
-| Material 수 | `materials.xml` 기반 수백 종 material | 7종 하드코딩 | 초기 prototype |
+| Material 수 | `materials.xml` 기반 수백 종 material | 9종 하드코딩 | 초기 prototype |
 | Material 정의 | `CellData`, `CellDataChild` 상속과 tag | JS/WGSL enum 직접 선언 | 미구현 |
-| Reaction | XML `Reaction` table, tag selector, probability | shader if문으로 water/fire, wet/fire 정도만 근사 | 매우 제한적 |
-| Movement | density, gravity, flow speed, viscosity, static sand | sand/water/smoke/fire/spark 전용 target 함수 | 부분 구현 |
-| Liquid pressure | density/flow/압력성 움직임 | `waterPressure()`로 상부 water 개수만 보는 근사 | 실험적 구현 |
-| Density layering | oil/water/lava/acid 등 밀도 교환 | sand가 water와 swap하는 정도 | 대부분 미구현 |
-| Fire/heat | burnable, fire_hp, smoke, temperature, oxygen | fire life 감소, water 인접 시 smoke | 부분 구현 |
-| Gas/vapor | steam, smoke, acid gas, poison gas, lifetime/condensation | smoke 1종, lifetime 감소, 상승 | 부분 구현 |
+| Reaction | XML `Reaction` table, tag selector, probability | shader if문으로 water/fire, sand/water 흡수, wet sand 수분 확산 정도만 근사 | 매우 제한적 |
+| Movement | density, gravity, flow speed, viscosity, static sand | density helper 기반 sand/wet sand/water/smoke/fire/spark target 함수 | 부분 구현 |
+| Liquid pressure | density/flow/압력성 움직임 | 표면 흐름과 깊은 물 안정화를 나눈 단순 근사 | 실험적 구현 |
+| Density layering | oil/water/lava/acid 등 밀도 교환 | solid > wet sand > sand > water 정도의 단순 hierarchy | 대부분 미구현 |
+| Fire/heat | burnable, fire_hp, smoke, temperature, oxygen | fire life 감소, water/wet sand 인접 시 steam 또는 smoke | 부분 구현 |
+| Gas/vapor | steam, smoke, acid gas, poison gas, lifetime/condensation | smoke와 steam, lifetime 감소, 상승/응축 | 부분 구현 |
 | Terrain | static terrain, corrodible, meltable, durability | `SOLID` 1종, 폭발 중심부만 일부 제거 | 초기 prototype |
 | Explosion | material별 파괴/연소/압력/파편 | radius 안에서 empty/fire/smoke/spark/sand 생성 | 시각 효과 수준 |
 | Entity coupling | damage, stain, polymorph, teleport, suffocation | entity 없음 | 미구현 |
@@ -756,7 +756,7 @@ WebGPU shader는 원작 material 전체를 switch로 직접 작성하지 말고,
 
 ### 15.4 현재 구현과 원작의 핵심 차이
 
-가장 큰 차이는 데이터 중심성이다. 원작은 material property와 reaction이 데이터로 정의되고, tag로 반응 범위를 넓힌다. 현재 구현은 `canSandEnter`, `canFluidEnter`, `isWetNear`, `applyCurrentOutgoing` 같은 shader 함수에 규칙이 직접 들어간다. material이 7종을 넘기 시작하면 이 방식은 빠르게 유지보수가 어려워진다.
+가장 큰 차이는 데이터 중심성이다. 원작은 material property와 reaction이 데이터로 정의되고, tag로 반응 범위를 넓힌다. 현재 구현은 `materialDensity`, `canPowderEnter`, `canFluidEnter`, `isWetNear`, `applyCurrentOutgoing` 같은 shader 함수에 규칙이 직접 들어간다. material이 현재의 소수 enum을 넘어 늘기 시작하면 이 방식은 빠르게 유지보수가 어려워진다.
 
 두 번째 차이는 update pass다. 원작 수준의 액체/분말/반응은 movement, reaction, heat, lifetime, entity sampling을 분리해야 한다. 현재는 `simulate()`에서 한 cell 기준으로 outgoing, incoming, emitter를 순서대로 적용한다. 구현은 단순하고 빠르지만, 여러 material의 동시 반응, 확률 reaction, density swap, 다중 입력 alchemy를 넣기 어렵다.
 
@@ -766,8 +766,8 @@ WebGPU shader는 원작 material 전체를 switch로 직접 작성하지 말고,
 
 현재 코드를 버리지 않고 이어가려면 다음 순서가 가장 안전하다.
 
-1. `MATERIAL` enum을 `MaterialDef` registry로 감싸고, 현재 7종을 registry fixture로 옮긴다.
-2. `canSandEnter`, `canFluidEnter`, `canSmokeEnter`를 material property lookup 기반으로 바꾼다.
+1. `MATERIAL` enum을 `MaterialDef` registry로 감싸고, 현재 9종을 registry fixture로 옮긴다.
+2. `materialDensity`, `canPowderEnter`, `canFluidEnter`, `canSmokeEnter`를 material property lookup 기반으로 바꾼다.
 3. `SOLID`를 `STATIC_TERRAIN`, `CORRODIBLE`, `WOOD`, `METAL`, `ICE` 같은 1차 지형군으로 쪼갠다.
 4. reaction pass를 별도 함수로 분리해서 water/fire/steam, acid/corrodible, lava/water부터 넣는다.
 5. CPU reference simulator를 같은 registry로 작성해서 shader 결과 비교 기준을 만든다.

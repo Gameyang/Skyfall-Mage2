@@ -38,10 +38,78 @@ const MATERIAL = {
   SMOKE: 5,
   SPARK: 6,
   STEAM: 7,
+  WET_SAND: 8,
 };
+
+const MATERIAL_OPTIONS = [
+  {
+    label: 'Fire',
+    key: '1',
+    material: MATERIAL.FIRE,
+    color: '#ff6a1a',
+    glow: 'rgba(255, 106, 26, 0.72)',
+  },
+  {
+    label: 'Water',
+    key: '2',
+    material: MATERIAL.WATER,
+    color: '#2f88ff',
+    glow: 'rgba(47, 136, 255, 0.56)',
+  },
+  {
+    label: 'Sand',
+    key: '3',
+    material: MATERIAL.SAND,
+    color: '#d9a84a',
+    glow: 'rgba(217, 168, 74, 0.42)',
+  },
+  {
+    label: 'Smoke',
+    key: '4',
+    material: MATERIAL.SMOKE,
+    color: '#9da3aa',
+    glow: 'rgba(157, 163, 170, 0.38)',
+  },
+  {
+    label: 'Steam',
+    key: '5',
+    material: MATERIAL.STEAM,
+    color: '#c9e5f7',
+    glow: 'rgba(201, 229, 247, 0.46)',
+  },
+  {
+    label: 'Spark',
+    key: '6',
+    material: MATERIAL.SPARK,
+    color: '#ffd76a',
+    glow: 'rgba(255, 215, 106, 0.7)',
+  },
+  {
+    label: 'Rock',
+    key: '7',
+    material: MATERIAL.SOLID,
+    color: '#6f6870',
+    glow: 'rgba(111, 104, 112, 0.28)',
+  },
+  {
+    label: 'Wet Sand',
+    key: '8',
+    material: MATERIAL.WET_SAND,
+    color: '#9b7849',
+    glow: 'rgba(155, 120, 73, 0.36)',
+  },
+  {
+    label: 'Erase',
+    key: '0',
+    material: MATERIAL.EMPTY,
+    color: '#111827',
+    glow: 'rgba(215, 228, 255, 0.18)',
+  },
+];
 
 const canvas = document.getElementById('fieldCanvas');
 const fatal = document.getElementById('fatal');
+const materialHub = document.getElementById('materialHub');
 const activePointers = new Map();
 const burstEmitters = [];
 
@@ -66,6 +134,76 @@ function pack(material, life = 0, aux = 0) {
 
 function randomSeed() {
   return Math.floor(Math.random() * 0xffffffff) >>> 0;
+}
+
+function setSelectedMaterial(material) {
+  selectedMaterial = material;
+
+  for (const slot of materialHub.querySelectorAll('.material-slot[data-material]')) {
+    const isSelected = Number(slot.dataset.material) === selectedMaterial;
+    slot.classList.toggle('is-selected', isSelected);
+    slot.setAttribute('aria-pressed', String(isSelected));
+  }
+}
+
+function setupMaterialHub() {
+  const fragment = document.createDocumentFragment();
+
+  for (const option of MATERIAL_OPTIONS) {
+    const slot = document.createElement('button');
+    slot.type = 'button';
+    slot.className = 'material-slot';
+    slot.dataset.material = String(option.material);
+    slot.setAttribute('aria-pressed', 'false');
+    slot.title = `${option.label} brush (${option.key})`;
+    slot.style.setProperty('--slot-color', option.color);
+    slot.style.setProperty('--slot-glow', option.glow);
+
+    const swatch = document.createElement('span');
+    swatch.className = 'material-swatch';
+    swatch.setAttribute('aria-hidden', 'true');
+
+    const name = document.createElement('span');
+    name.className = 'material-name';
+    name.textContent = option.label;
+
+    const key = document.createElement('span');
+    key.className = 'material-key';
+    key.textContent = option.key;
+
+    slot.append(swatch, name, key);
+    fragment.append(slot);
+  }
+
+  const explosion = document.createElement('button');
+  explosion.type = 'button';
+  explosion.className = 'material-slot';
+  explosion.dataset.action = 'explosion';
+  explosion.title = 'Explosion at last pointer position (Space)';
+  explosion.style.setProperty('--slot-color', '#ff3b45');
+  explosion.style.setProperty('--slot-glow', 'rgba(255, 59, 69, 0.78)');
+  explosion.innerHTML =
+    '<span class="material-swatch" aria-hidden="true"></span><span class="material-name">Blast</span><span class="material-key">Space</span>';
+  fragment.append(explosion);
+
+  materialHub.append(fragment);
+  materialHub.addEventListener('pointerdown', (event) => event.stopPropagation());
+  materialHub.addEventListener('click', (event) => {
+    const slot = event.target.closest('.material-slot');
+    if (!slot) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (slot.dataset.action === 'explosion') {
+      addExplosion(lastGrid.x, lastGrid.y);
+      return;
+    }
+
+    setSelectedMaterial(Number(slot.dataset.material));
+  });
+
+  setSelectedMaterial(selectedMaterial);
 }
 
 function showFatal(title, detail) {
@@ -137,6 +275,40 @@ function seedInitialField() {
     }
   }
 
+  const basin = {
+    left: 164,
+    right: 224,
+    top: GRID_HEIGHT - 82,
+    bottom: GRID_HEIGHT - 16,
+    wall: 4,
+    waterTop: GRID_HEIGHT - 44,
+  };
+
+  for (let y = basin.top; y <= basin.bottom; y += 1) {
+    for (let x = basin.left; x <= basin.right; x += 1) {
+      const isLeftWall = x < basin.left + basin.wall;
+      const isRightWall = x > basin.right - basin.wall;
+      const isBottom = y > basin.bottom - basin.wall;
+      const index = y * GRID_WIDTH + x;
+
+      if (isLeftWall || isRightWall || isBottom) {
+        cells[index] = pack(MATERIAL.SOLID, 255, 0);
+      } else if (y >= basin.waterTop && Math.random() < 0.9) {
+        cells[index] = pack(MATERIAL.WATER, 0, randomSeed() & 255);
+      } else if (!isLeftWall && !isRightWall && !isBottom) {
+        cells[index] = pack(MATERIAL.EMPTY, 0, 0);
+      }
+    }
+  }
+
+  for (let y = basin.top - 14; y < basin.top - 4; y += 1) {
+    for (let x = basin.left + 14; x < basin.left + 36; x += 1) {
+      if (Math.random() < 0.62) {
+        cells[y * GRID_WIDTH + x] = pack(MATERIAL.SAND, 0, randomSeed() & 255);
+      }
+    }
+  }
+
   return cells;
 }
 
@@ -164,12 +336,13 @@ function buildEmitterBuffer() {
   for (const pointer of activePointers.values()) {
     const touchWater = pointer.pointerType === 'touch' && pointerCount > 1;
     const waterBrush = touchWater || pointer.material === MATERIAL.WATER;
+    const hardBrush = pointer.material === MATERIAL.SOLID || pointer.material === MATERIAL.EMPTY;
     count = pushEmitter(words, count, {
       material: touchWater ? MATERIAL.WATER : pointer.material,
       x: pointer.x,
       y: pointer.y,
       radius: waterBrush ? TOUCH_WATER_RADIUS : BRUSH_RADIUS,
-      strength: waterBrush ? 255 : 222,
+      strength: waterBrush || hardBrush ? 255 : 222,
       seed: pointer.seed,
       flags: 0,
     });
@@ -604,9 +777,15 @@ function setupInput() {
   window.addEventListener('blur', () => activePointers.clear());
 
   window.addEventListener('keydown', (event) => {
-    if (event.code === 'Digit1') selectedMaterial = MATERIAL.FIRE;
-    if (event.code === 'Digit2') selectedMaterial = MATERIAL.WATER;
-    if (event.code === 'Digit3') selectedMaterial = MATERIAL.SAND;
+    if (event.code === 'Digit1') setSelectedMaterial(MATERIAL.FIRE);
+    if (event.code === 'Digit2') setSelectedMaterial(MATERIAL.WATER);
+    if (event.code === 'Digit3') setSelectedMaterial(MATERIAL.SAND);
+    if (event.code === 'Digit4') setSelectedMaterial(MATERIAL.SMOKE);
+    if (event.code === 'Digit5') setSelectedMaterial(MATERIAL.STEAM);
+    if (event.code === 'Digit6') setSelectedMaterial(MATERIAL.SPARK);
+    if (event.code === 'Digit7') setSelectedMaterial(MATERIAL.SOLID);
+    if (event.code === 'Digit8') setSelectedMaterial(MATERIAL.WET_SAND);
+    if (event.code === 'Digit0') setSelectedMaterial(MATERIAL.EMPTY);
 
     if (event.code === 'Space') {
       event.preventDefault();
@@ -617,6 +796,7 @@ function setupInput() {
 
 async function main() {
   resizeCanvas();
+  setupMaterialHub();
   setupInput();
 
   try {

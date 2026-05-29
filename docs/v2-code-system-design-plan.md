@@ -3,6 +3,7 @@
 작성일: 2026-05-28  
 대상 프로젝트: `F:\Workspace\Skyfall-Mage2`  
 기준 분석 문서: `docs/baseline-game-analysis.md`
+관련 WebGPU handoff: `docs/noita-webgpu-tech-test-handoff.md`
 
 ## 1. 목표
 
@@ -449,12 +450,15 @@ UI는 inventory state를 표시하고 command만 보낸다.
 
 구성:
 
-- `MaterialParticleSystem`: falling-sand/cellular automata 기반 material grid
-- `MaterialEmitterSystem`: fire, water, sand, smoke, spark 생성
-- `MaterialInteractionSystem`: 물/불/연기/고체의 간단한 반응 규칙
+- `MaterialFieldSystem`: CPU gameplay/environment event를 material emitter로 변환
+- `MaterialEmitterQueue`: fire, water, sand, wet sand, smoke, steam, spark, explosion emitter packing
+- `MaterialInteractionSystem`: density, water pooling, sand-water absorption, wet sand spread, fire/smoke/steam 규칙
 - `WebGPUMaterialBackend`: compute shader 기반 grid update와 render
+- `MaterialFieldBloom`: `rgba16float` scene texture와 bloom 후처리
 
 이 시스템은 전투 판정 엔진이 아니라 비주얼/환경 이펙트 레이어로 제한한다. 플레이어 피격, 투사체 명중, 적 충돌 같은 판정은 기존 core combat system이 담당한다.
+
+`tech-tests/noita-webgpu`는 정식 구현 전용 코드가 아니므로 삭제 준비 대상으로 둔다. 이식할 세부 구현은 `docs/noita-webgpu-tech-test-handoff.md`를 기준으로 하며, top slot hub, standalone page, debug terrain은 정식 게임에 포함하지 않는다.
 
 ## 11. 저장 시스템 설계
 
@@ -619,7 +623,7 @@ Vite 설정:
 - 첫 화면은 랜딩 페이지가 아니라 실제 게임 화면이다.
 - 전투와 인벤토리는 항상 독립 패널로 존재하며, 화면 방향에 따라 배치만 바뀐다.
 - WebGL2는 전투 렌더링에 집중하고, 인벤토리/상점/스킬트리는 DOM UI로 구현한다.
-- WebGPU는 Noita-inspired material particle 같은 고급 이펙트용 선택 백엔드로 사용한다.
+- WebGPU는 Noita-inspired material field 같은 고급 이펙트용 선택 백엔드로 사용하며, 실패해도 게임 본체를 중단하지 않는다.
 - `GameState`에는 시스템 인스턴스와 DOM 참조를 넣지 않는다.
 - UI와 입력은 state를 직접 변경하지 않고 command를 보낸다.
 - 저장은 versioned save schema를 사용한다.
