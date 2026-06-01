@@ -63,7 +63,10 @@ fn fragmentMain(@builtin(position) position: vec4f) -> @location(0) vec4f {
 
   let playerGlow = smoothstep(0.11, 0.0, distance(uv, params.playerAndAim.xy));
   let aimGlow = smoothstep(0.08, 0.0, distance(uv, params.playerAndAim.zw));
-  color.rgb = color.rgb + vec3f(0.02, 0.12, 0.11) * playerGlow + vec3f(0.18, 0.11, 0.02) * aimGlow;
+  let glowColor =
+    vec3f(0.02, 0.12, 0.11) * playerGlow +
+    vec3f(0.18, 0.11, 0.02) * aimGlow;
+  color = vec4f(color.rgb + glowColor, color.a);
 
   return color;
 }
