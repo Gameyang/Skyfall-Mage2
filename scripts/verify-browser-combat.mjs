@@ -1,10 +1,11 @@
 import { chromium } from "@playwright/test";
 
 const url = process.env.SKYFALL_COMBAT_URL ?? "http://127.0.0.1:5173";
+let browser = null;
 
 try {
   await waitForServer(url);
-  const browser = await launchBrowser();
+  browser = await launchBrowser();
   const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 2 });
   await context.addInitScript(() => localStorage.clear());
   const page = await context.newPage();
@@ -19,7 +20,7 @@ try {
   await page.goto(url, { waitUntil: "networkidle" });
   await page.waitForSelector('.gpu-badge[data-status="ready"]');
   await page.waitForSelector(".enemy-marker");
-  const enemy = await page.locator(".enemy-marker").first().boundingBox();
+  const enemy = await waitForElementBox(page, ".enemy-marker");
 
   if (!enemy) {
     throw new Error("Expected an enemy marker before combat verification");
@@ -32,6 +33,7 @@ try {
   await page.waitForFunction(() => document.querySelectorAll(".enemy-marker").length === 0, null, { timeout: 15_000 });
   const dropCount = await page.locator(".item-drop-marker").count();
   await browser.close();
+  browser = null;
 
   if (dropCount < 1) {
     throw new Error(`Expected at least one item drop after combat, got ${dropCount}`);
@@ -45,6 +47,8 @@ try {
 } catch (error) {
   console.error(error);
   process.exitCode = 1;
+} finally {
+  await browser?.close().catch(() => undefined);
 }
 
 async function waitForServer(targetUrl) {
@@ -72,4 +76,47 @@ async function launchBrowser() {
   } catch {
     return chromium.launch({ headless: true });
   }
+}
+
+async function waitForElementBox(page, selector) {
+  const deadline = Date.now() + 6_000;
+
+  while (Date.now() < deadline) {
+    const box = await page
+      .evaluate((targetSelector) => {
+        const element = document.querySelector(targetSelector);
+
+        if (!element) {
+          return null;
+        }
+
+        const style = getComputedStyle(element);
+
+        if (style.display === "none" || style.visibility === "hidden") {
+          return null;
+        }
+
+        const rect = element.getBoundingClientRect();
+
+        if (rect.width <= 0 || rect.height <= 0) {
+          return null;
+        }
+
+        return {
+          x: rect.x,
+          y: rect.y,
+          width: rect.width,
+          height: rect.height,
+        };
+      }, selector)
+      .catch(() => null);
+
+    if (box && box.width > 0 && box.height > 0) {
+      return box;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+
+  return null;
 }

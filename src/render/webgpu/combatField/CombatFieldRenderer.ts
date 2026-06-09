@@ -6,6 +6,7 @@ import { materialEmitterStride, packMaterialEmitter } from "../../../features/co
 import { starterMaterials } from "../../../features/combatField/materials/starterMaterials";
 import type { RenderSnapshot } from "../../snapshots/RenderSnapshot";
 import { CombatSpriteRenderer } from "./CombatSpriteRenderer";
+import { CombatFieldBackgroundRenderer } from "./CombatFieldBackgroundRenderer";
 import { CombatFieldBloom } from "./CombatFieldBloom";
 import { CombatFieldWaterRenderer } from "./CombatFieldWaterRenderer";
 import entityQueryShaderSource from "./combatFieldEntityQuery.wgsl?raw";
@@ -24,6 +25,7 @@ export class CombatFieldRenderer {
   private readonly materialPaletteBuffer: GPUBuffer;
   private readonly renderPipeline: GPURenderPipeline;
   private readonly bindGroup: GPUBindGroup;
+  private readonly backgroundRenderer: CombatFieldBackgroundRenderer;
   private readonly bloom: CombatFieldBloom;
   private readonly waterRenderer: CombatFieldWaterRenderer;
   private readonly spriteRenderer: CombatSpriteRenderer;
@@ -91,7 +93,23 @@ export class CombatFieldRenderer {
       fragment: {
         module: shaderModule,
         entryPoint: "fragmentMain",
-        targets: [{ format }],
+        targets: [
+          {
+            format,
+            blend: {
+              color: {
+                srcFactor: "src-alpha",
+                dstFactor: "one-minus-src-alpha",
+                operation: "add",
+              },
+              alpha: {
+                srcFactor: "one",
+                dstFactor: "one-minus-src-alpha",
+                operation: "add",
+              },
+            },
+          },
+        ],
       },
       primitive: {
         topology: "triangle-list",
@@ -108,6 +126,7 @@ export class CombatFieldRenderer {
         { binding: 4, resource: { buffer: this.materialPaletteBuffer } },
       ],
     });
+    this.backgroundRenderer = new CombatFieldBackgroundRenderer(device, format);
     this.bloom = new CombatFieldBloom(device, format, bindGroupLayout);
     this.waterRenderer = new CombatFieldWaterRenderer(device, format);
     this.spriteRenderer = new CombatSpriteRenderer(device, format);
@@ -133,17 +152,19 @@ export class CombatFieldRenderer {
         },
       ],
     });
+    this.backgroundRenderer.render(pass, width, height, timeMs);
     pass.setPipeline(this.renderPipeline);
     pass.setBindGroup(0, this.bindGroup);
     pass.draw(3);
-    this.waterRenderer.render(pass, width, height, snapshot.environment, timeMs);
-    this.bloom.render(pass, this.bindGroup);
     this.spriteRenderer.render(pass);
+    this.waterRenderer.render(pass, width, height, snapshot, timeMs);
+    this.bloom.render(pass, this.bindGroup);
     pass.end();
     return encoder.finish();
   }
 
   dispose(): void {
+    this.backgroundRenderer.dispose();
     this.waterRenderer.dispose();
     this.spriteRenderer.dispose();
   }

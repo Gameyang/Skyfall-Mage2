@@ -66,13 +66,32 @@ fn fragmentMain(@builtin(position) position: vec4f) -> @location(0) vec4f {
   let glowColor =
     vec3f(0.02, 0.12, 0.11) * playerGlow +
     vec3f(0.18, 0.11, 0.02) * aimGlow;
-  color = vec4f(color.rgb + glowColor, color.a);
+  let glowAlpha = clamp(max(playerGlow * 0.34, aimGlow * 0.26), 0.0, 0.45);
+  color = vec4f(color.rgb + glowColor, max(color.a, glowAlpha));
 
   return color;
 }
 
 fn materialColor(material: u32, uv: vec2f) -> vec4f {
-  let scan = 0.025 * sin((uv.x + uv.y) * 90.0 + params.timeAndCounts.x * 0.001);
+  let scan = 0.014 * sin((uv.x + uv.y) * 90.0 + params.timeAndCounts.x * 0.001);
   let paletteColor = materialPalette[min(material, 31u)];
-  return vec4f(max(vec3f(0.0), paletteColor.rgb + vec3f(scan)), max(0.35, paletteColor.a));
+  var alpha = paletteColor.a;
+  var color = paletteColor.rgb;
+
+  if (material == 0u) {
+    alpha = 0.0;
+  } else if (material == 1u) {
+    alpha = 0.46;
+    color = mix(color, vec3f(0.18, 0.16, 0.20), 0.34);
+  } else if (material == 2u || material == 3u) {
+    alpha = min(alpha, 0.66);
+  } else if (material == 5u || material == 6u) {
+    alpha = min(alpha, 0.38);
+  } else if (material == 7u || material == 8u || material == 9u) {
+    alpha = min(alpha, 0.72);
+  } else {
+    alpha = min(alpha, 0.76);
+  }
+
+  return vec4f(max(vec3f(0.0), color + vec3f(scan)), alpha);
 }

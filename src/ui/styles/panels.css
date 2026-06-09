@@ -35,10 +35,10 @@
   overflow: hidden;
   isolation: isolate;
   background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px),
-    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
-    linear-gradient(#27313a 0 23%, #1c252c 23% 58%, #203127 58% 100%);
-  background-size: 32px 32px, 32px 32px, auto;
+    radial-gradient(circle at 72% 20%, rgba(128, 72, 150, 0.2), transparent 28%),
+    radial-gradient(circle at 18% 28%, rgba(68, 88, 168, 0.18), transparent 30%),
+    linear-gradient(#1a1a3e 0%, #291f47 42%, #73405a 80%, #1f1433 100%);
+  background-size: auto;
   touch-action: none;
 }
 
@@ -47,9 +47,10 @@
   inset: 0;
   z-index: -1;
   background:
-    repeating-linear-gradient(112deg, transparent 0 18px, rgba(67, 196, 184, 0.18) 18px 20px, transparent 20px 42px),
-    radial-gradient(circle at 20% 24%, rgba(240, 189, 85, 0.18), transparent 28%),
-    radial-gradient(circle at 78% 18%, rgba(79, 143, 227, 0.17), transparent 30%);
+    radial-gradient(circle at 12% 16%, rgba(255, 255, 245, 0.42) 0 1px, transparent 2px),
+    radial-gradient(circle at 42% 8%, rgba(255, 255, 245, 0.32) 0 1px, transparent 2px),
+    radial-gradient(circle at 74% 26%, rgba(255, 255, 245, 0.36) 0 1px, transparent 2px),
+    linear-gradient(180deg, rgba(160, 86, 140, 0), rgba(160, 86, 140, 0.14) 80%, rgba(33, 20, 51, 0.2));
   content: "";
 }
 
