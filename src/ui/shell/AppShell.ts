@@ -14,7 +14,9 @@ import { createBattleViewModel } from "../viewModels/createBattleViewModel";
 import { createInventoryViewModel } from "../viewModels/createInventoryViewModel";
 import { createProgressViewModel } from "../viewModels/createProgressViewModel";
 import { createShopViewModel } from "../viewModels/createShopViewModel";
+import { createAppLayout } from "./AppLayout";
 import { createPanelHost } from "./PanelHost";
+import { createViewportLayoutController, type ViewportLayoutController } from "./ViewportLayoutController";
 
 export interface AppShellOptions {
   readonly dispatch: (command: GameCommand) => void;
@@ -25,6 +27,7 @@ export class AppShell {
   readonly canvas: HTMLCanvasElement;
   readonly playfieldElement: HTMLElement;
   readonly joystickElement: HTMLElement;
+  private readonly layoutController: ViewportLayoutController;
   private readonly battlePanel: BattlePanel;
   private readonly progressPanel: ProgressPanel;
   private readonly inventoryPanel: InventoryPanel;
@@ -33,20 +36,6 @@ export class AppShell {
   private readonly modalLayer: ModalLayer;
 
   constructor(options: AppShellOptions) {
-    this.element = document.createElement("main");
-    this.element.className = "skyfall-app";
-
-    const rotateNotice = document.createElement("section");
-    rotateNotice.className = "rotate-notice";
-    const rotateTitle = document.createElement("h1");
-    rotateTitle.textContent = "Skyfall Mage2";
-    const rotateText = document.createElement("p");
-    rotateText.textContent = "Rotate device";
-    rotateNotice.append(rotateTitle, rotateText);
-
-    const appFrame = document.createElement("div");
-    appFrame.className = "app-frame";
-
     this.battlePanel = new BattlePanel();
     this.progressPanel = new ProgressPanel();
     this.inventoryPanel = new InventoryPanel(options.dispatch);
@@ -63,8 +52,12 @@ export class AppShell {
     ]);
     sidePanel.append(this.progressPanel.element, tabs.element);
 
-    appFrame.append(this.battlePanel.element, sidePanel, this.modalLayer.element);
-    this.element.append(rotateNotice, appFrame);
+    this.element = createAppLayout({
+      battlePanelElement: this.battlePanel.element,
+      sidePanelElement: sidePanel,
+      modalLayerElement: this.modalLayer.element,
+    });
+    this.layoutController = createViewportLayoutController(this.element);
     this.canvas = this.battlePanel.canvas;
     this.playfieldElement = this.battlePanel.playfieldElement;
     this.joystickElement = this.battlePanel.joystickElement;
@@ -84,6 +77,7 @@ export class AppShell {
   }
 
   dispose(): void {
+    this.layoutController.dispose();
     this.element.replaceChildren();
   }
 }
