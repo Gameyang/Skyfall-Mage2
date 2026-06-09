@@ -146,6 +146,14 @@
   box-shadow: 0 0 14px rgba(240, 189, 85, 0.28);
 }
 
+.playfield[data-gpu-status="ready"] .player-marker,
+.playfield[data-gpu-status="ready"] .enemy-marker,
+.playfield[data-gpu-status="ready"] .item-drop-marker {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
 .enemy-hp {
   position: absolute;
   left: -4px;

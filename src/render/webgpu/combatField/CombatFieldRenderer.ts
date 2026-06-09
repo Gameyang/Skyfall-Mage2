@@ -5,6 +5,7 @@ import { combatMaterialIds } from "../../../features/combatField/CombatFieldType
 import { materialEmitterStride, packMaterialEmitter } from "../../../features/combatField/MaterialEmitterPacking";
 import { starterMaterials } from "../../../features/combatField/materials/starterMaterials";
 import type { RenderSnapshot } from "../../snapshots/RenderSnapshot";
+import { CombatSpriteRenderer } from "./CombatSpriteRenderer";
 import { CombatFieldBloom } from "./CombatFieldBloom";
 import entityQueryShaderSource from "./combatFieldEntityQuery.wgsl?raw";
 import movementShaderSource from "./combatFieldMovement.wgsl?raw";
@@ -23,6 +24,7 @@ export class CombatFieldRenderer {
   private readonly renderPipeline: GPURenderPipeline;
   private readonly bindGroup: GPUBindGroup;
   private readonly bloom: CombatFieldBloom;
+  private readonly spriteRenderer: CombatSpriteRenderer;
   private readonly paramsData = new Float32Array(12);
   private readonly emitterData = new Float32Array(CombatFieldRenderer.maxEmitters * materialEmitterStride);
 
@@ -105,6 +107,7 @@ export class CombatFieldRenderer {
       ],
     });
     this.bloom = new CombatFieldBloom(device, format, bindGroupLayout);
+    this.spriteRenderer = new CombatSpriteRenderer(device, format);
 
     const starterField = createStarterFieldCells(CombatFieldRenderer.gridWidth, CombatFieldRenderer.gridHeight);
     this.device.queue.writeBuffer(this.cellReadBuffer, 0, starterField);
@@ -114,6 +117,7 @@ export class CombatFieldRenderer {
 
   render(textureView: GPUTextureView, width: number, height: number, snapshot: RenderSnapshot, timeMs: number): GPUCommandBuffer {
     this.writeFrameData(width, height, snapshot, timeMs);
+    this.spriteRenderer.prepare(width, height, snapshot.sprites, timeMs);
 
     const encoder = this.device.createCommandEncoder();
     const pass = encoder.beginRenderPass({
@@ -130,8 +134,13 @@ export class CombatFieldRenderer {
     pass.setBindGroup(0, this.bindGroup);
     pass.draw(3);
     this.bloom.render(pass, this.bindGroup);
+    this.spriteRenderer.render(pass);
     pass.end();
     return encoder.finish();
+  }
+
+  dispose(): void {
+    this.spriteRenderer.dispose();
   }
 
   private writeFrameData(width: number, height: number, snapshot: RenderSnapshot, timeMs: number): void {

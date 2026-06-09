@@ -66,6 +66,7 @@ export class BattlePanel {
   setGpuStatus(label: string, status: "ready" | "degraded"): void {
     this.gpuBadge.textContent = label;
     this.gpuBadge.dataset.status = status;
+    this.playfieldElement.dataset.gpuStatus = status;
   }
 
   update(viewModel: BattleViewModel): void {

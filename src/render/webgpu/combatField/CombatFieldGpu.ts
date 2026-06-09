@@ -101,6 +101,7 @@ export class CombatFieldGpu {
   }
 
   dispose(): void {
+    this.fieldRenderer.dispose();
     this.device.destroy();
   }
 

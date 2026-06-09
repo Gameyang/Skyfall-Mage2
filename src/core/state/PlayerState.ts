@@ -12,6 +12,7 @@ export interface ResourceMeterState {
 export interface PlayerState {
   readonly id: string;
   readonly name: string;
+  readonly skinId: string;
   readonly position: Vec2;
   readonly aim: Vec2;
   readonly movement: Vec2;
@@ -28,11 +29,13 @@ export const basePlayerHpMax = 120;
 export const basePlayerManaMax = 100;
 export const basePlayerMoveSpeedPerSecond = 0.32;
 export const basePlayerManaRegenPerSecond = 2;
+export const defaultPlayerSkinId = "skin_화염마법사";
 
 export function createInitialPlayerState(): PlayerState {
   return {
     id: "player",
     name: "Skyfall Mage",
+    skinId: defaultPlayerSkinId,
     position: { x: 0.5, y: 0.58 },
     aim: { x: 0.72, y: 0.42 },
     movement: zeroVec2,
