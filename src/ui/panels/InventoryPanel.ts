@@ -3,7 +3,7 @@
 
 import type { GameCommand } from "../../core/state/Command";
 import type { EquipmentSlotKind } from "../../core/state/InventoryState";
-import { createSlotGrid, type SlotGridHandle } from "../components/SlotGrid";
+import { createSlotGrid, type SlotGridHandle, type SlotLocation } from "../components/SlotGrid";
 import type { InventoryViewModel } from "../viewModels/createInventoryViewModel";
 
 type CommandSink = (command: GameCommand) => void;
@@ -22,8 +22,14 @@ export class InventoryPanel {
     this.element.className = "inventory-panel";
     this.wallet = document.createElement("div");
     this.wallet.className = "wallet-row";
-    this.equipmentGrid = createSlotGrid("equipment-grid", (index) => this.handleEquipmentClick(index));
-    this.bagGrid = createSlotGrid("bag-grid", (index) => this.handleBagClick(index));
+    this.equipmentGrid = createSlotGrid("equipment-grid", "equipment", {
+      onSlotTap: (location) => this.handleEquipmentTap(location.index),
+      onSlotDrop: (from, to) => this.handleSlotDrop(from, to),
+    });
+    this.bagGrid = createSlotGrid("bag-grid", "bag", {
+      onSlotTap: (location) => this.handleBagTap(location.index),
+      onSlotDrop: (from, to) => this.handleSlotDrop(from, to),
+    });
     this.element.append(this.wallet, this.equipmentGrid.element, this.bagGrid.element);
   }
 
@@ -43,7 +49,7 @@ export class InventoryPanel {
     this.bagGrid.update(viewModel.bag);
   }
 
-  private handleBagClick(index: number): void {
+  private handleBagTap(index: number): void {
     if (this.selectedSlotIndex !== null && this.selectedSlotIndex !== index) {
       this.sink({ type: "MoveInventoryItem", fromIndex: this.selectedSlotIndex, toIndex: index });
       return;
@@ -52,7 +58,7 @@ export class InventoryPanel {
     this.sink({ type: "UseInventorySlot", slotIndex: index });
   }
 
-  private handleEquipmentClick(index: number): void {
+  private handleEquipmentTap(index: number): void {
     const equipmentSlot = this.equipmentSlots[index];
 
     if (!equipmentSlot || this.selectedSlotIndex === null) {
@@ -60,6 +66,25 @@ export class InventoryPanel {
     }
 
     this.sink({ type: "EquipItem", slotIndex: this.selectedSlotIndex, equipmentSlot });
+  }
+
+  private handleSlotDrop(from: SlotLocation, to: SlotLocation): void {
+    if (from.grid !== "bag") {
+      return;
+    }
+
+    if (to.grid === "bag") {
+      if (from.index !== to.index) {
+        this.sink({ type: "MoveInventoryItem", fromIndex: from.index, toIndex: to.index });
+      }
+      return;
+    }
+
+    const equipmentSlot = this.equipmentSlots[to.index];
+
+    if (equipmentSlot) {
+      this.sink({ type: "EquipItem", slotIndex: from.index, equipmentSlot });
+    }
   }
 }
 

@@ -71,6 +71,17 @@
   place-items: center;
   padding: var(--item-slot-padding, 4px);
   overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+}
+
+.item-slot[data-pressing="true"],
+.item-slot[data-dragging="true"] {
+  box-shadow:
+    inset 0 0 0 2px rgba(240, 189, 85, 0.42),
+    0 0 0 1px rgba(240, 189, 85, 0.24);
 }
 
 .item-slot[data-selected="true"] {

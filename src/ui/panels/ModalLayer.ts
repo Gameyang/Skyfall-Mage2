@@ -4,6 +4,7 @@
 import type { GameCommand } from "../../core/state/Command";
 import type { GameState } from "../../core/state/GameState";
 import { levelRewards } from "../../features/progression/RewardSystem";
+import { bindPressAction } from "../components/PressAction";
 
 type CommandSink = (command: GameCommand) => void;
 
@@ -52,7 +53,7 @@ export class ModalLayer {
         button.type = "button";
         button.className = "modal-action";
         button.textContent = reward.label;
-        button.addEventListener("click", () => this.sink({ type: "SelectLevelUpReward", rewardId: reward.id }));
+        bindPressAction(button, () => this.sink({ type: "SelectLevelUpReward", rewardId: reward.id }));
         return button;
       }),
     );
@@ -61,7 +62,7 @@ export class ModalLayer {
     close.type = "button";
     close.className = "modal-close";
     close.textContent = "Close";
-    close.addEventListener("click", () => this.sink({ type: "DismissModal", modalId: "level-up" }));
+    bindPressAction(close, () => this.sink({ type: "DismissModal", modalId: "level-up" }));
 
     card.append(title, rewardGrid, close);
     this.element.replaceChildren(card);
@@ -88,7 +89,7 @@ export class ModalLayer {
         button.type = "button";
         button.className = "modal-action";
         button.textContent = choice;
-        button.addEventListener("click", () => this.sink({ type: "AnswerReviveQuiz", answer: choice }));
+        bindPressAction(button, () => this.sink({ type: "AnswerReviveQuiz", answer: choice }));
         return button;
       }),
     );

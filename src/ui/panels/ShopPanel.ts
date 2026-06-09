@@ -2,6 +2,7 @@
 // Owner: ui/panels
 
 import type { GameCommand } from "../../core/state/Command";
+import { bindPressAction } from "../components/PressAction";
 import type { ShopViewModel } from "../viewModels/createShopViewModel";
 
 type CommandSink = (command: GameCommand) => void;
@@ -31,7 +32,7 @@ export class ShopPanel {
     reroll.type = "button";
     reroll.className = "shop-offer";
     reroll.disabled = viewModel.rerollDisabled;
-    reroll.addEventListener("click", () => this.sink({ type: "RerollShopOffers" }));
+    bindPressAction(reroll, () => this.sink({ type: "RerollShopOffers" }));
 
     const rerollLabel = document.createElement("span");
     rerollLabel.textContent = "Reroll";
@@ -46,7 +47,7 @@ export class ShopPanel {
         button.type = "button";
         button.className = "shop-offer";
         button.disabled = offer.disabled;
-        button.addEventListener("click", () => this.sink({ type: "BuyShopItem", offerId: offer.id }));
+        bindPressAction(button, () => this.sink({ type: "BuyShopItem", offerId: offer.id }));
 
         const label = document.createElement("span");
         label.textContent = `${offer.label} x${offer.remainingStock}`;

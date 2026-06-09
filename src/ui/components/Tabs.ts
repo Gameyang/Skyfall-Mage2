@@ -1,6 +1,8 @@
 // Responsibility: Render tab controls and switch visible panel content.
 // Owner: ui/components
 
+import { bindPressAction } from "./PressAction";
+
 export interface TabDefinition {
   readonly id: string;
   readonly label: string;
@@ -33,7 +35,7 @@ export class Tabs {
         button.className = "tab-button";
         button.dataset.active = String(tab.id === this.activeId);
         button.textContent = tab.label;
-        button.addEventListener("click", () => {
+        bindPressAction(button, () => {
           this.activeId = tab.id;
           this.render();
         });

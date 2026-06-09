@@ -4,6 +4,7 @@
 import type { GameCommand } from "../../core/state/Command";
 import type { GameState } from "../../core/state/GameState";
 import { canUnlockSkill, starterSkills } from "../../features/progression/SkillTreeSystem";
+import { bindPressAction } from "../components/PressAction";
 
 type CommandSink = (command: GameCommand) => void;
 
@@ -37,7 +38,7 @@ export class SkillTreePanel {
         button.dataset.active = String(active);
         button.disabled = active || !canUnlockSkill(state, skill.id);
         button.textContent = `${skill.label} ${active ? "On" : skill.cost}`;
-        button.addEventListener("click", () => this.sink({ type: "UnlockSkill", skillId: skill.id }));
+        bindPressAction(button, () => this.sink({ type: "UnlockSkill", skillId: skill.id }));
         return button;
       }),
     );
