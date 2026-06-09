@@ -36,6 +36,7 @@ fn vertexMain(@builtin(vertex_index) vertexIndex: u32) -> VertexOut {
 fn fragmentMain(@builtin(position) position: vec4f) -> @location(0) vec4f {
   let canvasSize = max(params.gridAndCanvas.zw, vec2f(1.0, 1.0));
   let uv = clamp(position.xy / canvasSize, vec2f(0.0), vec2f(0.999));
+  let bloomIntensityScale = clamp(params.timeAndCounts.w, 0.35, 1.0);
   var bloom = vec3f(0.0);
   bloom = bloom + vec3f(0.0, 0.45, 0.38) * smoothstep(0.22, 0.0, distance(uv, params.playerAndAim.xy));
   bloom = bloom + vec3f(0.75, 0.45, 0.08) * smoothstep(0.16, 0.0, distance(uv, params.playerAndAim.zw));
@@ -55,5 +56,5 @@ fn fragmentMain(@builtin(position) position: vec4f) -> @location(0) vec4f {
     bloom = bloom + paletteColor * smoothstep(radius, 0.0, distance(uv, center)) * clamp(strength, 0.0, 1.0) * 0.65;
   }
 
-  return vec4f(bloom, 1.0);
+  return vec4f(bloom * bloomIntensityScale, 1.0);
 }

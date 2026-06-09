@@ -5,6 +5,10 @@ import { checkWebGpuSupport, type WebGpuFailureReason } from "../../../platform/
 import type { RenderSnapshot } from "../../snapshots/RenderSnapshot";
 import { CombatFieldRenderer } from "./CombatFieldRenderer";
 
+const bloomReferenceLogicalArea = 960 * 540;
+const bloomMinIntensityScale = 0.58;
+const bloomMaxIntensityScale = 1;
+
 export interface CombatFieldGpuOptions {
   readonly maxDevicePixelRatio: number;
 }
@@ -27,6 +31,7 @@ export class CombatFieldGpu {
   private readonly fieldRenderer: CombatFieldRenderer;
   private width = 0;
   private height = 0;
+  private bloomIntensityScale = 1;
 
   private constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -73,8 +78,11 @@ export class CombatFieldGpu {
 
   resize(): void {
     const dpr = Math.min(this.maxDevicePixelRatio, Math.max(1, window.devicePixelRatio || 1));
-    const width = Math.max(1, Math.floor(this.canvas.clientWidth * dpr));
-    const height = Math.max(1, Math.floor(this.canvas.clientHeight * dpr));
+    const logicalWidth = Math.max(1, this.canvas.clientWidth);
+    const logicalHeight = Math.max(1, this.canvas.clientHeight);
+    const width = Math.max(1, Math.floor(logicalWidth * dpr));
+    const height = Math.max(1, Math.floor(logicalHeight * dpr));
+    this.bloomIntensityScale = calculateBloomIntensityScale(logicalWidth, logicalHeight);
 
     if (width === this.width && height === this.height) {
       return;
@@ -97,7 +105,9 @@ export class CombatFieldGpu {
     }
 
     const textureView = this.context.getCurrentTexture().createView();
-    this.device.queue.submit([this.fieldRenderer.render(textureView, this.width, this.height, snapshot, timeMs)]);
+    this.device.queue.submit([
+      this.fieldRenderer.render(textureView, this.width, this.height, snapshot, timeMs, this.bloomIntensityScale),
+    ]);
   }
 
   dispose(): void {
@@ -105,4 +115,15 @@ export class CombatFieldGpu {
     this.device.destroy();
   }
 
+}
+
+export function calculateBloomIntensityScale(logicalWidth: number, logicalHeight: number): number {
+  const width = Math.max(1, Number.isFinite(logicalWidth) ? logicalWidth : 1);
+  const height = Math.max(1, Number.isFinite(logicalHeight) ? logicalHeight : 1);
+  const areaScale = Math.sqrt((width * height) / bloomReferenceLogicalArea);
+  return clamp(areaScale, bloomMinIntensityScale, bloomMaxIntensityScale);
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }

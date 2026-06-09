@@ -137,8 +137,15 @@ export class CombatFieldRenderer {
     this.device.queue.writeBuffer(this.materialPaletteBuffer, 0, createMaterialPalette());
   }
 
-  render(textureView: GPUTextureView, width: number, height: number, snapshot: RenderSnapshot, timeMs: number): GPUCommandBuffer {
-    this.writeFrameData(width, height, snapshot, timeMs);
+  render(
+    textureView: GPUTextureView,
+    width: number,
+    height: number,
+    snapshot: RenderSnapshot,
+    timeMs: number,
+    bloomIntensityScale = 1,
+  ): GPUCommandBuffer {
+    this.writeFrameData(width, height, snapshot, timeMs, bloomIntensityScale);
     this.spriteRenderer.prepare(width, height, snapshot.sprites, timeMs);
 
     const encoder = this.device.createCommandEncoder();
@@ -169,7 +176,13 @@ export class CombatFieldRenderer {
     this.spriteRenderer.dispose();
   }
 
-  private writeFrameData(width: number, height: number, snapshot: RenderSnapshot, timeMs: number): void {
+  private writeFrameData(
+    width: number,
+    height: number,
+    snapshot: RenderSnapshot,
+    timeMs: number,
+    bloomIntensityScale: number,
+  ): void {
     this.paramsData[0] = CombatFieldRenderer.gridWidth;
     this.paramsData[1] = CombatFieldRenderer.gridHeight;
     this.paramsData[2] = width;
@@ -181,7 +194,7 @@ export class CombatFieldRenderer {
     this.paramsData[8] = timeMs;
     this.paramsData[9] = Math.min(CombatFieldRenderer.maxEmitters, snapshot.materialEmitters.length);
     this.paramsData[10] = snapshot.activeEmitterCount;
-    this.paramsData[11] = 0;
+    this.paramsData[11] = bloomIntensityScale;
     this.device.queue.writeBuffer(this.paramsBuffer, 0, this.paramsData);
 
     this.emitterData.fill(0);
