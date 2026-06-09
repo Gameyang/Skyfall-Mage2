@@ -15,6 +15,7 @@ import { createInventoryViewModel } from "../viewModels/createInventoryViewModel
 import { createProgressViewModel } from "../viewModels/createProgressViewModel";
 import { createShopViewModel } from "../viewModels/createShopViewModel";
 import { createAppLayout } from "./AppLayout";
+import { createMobileFullscreenController, type MobileFullscreenController } from "./MobileFullscreenController";
 import { createPanelHost } from "./PanelHost";
 import { createViewportLayoutController, type ViewportLayoutController } from "./ViewportLayoutController";
 
@@ -28,6 +29,7 @@ export class AppShell {
   readonly playfieldElement: HTMLElement;
   readonly joystickElement: HTMLElement;
   private readonly layoutController: ViewportLayoutController;
+  private readonly mobileFullscreenController: MobileFullscreenController;
   private readonly battlePanel: BattlePanel;
   private readonly progressPanel: ProgressPanel;
   private readonly inventoryPanel: InventoryPanel;
@@ -58,6 +60,7 @@ export class AppShell {
       modalLayerElement: this.modalLayer.element,
     });
     this.layoutController = createViewportLayoutController(this.element);
+    this.mobileFullscreenController = createMobileFullscreenController(this.element);
     this.canvas = this.battlePanel.canvas;
     this.playfieldElement = this.battlePanel.playfieldElement;
     this.joystickElement = this.battlePanel.joystickElement;
@@ -78,6 +81,7 @@ export class AppShell {
 
   dispose(): void {
     this.layoutController.dispose();
+    this.mobileFullscreenController.dispose();
     this.element.replaceChildren();
   }
 }
