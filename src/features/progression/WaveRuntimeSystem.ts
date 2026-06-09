@@ -4,7 +4,7 @@
 import { clamp, type Vec2 } from "../../core/math/vector";
 import type { GameEvent } from "../../core/state/Event";
 import type { GameState } from "../../core/state/GameState";
-import { spawnEnemy } from "../combat/SpawnSystem";
+import { spawnEnemy, type EnemySpawnOptions } from "../combat/SpawnSystem";
 import { applyEnvironmentFieldTransition } from "./EnvironmentSystem";
 import { planWaveStep, type WavePlan } from "./WaveDirector";
 
@@ -83,7 +83,8 @@ function spawnDueEnemies(state: GameState, plan: WavePlan): GameState {
 
   for (const spawn of plan.dueSpawns) {
     for (let index = 0; index < spawn.count; index += 1) {
-      nextState = spawnEnemy(nextState, spawn.enemyId, createSpawnPosition(plan.wave.index, spawnOrdinal, index));
+      const transit = createTransitSpawn(plan.wave.index, spawnOrdinal, index);
+      nextState = spawnEnemy(nextState, spawn.enemyId, transit.position, transit.options);
     }
 
     spawnOrdinal += 1;
@@ -92,9 +93,21 @@ function spawnDueEnemies(state: GameState, plan: WavePlan): GameState {
   return nextState;
 }
 
-function createSpawnPosition(waveIndex: number, spawnOrdinal: number, index: number): Vec2 {
+function createTransitSpawn(
+  waveIndex: number,
+  spawnOrdinal: number,
+  index: number,
+): { readonly position: Vec2; readonly options: EnemySpawnOptions } {
+  const direction = (waveIndex + spawnOrdinal + index) % 2 === 0 ? 1 : -1;
+
   return {
-    x: clamp(0.7 + index * 0.06 - spawnOrdinal * 0.04, 0.58, 0.9),
-    y: clamp(0.38 + ((waveIndex + index + spawnOrdinal) % 4) * 0.08, 0.22, 0.78),
+    position: {
+      x: direction > 0 ? -0.08 : 1.08,
+      y: clamp(0.34 + ((waveIndex + index + spawnOrdinal) % 4) * 0.08, 0.24, 0.76),
+    },
+    options: {
+      velocity: { x: direction * 0.14, y: 0 },
+      despawnWhenOffscreen: true,
+    },
   };
 }

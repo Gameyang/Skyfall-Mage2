@@ -18,6 +18,8 @@ import {
   basePlayerMoveSpeedPerSecond,
 } from "./PlayerState";
 
+const enemyDespawnMargin = 0.12;
+
 export function stepGameState(state: GameState, deltaMs: number): GameState {
   const deltaSeconds = Math.min(deltaMs, 100) / 1000;
   const equipmentModifiers = resolveEquipmentModifiers(state.inventory);
@@ -35,6 +37,7 @@ export function stepGameState(state: GameState, deltaMs: number): GameState {
     x: clamp(nextPosition.x, 0.08, 0.92),
     y: clamp(nextPosition.y, 0.16, 0.86),
   };
+  const enemies = advanceEnemies(state.entities.enemies, deltaSeconds);
   const projectiles = state.entities.projectiles
     .map((projectile) => ({
       ...projectile,
@@ -53,7 +56,7 @@ export function stepGameState(state: GameState, deltaMs: number): GameState {
   const weaponTargeting = resolveEquippedWeaponTargeting(state.inventory);
   const attackTarget = selectNearestAttackTarget(
     nextPlayerPosition,
-    state.entities.enemies,
+    enemies,
     weaponTargeting.detectionRange,
   );
   const autoAttacking = attackTarget !== null && state.player.mana.current > 1;
@@ -78,7 +81,17 @@ export function stepGameState(state: GameState, deltaMs: number): GameState {
     ttlMs: 120,
   }));
   const nextElapsedMs = state.session.elapsedMs + deltaMs;
-  const enemyPatternEmitters = createEnemyPatternEmitters(state, nextElapsedMs, deltaMs);
+  const enemyPatternEmitters = createEnemyPatternEmitters(
+    {
+      ...state,
+      entities: {
+        ...state.entities,
+        enemies,
+      },
+    },
+    nextElapsedMs,
+    deltaMs,
+  );
 
   return {
     ...state,
@@ -114,6 +127,7 @@ export function stepGameState(state: GameState, deltaMs: number): GameState {
     },
     entities: {
       ...state.entities,
+      enemies,
       projectiles,
     },
     battleField: {
@@ -129,6 +143,30 @@ export function stepGameState(state: GameState, deltaMs: number): GameState {
         .filter((emitter) => emitter.ttlMs > 0),
     },
   };
+}
+
+function advanceEnemies(enemies: GameState["entities"]["enemies"], deltaSeconds: number): GameState["entities"]["enemies"] {
+  return enemies
+    .map((enemy) => {
+      if (!enemy.velocity) {
+        return enemy;
+      }
+
+      return {
+        ...enemy,
+        position: addVec2(enemy.position, scaleVec2(enemy.velocity, deltaSeconds)),
+      };
+    })
+    .filter((enemy) => !enemy.despawnWhenOffscreen || !isEnemyOffscreen(enemy.position));
+}
+
+function isEnemyOffscreen(position: GameState["player"]["position"]): boolean {
+  return (
+    position.x < -enemyDespawnMargin ||
+    position.x > 1 + enemyDespawnMargin ||
+    position.y < -enemyDespawnMargin ||
+    position.y > 1 + enemyDespawnMargin
+  );
 }
 
 function createSustainedAttack(

@@ -9,6 +9,8 @@ export interface EnemyState {
   readonly kind: import("../../content/enemies/EnemyDefinition").EnemyKind;
   readonly patternId: import("../../content/enemies/EnemyDefinition").EnemyPatternId;
   readonly position: Vec2;
+  readonly velocity?: Vec2;
+  readonly despawnWhenOffscreen?: boolean;
   readonly hp: number;
   readonly maxHp: number;
 }
@@ -47,7 +49,9 @@ export function createInitialEntityState(): EntityState {
         definitionId: "bat",
         kind: "normal",
         patternId: "none",
-        position: { x: 0.72, y: 0.52 },
+        position: { x: -0.08, y: 0.52 },
+        velocity: { x: 0.14, y: 0 },
+        despawnWhenOffscreen: true,
         hp: 36,
         maxHp: 36,
       },

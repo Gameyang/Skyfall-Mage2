@@ -22,11 +22,15 @@ describe("runtime systems", () => {
       ...initial.entities.enemies[0]!,
       id: "near",
       position: { x: 0.58, y: 0.56 },
+      velocity: undefined,
+      despawnWhenOffscreen: undefined,
     };
     const farEnemy = {
       ...initial.entities.enemies[0]!,
       id: "far",
       position: { x: 0.72, y: 0.52 },
+      velocity: undefined,
+      despawnWhenOffscreen: undefined,
     };
     const stepped = stepGameState(
       {
@@ -77,6 +81,41 @@ describe("runtime systems", () => {
     expect(stepped.entities.projectiles).toHaveLength(0);
   });
 
+  it("moves transient test enemies and removes them after they cross offscreen", () => {
+    const initial = createInitialGameState();
+    const movingEnemy = {
+      ...initial.entities.enemies[0]!,
+      position: { x: -0.08, y: 0.5 },
+      velocity: { x: 0.14, y: 0 },
+      despawnWhenOffscreen: true,
+    };
+    const moved = stepGameState(
+      {
+        ...initial,
+        entities: {
+          ...initial.entities,
+          enemies: [movingEnemy],
+          projectiles: [],
+        },
+      },
+      100,
+    );
+    const removed = stepGameState(
+      {
+        ...initial,
+        entities: {
+          ...initial.entities,
+          enemies: [{ ...movingEnemy, position: { x: 1.115, y: 0.5 } }],
+          projectiles: [],
+        },
+      },
+      100,
+    );
+
+    expect(moved.entities.enemies[0]?.position.x).toBeGreaterThan(movingEnemy.position.x);
+    expect(removed.entities.enemies).toHaveLength(0);
+  });
+
   it("advances completed waves into the next wave with environment and spawn changes", () => {
     const initial = createInitialGameState();
     const result = advanceWaveRuntime(
@@ -96,6 +135,7 @@ describe("runtime systems", () => {
     expect(result.state.battleField.fluidLevel).toBeGreaterThan(initial.battleField.fluidLevel);
     expect(result.state.battleField.gasLevel).toBeGreaterThan(0);
     expect(result.state.entities.enemies.length).toBe(3);
+    expect(result.state.entities.enemies.every((enemy) => enemy.despawnWhenOffscreen)).toBe(true);
     expect(result.events.map((event) => event.type)).toContain("WaveStarted");
     expect(result.events.map((event) => event.type)).toContain("EnvironmentChanged");
   });

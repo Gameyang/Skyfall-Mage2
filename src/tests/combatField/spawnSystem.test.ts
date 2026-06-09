@@ -36,6 +36,9 @@ describe("SpawnSystem", () => {
     const state = createSingleSpawnTestState(emptyState);
 
     expect(state.entities.enemies).toHaveLength(1);
+    expect(state.entities.enemies[0]?.position.x).toBeLessThan(0);
+    expect(state.entities.enemies[0]?.velocity?.x).toBeGreaterThan(0);
+    expect(state.entities.enemies[0]?.despawnWhenOffscreen).toBe(true);
     expect(spawnEnemy(emptyState, "bat", { x: 0.2, y: 0.3 }).entities.enemies).toHaveLength(1);
   });
 });
