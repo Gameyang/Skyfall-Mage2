@@ -13,6 +13,30 @@ describe("createRenderSnapshot", () => {
     expect(snapshot.sprites.every((sprite) => sprite.textureUrl.includes(".webp"))).toBe(true);
     expect(snapshot.sprites.find((sprite) => sprite.kind === "player")?.statusEffects).toContain("buff");
     expect(snapshot.activeEmitterCount).toBe(0);
+    expect(snapshot.environment.waterStart).toBeCloseTo(0.8);
+    expect(snapshot.environment.waterCoverage).toBeCloseTo(0.2);
     expect("inventory" in snapshot).toBe(false);
+  });
+
+  it("derives water visuals from rain and field fluid levels", () => {
+    const initial = createInitialGameState();
+    const snapshot = createRenderSnapshot({
+      ...initial,
+      environment: {
+        ...initial.environment,
+        kind: "rain-shelf",
+        rainRate: 0.32,
+        windX: -0.3,
+      },
+      battleField: {
+        ...initial.battleField,
+        fluidLevel: 0.32,
+      },
+    });
+
+    expect(snapshot.environment.kind).toBe("rain-shelf");
+    expect(snapshot.environment.waterCoverage).toBeCloseTo(0.32);
+    expect(snapshot.environment.waterStart).toBeCloseTo(0.68);
+    expect(snapshot.environment.waveActivity).toBeGreaterThan(0.65);
   });
 });

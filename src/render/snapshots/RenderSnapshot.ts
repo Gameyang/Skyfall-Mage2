@@ -2,6 +2,7 @@
 // Owner: render/snapshots
 
 import type { Vec2 } from "../../core/math/vector";
+import type { EnvironmentKind } from "../../core/state/EnvironmentState";
 import type { MaterialEmitter } from "../../features/combatField/CombatFieldTypes";
 
 export type RenderableSpriteKind = "player" | "enemy" | "boss" | "item";
@@ -29,12 +30,26 @@ export interface RenderableSprite {
   readonly hpPercent: number | null;
 }
 
+export interface BattleEnvironmentVisuals {
+  readonly kind: EnvironmentKind;
+  readonly waterStart: number;
+  readonly waterCoverage: number;
+  readonly waterAlpha: number;
+  readonly waveActivity: number;
+  readonly rainRate: number;
+  readonly windX: number;
+  readonly heat: number;
+  readonly frostFactor: number;
+  readonly lavaFactor: number;
+}
+
 export interface RenderSnapshot {
   readonly playerPosition: Vec2;
   readonly aim: Vec2;
   readonly enemyPositions: readonly Vec2[];
   readonly itemDropPositions: readonly Vec2[];
   readonly sprites: readonly RenderableSprite[];
+  readonly environment: BattleEnvironmentVisuals;
   readonly materialEmitters: readonly MaterialEmitter[];
   readonly activeEmitterCount: number;
   readonly elapsedMs: number;

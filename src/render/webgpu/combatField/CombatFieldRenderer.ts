@@ -7,6 +7,7 @@ import { starterMaterials } from "../../../features/combatField/materials/starte
 import type { RenderSnapshot } from "../../snapshots/RenderSnapshot";
 import { CombatSpriteRenderer } from "./CombatSpriteRenderer";
 import { CombatFieldBloom } from "./CombatFieldBloom";
+import { CombatFieldWaterRenderer } from "./CombatFieldWaterRenderer";
 import entityQueryShaderSource from "./combatFieldEntityQuery.wgsl?raw";
 import movementShaderSource from "./combatFieldMovement.wgsl?raw";
 import reactionShaderSource from "./combatFieldReaction.wgsl?raw";
@@ -24,6 +25,7 @@ export class CombatFieldRenderer {
   private readonly renderPipeline: GPURenderPipeline;
   private readonly bindGroup: GPUBindGroup;
   private readonly bloom: CombatFieldBloom;
+  private readonly waterRenderer: CombatFieldWaterRenderer;
   private readonly spriteRenderer: CombatSpriteRenderer;
   private readonly paramsData = new Float32Array(12);
   private readonly emitterData = new Float32Array(CombatFieldRenderer.maxEmitters * materialEmitterStride);
@@ -107,6 +109,7 @@ export class CombatFieldRenderer {
       ],
     });
     this.bloom = new CombatFieldBloom(device, format, bindGroupLayout);
+    this.waterRenderer = new CombatFieldWaterRenderer(device, format);
     this.spriteRenderer = new CombatSpriteRenderer(device, format);
 
     const starterField = createStarterFieldCells(CombatFieldRenderer.gridWidth, CombatFieldRenderer.gridHeight);
@@ -133,6 +136,7 @@ export class CombatFieldRenderer {
     pass.setPipeline(this.renderPipeline);
     pass.setBindGroup(0, this.bindGroup);
     pass.draw(3);
+    this.waterRenderer.render(pass, width, height, snapshot.environment, timeMs);
     this.bloom.render(pass, this.bindGroup);
     this.spriteRenderer.render(pass);
     pass.end();
@@ -140,6 +144,7 @@ export class CombatFieldRenderer {
   }
 
   dispose(): void {
+    this.waterRenderer.dispose();
     this.spriteRenderer.dispose();
   }
 
