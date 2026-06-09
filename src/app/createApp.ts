@@ -39,7 +39,7 @@ export async function createApp(root: HTMLElement): Promise<AppInstance> {
   window.addEventListener("beforeunload", () => saveRuntime.save(runtime.getState()));
 
   const keyboardInput = new KeyboardInput(window, (command) => commandBus.enqueue(command));
-  const touchInput = new TouchInput(shell.joystickElement, (command) => commandBus.enqueue(command));
+  const touchInput = new TouchInput(shell.playfieldElement, shell.joystickElement, (command) => commandBus.enqueue(command));
 
   const gpu = await CombatFieldGpu.create(shell.canvas, {
     maxDevicePixelRatio: defaultAppConfig.maxDevicePixelRatio,

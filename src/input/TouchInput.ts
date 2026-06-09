@@ -1,4 +1,4 @@
-// Responsibility: Translate virtual joystick gestures into movement commands.
+// Responsibility: Translate playfield touch gestures into movement commands.
 // Owner: input
 
 import type { GameCommand } from "../core/state/Command";
@@ -6,56 +6,143 @@ import { touchVectorToCommand } from "./InputMapper";
 
 type CommandSink = (command: GameCommand) => void;
 
+export interface MovementAnchor {
+  readonly x: number;
+  readonly y: number;
+  readonly maxRadius: number;
+}
+
+export interface MovementAnchorOptions {
+  readonly clientX: number;
+  readonly clientY: number;
+  readonly joystickRect: Pick<DOMRectReadOnly, "left" | "top" | "width" | "height">;
+  readonly useJoystickCenter: boolean;
+}
+
 export class TouchInput {
-  private activePointerId: number | null = null;
+  private activeMovement: { readonly pointerId: number; readonly anchor: MovementAnchor } | null = null;
 
   constructor(
+    private readonly playfieldElement: HTMLElement,
     private readonly joystickElement: HTMLElement,
     private readonly sink: CommandSink,
   ) {
-    joystickElement.addEventListener("pointerdown", this.handlePointerDown);
-    joystickElement.addEventListener("pointermove", this.handlePointerMove);
-    joystickElement.addEventListener("pointerup", this.handlePointerUp);
-    joystickElement.addEventListener("pointercancel", this.handlePointerUp);
+    playfieldElement.addEventListener("pointerdown", this.handlePointerDown);
+    playfieldElement.addEventListener("pointermove", this.handlePointerMove);
+    playfieldElement.addEventListener("pointerup", this.handlePointerUp);
+    playfieldElement.addEventListener("pointercancel", this.handlePointerUp);
+    playfieldElement.addEventListener("lostpointercapture", this.handlePointerUp);
   }
 
   dispose(): void {
-    this.joystickElement.removeEventListener("pointerdown", this.handlePointerDown);
-    this.joystickElement.removeEventListener("pointermove", this.handlePointerMove);
-    this.joystickElement.removeEventListener("pointerup", this.handlePointerUp);
-    this.joystickElement.removeEventListener("pointercancel", this.handlePointerUp);
+    this.playfieldElement.removeEventListener("pointerdown", this.handlePointerDown);
+    this.playfieldElement.removeEventListener("pointermove", this.handlePointerMove);
+    this.playfieldElement.removeEventListener("pointerup", this.handlePointerUp);
+    this.playfieldElement.removeEventListener("pointercancel", this.handlePointerUp);
+    this.playfieldElement.removeEventListener("lostpointercapture", this.handlePointerUp);
   }
 
   private readonly handlePointerDown = (event: PointerEvent): void => {
-    this.activePointerId = event.pointerId;
-    this.joystickElement.setPointerCapture(event.pointerId);
+    if (!canClaimMovementPointer(this.activeMovement?.pointerId ?? null, event.pointerType, event.button)) {
+      return;
+    }
+
+    const joystickRect = this.joystickElement.getBoundingClientRect();
+    const useJoystickCenter = event.target instanceof Node && this.joystickElement.contains(event.target);
+    const anchor = createMovementAnchor({
+      clientX: event.clientX,
+      clientY: event.clientY,
+      joystickRect,
+      useJoystickCenter,
+    });
+
+    this.activeMovement = { pointerId: event.pointerId, anchor };
+    this.playfieldElement.setPointerCapture(event.pointerId);
+    preventBattleGestureDefault(event);
     this.emitVector(event);
   };
 
   private readonly handlePointerMove = (event: PointerEvent): void => {
-    if (event.pointerId !== this.activePointerId) {
+    if (event.pointerId !== this.activeMovement?.pointerId) {
       return;
     }
 
+    preventBattleGestureDefault(event);
     this.emitVector(event);
   };
 
   private readonly handlePointerUp = (event: PointerEvent): void => {
-    if (event.pointerId !== this.activePointerId) {
+    if (event.pointerId !== this.activeMovement?.pointerId) {
       return;
     }
 
-    this.activePointerId = null;
+    preventBattleGestureDefault(event);
+    this.activeMovement = null;
+    this.releasePointerCapture(event.pointerId);
     this.sink(touchVectorToCommand(0, 0));
   };
 
   private emitVector(event: PointerEvent): void {
-    const rect = this.joystickElement.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-    const maxRadius = Math.max(1, Math.min(rect.width, rect.height) / 2);
-    const x = Math.max(-1, Math.min(1, (event.clientX - centerX) / maxRadius));
-    const y = Math.max(-1, Math.min(1, (event.clientY - centerY) / maxRadius));
+    if (!this.activeMovement) {
+      return;
+    }
+
+    const { x, y } = pointerToMovementVector(this.activeMovement.anchor, event.clientX, event.clientY);
     this.sink(touchVectorToCommand(x, y));
+  }
+
+  private releasePointerCapture(pointerId: number): void {
+    if (!this.playfieldElement.hasPointerCapture(pointerId)) {
+      return;
+    }
+
+    this.playfieldElement.releasePointerCapture(pointerId);
+  }
+}
+
+export function canClaimMovementPointer(
+  activePointerId: number | null,
+  pointerType: string,
+  button: number,
+): boolean {
+  if (activePointerId !== null) {
+    return false;
+  }
+
+  return pointerType !== "mouse" || button === 0;
+}
+
+export function createMovementAnchor(options: MovementAnchorOptions): MovementAnchor {
+  const maxRadius = Math.max(1, Math.min(options.joystickRect.width, options.joystickRect.height) / 2);
+
+  if (options.useJoystickCenter) {
+    return {
+      x: options.joystickRect.left + options.joystickRect.width / 2,
+      y: options.joystickRect.top + options.joystickRect.height / 2,
+      maxRadius,
+    };
+  }
+
+  return {
+    x: options.clientX,
+    y: options.clientY,
+    maxRadius,
+  };
+}
+
+export function pointerToMovementVector(anchor: MovementAnchor, clientX: number, clientY: number): { x: number; y: number } {
+  return {
+    x: clampUnit((clientX - anchor.x) / anchor.maxRadius),
+    y: clampUnit((clientY - anchor.y) / anchor.maxRadius),
+  };
+}
+
+function clampUnit(value: number): number {
+  return Math.max(-1, Math.min(1, value));
+}
+
+function preventBattleGestureDefault(event: PointerEvent): void {
+  if (event.cancelable) {
+    event.preventDefault();
   }
 }
