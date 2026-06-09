@@ -1,10 +1,23 @@
 // Responsibility: Convert combat intent already stored in state into field-facing requests.
 // Owner: features/combat
 
+import type { Vec2 } from "../../core/math/vector";
 import type { ActiveEmitterState } from "../../core/state/BattleFieldState";
+import type { EnemyState } from "../../core/state/EntityState";
 import type { InventoryState } from "../../core/state/InventoryState";
 import { starterItemById } from "../../content/items/starterItems";
 import type { MaterialEmitter } from "../combatField/CombatFieldTypes";
+
+export const fallbackWeaponTargetDetectionRange = 0.36;
+
+export interface WeaponTargetingConfig {
+  readonly detectionRange: number;
+}
+
+export interface AttackTarget {
+  readonly enemyId: string;
+  readonly position: Vec2;
+}
 
 export function activeEmitterToMaterialEmitter(emitter: ActiveEmitterState): MaterialEmitter {
   return {
@@ -15,6 +28,44 @@ export function activeEmitterToMaterialEmitter(emitter: ActiveEmitterState): Mat
     strength: emitter.strength,
     ttlMs: emitter.ttlMs,
   };
+}
+
+export function resolveEquippedWeaponTargeting(inventory: InventoryState): WeaponTargetingConfig {
+  const weaponItemId = inventory.equipment.find((slot) => slot.slot === "weapon")?.itemId;
+  const weapon = weaponItemId ? starterItemById.get(weaponItemId) : null;
+
+  return {
+    detectionRange: weapon?.weaponTargeting?.detectionRange ?? fallbackWeaponTargetDetectionRange,
+  };
+}
+
+export function selectNearestAttackTarget(
+  playerPosition: Vec2,
+  enemies: readonly EnemyState[],
+  detectionRange: number,
+): AttackTarget | null {
+  const rangeSquared = detectionRange * detectionRange;
+  let nearest: { readonly enemy: EnemyState; readonly distanceSquared: number } | null = null;
+
+  for (const enemy of enemies) {
+    if (enemy.hp <= 0) {
+      continue;
+    }
+
+    const distanceSquared =
+      (enemy.position.x - playerPosition.x) * (enemy.position.x - playerPosition.x) +
+      (enemy.position.y - playerPosition.y) * (enemy.position.y - playerPosition.y);
+
+    if (distanceSquared > rangeSquared) {
+      continue;
+    }
+
+    if (!nearest || distanceSquared < nearest.distanceSquared) {
+      nearest = { enemy, distanceSquared };
+    }
+  }
+
+  return nearest ? { enemyId: nearest.enemy.id, position: nearest.enemy.position } : null;
 }
 
 export function resolveEquippedAttackMaterial(inventory: InventoryState): ActiveEmitterState["material"] {

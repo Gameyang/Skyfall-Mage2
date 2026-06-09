@@ -4,37 +4,10 @@ import { applyCommand } from "../core/state/commandReducer";
 import { createInitialGameState } from "../core/state/GameState";
 
 describe("applyCommand", () => {
-  it("maps movement and aim commands into player intent", () => {
+  it("maps movement commands into player intent", () => {
     const moved = applyCommand(createInitialGameState(), { type: "MovePlayer", x: 2, y: 0, source: "keyboard" });
-    const aimed = applyCommand(moved, { type: "AimAt", x: 2, y: -1, source: "pointer" });
 
     expect(moved.player.movement).toEqual({ x: 1, y: 0 });
-    expect(aimed.player.aim).toEqual({ x: 1, y: 0 });
-  });
-
-  it("turns attack input into projectile and field emitter intent", () => {
-    const state = applyCommand(createInitialGameState(), { type: "StartAttack", source: "pointer" });
-
-    expect(state.player.attacking).toBe(true);
-    expect(state.entities.projectiles).toHaveLength(1);
-    expect(state.entities.projectiles[0]?.material).toBe("fire");
-    expect(state.battleField.activeEmitters.map((emitter) => emitter.material)).toEqual(["fire", "force"]);
-  });
-
-  it("reinterprets unlocked skills as field emitters during attacks", () => {
-    const initial = createInitialGameState();
-    const state = applyCommand(
-      {
-        ...initial,
-        progression: {
-          ...initial.progression,
-          unlockedSkillIds: ["ember-root", "steam-veil", "force-ring"],
-        },
-      },
-      { type: "StartAttack", source: "pointer" },
-    );
-
-    expect(state.battleField.activeEmitters.map((emitter) => emitter.material)).toEqual(["fire", "force", "steam", "force"]);
   });
 
   it("selects and moves inventory slots without mutating the previous state", () => {

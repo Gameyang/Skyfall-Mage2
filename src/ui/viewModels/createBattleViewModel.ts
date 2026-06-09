@@ -11,6 +11,7 @@ export interface BattleViewModel {
   readonly playerYPercent: number;
   readonly aimXPercent: number;
   readonly aimYPercent: number;
+  readonly hasAttackTarget: boolean;
   readonly enemies: readonly {
     readonly id: string;
     readonly xPercent: number;
@@ -35,6 +36,7 @@ export function createBattleViewModel(state: GameState): BattleViewModel {
     playerYPercent: state.player.position.y * 100,
     aimXPercent: state.player.aim.x * 100,
     aimYPercent: state.player.aim.y * 100,
+    hasAttackTarget: state.player.attacking,
     enemies: state.entities.enemies.map((enemy) => ({
       id: enemy.id,
       xPercent: enemy.position.x * 100,

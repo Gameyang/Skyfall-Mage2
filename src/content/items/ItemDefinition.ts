@@ -21,6 +21,10 @@ export interface FieldModifierBlock {
   readonly waterResistance?: number;
 }
 
+export interface WeaponTargetingBlock {
+  readonly detectionRange?: number;
+}
+
 export interface ItemDefinition {
   readonly id: string;
   readonly name: string;
@@ -30,5 +34,6 @@ export interface ItemDefinition {
   readonly equipmentSlot?: EquipmentSlotId;
   readonly stats?: StatBlock;
   readonly fieldModifiers?: FieldModifierBlock;
+  readonly weaponTargeting?: WeaponTargetingBlock;
   readonly materialAffinity?: "fire" | "water" | "ice" | "spark" | "force";
 }

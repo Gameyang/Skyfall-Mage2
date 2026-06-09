@@ -16,6 +16,67 @@ describe("runtime systems", () => {
     expect(stepped.player.moveSpeedPerSecond).toBeCloseTo(0.36);
   });
 
+  it("auto-targets the nearest enemy in weapon range and starts attacking", () => {
+    const initial = createInitialGameState();
+    const nearEnemy = {
+      ...initial.entities.enemies[0]!,
+      id: "near",
+      position: { x: 0.58, y: 0.56 },
+    };
+    const farEnemy = {
+      ...initial.entities.enemies[0]!,
+      id: "far",
+      position: { x: 0.72, y: 0.52 },
+    };
+    const stepped = stepGameState(
+      {
+        ...initial,
+        entities: {
+          ...initial.entities,
+          enemies: [farEnemy, nearEnemy],
+          projectiles: [],
+        },
+      },
+      16,
+    );
+
+    expect(stepped.player.attacking).toBe(true);
+    expect(stepped.player.aim).toEqual(nearEnemy.position);
+    expect(stepped.entities.projectiles).toHaveLength(1);
+    expect(stepped.entities.projectiles[0]?.material).toBe("fire");
+    expect(stepped.battleField.activeEmitters.map((emitter) => emitter.material)).toEqual(["fire", "force", "fire"]);
+  });
+
+  it("stops auto-attacking and regenerates mana when enemies are out of weapon range", () => {
+    const initial = createInitialGameState();
+    const stepped = stepGameState(
+      {
+        ...initial,
+        player: {
+          ...initial.player,
+          attacking: true,
+          mana: { ...initial.player.mana, current: 50 },
+        },
+        entities: {
+          ...initial.entities,
+          enemies: [
+            {
+              ...initial.entities.enemies[0]!,
+              position: { x: 0.92, y: 0.16 },
+            },
+          ],
+          projectiles: [],
+        },
+      },
+      1_000,
+    );
+
+    expect(stepped.player.attacking).toBe(false);
+    expect(stepped.player.aim).toEqual(stepped.player.position);
+    expect(stepped.player.mana.current).toBeGreaterThan(50);
+    expect(stepped.entities.projectiles).toHaveLength(0);
+  });
+
   it("advances completed waves into the next wave with environment and spawn changes", () => {
     const initial = createInitialGameState();
     const result = advanceWaveRuntime(

@@ -1,11 +1,8 @@
 // Responsibility: Apply queued commands to serializable game state.
 // Owner: core/state
 
-import { clamp, normalizeVec2, subtractVec2 } from "../math/vector";
+import { normalizeVec2 } from "../math/vector";
 import { starterItemById } from "../../content/items/starterItems";
-import { resolveEquippedAttackMaterial } from "../../features/combat/CombatSystem";
-import { createSkillEmitters } from "../../features/combat/SkillEmitterSystem";
-import { resolveEquipmentModifiers } from "../../features/equipment/EquipmentModifierResolver";
 import { fuseItems } from "../../features/fusion/FusionSystem";
 import { addItemToInventoryBag, useInventorySlotItem } from "../../features/inventory/InventoryMutations";
 import { selectLevelUpReward } from "../../features/progression/RewardSystem";
@@ -30,85 +27,6 @@ export function applyCommand(state: GameState, command: GameCommand): GameState 
         player: {
           ...state.player,
           movement: normalizeVec2({ x: command.x, y: command.y }),
-        },
-      };
-
-    case "AimAt":
-      return {
-        ...state,
-        player: {
-          ...state.player,
-          aim: {
-            x: clamp(command.x, 0, 1),
-            y: clamp(command.y, 0, 1),
-          },
-        },
-      };
-
-    case "StartAttack":
-      const attackDirection = normalizeVec2(subtractVec2(state.player.aim, state.player.position));
-      const projectileId = `projectile-${state.battleField.queryFrame}-${state.entities.projectiles.length}`;
-      const emitterId = `emitter-${state.battleField.queryFrame}-${state.battleField.activeEmitters.length}`;
-      const equipmentModifiers = resolveEquipmentModifiers(state.inventory);
-      const attackMaterial = resolveEquippedAttackMaterial(state.inventory);
-      const skillEmitters = createSkillEmitters(state, emitterId);
-
-      return {
-        ...state,
-        player: {
-          ...state.player,
-          attacking: true,
-          attackCooldownRemainingMs: 180,
-        },
-        entities: {
-          ...state.entities,
-          projectiles: [
-            ...state.entities.projectiles,
-            {
-              id: projectileId,
-              materialEmitterId: emitterId,
-              material: attackMaterial,
-              position: state.player.position,
-              direction: attackDirection,
-              speedPerSecond: 0.72,
-              ageMs: 0,
-              maxAgeMs: 700,
-            },
-          ],
-        },
-        battleField: {
-          ...state.battleField,
-          activeEmitters: [
-            ...state.battleField.activeEmitters,
-            {
-              id: emitterId,
-              material: attackMaterial,
-              x: state.player.aim.x,
-              y: state.player.aim.y,
-              radius: 0.06 * equipmentModifiers.simulation.emitterRadiusScale,
-              strength: 1 * equipmentModifiers.simulation.emitterStrengthScale * equipmentModifiers.simulation.heatScale,
-              ttlMs: 240,
-            },
-            {
-              id: `${emitterId}-force`,
-              material: "force",
-              x: state.player.aim.x,
-              y: state.player.aim.y,
-              radius: 0.08 * equipmentModifiers.simulation.emitterRadiusScale,
-              strength: 0.45 * equipmentModifiers.simulation.forceScale,
-              ttlMs: 240,
-            },
-            ...skillEmitters,
-          ],
-        },
-      };
-
-    case "StopAttack":
-      return {
-        ...state,
-        player: {
-          ...state.player,
-          attacking: false,
         },
       };
 

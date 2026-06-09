@@ -5,9 +5,6 @@ import type { EquipmentSlotKind } from "./InventoryState";
 
 export type GameCommand =
   | { readonly type: "MovePlayer"; readonly x: number; readonly y: number; readonly source: "keyboard" | "touch" }
-  | { readonly type: "AimAt"; readonly x: number; readonly y: number; readonly source: "pointer" | "touch" }
-  | { readonly type: "StartAttack"; readonly source: "keyboard" | "pointer" | "touch" }
-  | { readonly type: "StopAttack"; readonly source: "keyboard" | "pointer" | "touch" }
   | { readonly type: "UseInventorySlot"; readonly slotIndex: number }
   | { readonly type: "EquipItem"; readonly slotIndex: number; readonly equipmentSlot: EquipmentSlotKind }
   | { readonly type: "MoveInventoryItem"; readonly fromIndex: number; readonly toIndex: number }

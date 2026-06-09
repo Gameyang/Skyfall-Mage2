@@ -2,7 +2,11 @@
 // Owner: core/state
 
 import { addVec2, clamp, normalizeVec2, scaleVec2, subtractVec2 } from "../math/vector";
-import { resolveEquippedAttackMaterial } from "../../features/combat/CombatSystem";
+import {
+  resolveEquippedAttackMaterial,
+  resolveEquippedWeaponTargeting,
+  selectNearestAttackTarget,
+} from "../../features/combat/CombatSystem";
 import { createEnemyPatternEmitters } from "../../features/combat/EnemyPatternSystem";
 import { createSkillEmitters } from "../../features/combat/SkillEmitterSystem";
 import { resolveEquipmentModifiers } from "../../features/equipment/EquipmentModifierResolver";
@@ -27,6 +31,10 @@ export function stepGameState(state: GameState, deltaMs: number): GameState {
     state.player.position,
     scaleVec2(state.player.movement, moveSpeedPerSecond * deltaSeconds),
   );
+  const nextPlayerPosition = {
+    x: clamp(nextPosition.x, 0.08, 0.92),
+    y: clamp(nextPosition.y, 0.16, 0.86),
+  };
   const projectiles = state.entities.projectiles
     .map((projectile) => ({
       ...projectile,
@@ -42,9 +50,17 @@ export function stepGameState(state: GameState, deltaMs: number): GameState {
         projectile.position.y <= 1,
     );
   let attackCooldownRemainingMs = Math.max(0, state.player.attackCooldownRemainingMs - deltaMs);
+  const weaponTargeting = resolveEquippedWeaponTargeting(state.inventory);
+  const attackTarget = selectNearestAttackTarget(
+    nextPlayerPosition,
+    state.entities.enemies,
+    weaponTargeting.detectionRange,
+  );
+  const autoAttacking = attackTarget !== null && state.player.mana.current > 1;
+  const nextAim = attackTarget?.position ?? nextPlayerPosition;
   const sustainedAttack =
-    state.player.attacking && state.player.mana.current > 1 && attackCooldownRemainingMs <= 0
-      ? createSustainedAttack(state, projectiles.length)
+    autoAttacking && attackCooldownRemainingMs <= 0
+      ? createSustainedAttack(state, projectiles.length, nextPlayerPosition, nextAim)
       : null;
 
   if (sustainedAttack) {
@@ -75,16 +91,14 @@ export function stepGameState(state: GameState, deltaMs: number): GameState {
     player: {
       ...state.player,
       moveSpeedPerSecond,
-      position: {
-        x: clamp(nextPosition.x, 0.08, 0.92),
-        y: clamp(nextPosition.y, 0.16, 0.86),
-      },
+      position: nextPlayerPosition,
+      aim: nextAim,
       hp: {
         ...state.player.hp,
         current: clamp(state.player.hp.current, 0, hpMax),
         max: hpMax,
       },
-      mana: state.player.attacking
+      mana: autoAttacking
         ? {
             ...state.player.mana,
             current: clamp(state.player.mana.current - deltaSeconds * 4, 0, manaMax),
@@ -95,6 +109,7 @@ export function stepGameState(state: GameState, deltaMs: number): GameState {
             current: clamp(state.player.mana.current + deltaSeconds * manaRegenPerSecond, 0, manaMax),
             max: manaMax,
           },
+      attacking: autoAttacking,
       attackCooldownRemainingMs,
     },
     entities: {
@@ -116,8 +131,13 @@ export function stepGameState(state: GameState, deltaMs: number): GameState {
   };
 }
 
-function createSustainedAttack(state: GameState, projectileCount: number) {
-  const direction = normalizeVec2(subtractVec2(state.player.aim, state.player.position));
+function createSustainedAttack(
+  state: GameState,
+  projectileCount: number,
+  playerPosition: GameState["player"]["position"],
+  targetPosition: GameState["player"]["aim"],
+) {
+  const direction = normalizeVec2(subtractVec2(targetPosition, playerPosition));
   const equipmentModifiers = resolveEquipmentModifiers(state.inventory);
   const attackMaterial = resolveEquippedAttackMaterial(state.inventory);
   const emitterId = `emitter-${state.battleField.queryFrame}-${projectileCount}-sustain`;
@@ -125,7 +145,7 @@ function createSustainedAttack(state: GameState, projectileCount: number) {
     id: `projectile-${state.battleField.queryFrame}-${projectileCount}-sustain`,
     materialEmitterId: emitterId,
     material: attackMaterial,
-    position: state.player.position,
+    position: playerPosition,
     direction,
     speedPerSecond: 0.72,
     ageMs: 0,
@@ -138,8 +158,8 @@ function createSustainedAttack(state: GameState, projectileCount: number) {
       {
         id: emitterId,
         material: attackMaterial,
-        x: state.player.aim.x,
-        y: state.player.aim.y,
+        x: targetPosition.x,
+        y: targetPosition.y,
         radius: 0.06 * equipmentModifiers.simulation.emitterRadiusScale,
         strength: 1 * equipmentModifiers.simulation.emitterStrengthScale * equipmentModifiers.simulation.heatScale,
         ttlMs: 220,
@@ -147,13 +167,13 @@ function createSustainedAttack(state: GameState, projectileCount: number) {
       {
         id: `${emitterId}-force`,
         material: "force" as const,
-        x: state.player.aim.x,
-        y: state.player.aim.y,
+        x: targetPosition.x,
+        y: targetPosition.y,
         radius: 0.08 * equipmentModifiers.simulation.emitterRadiusScale,
         strength: 0.45 * equipmentModifiers.simulation.forceScale,
         ttlMs: 180,
       },
-      ...createSkillEmitters(state, emitterId),
+      ...createSkillEmitters(state, emitterId, targetPosition, playerPosition),
     ],
   };
 }

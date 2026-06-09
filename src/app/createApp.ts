@@ -3,7 +3,6 @@
 
 import { createInitialGameState } from "../core/state/GameState";
 import { KeyboardInput } from "../input/KeyboardInput";
-import { PointerInput } from "../input/PointerInput";
 import { TouchInput } from "../input/TouchInput";
 import { CombatFieldGpu } from "../render/webgpu/combatField/CombatFieldGpu";
 import { CommandBus } from "../runtime/CommandBus";
@@ -40,7 +39,6 @@ export async function createApp(root: HTMLElement): Promise<AppInstance> {
   window.addEventListener("beforeunload", () => saveRuntime.save(runtime.getState()));
 
   const keyboardInput = new KeyboardInput(window, (command) => commandBus.enqueue(command));
-  const pointerInput = new PointerInput(shell.playfieldElement, (command) => commandBus.enqueue(command));
   const touchInput = new TouchInput(shell.joystickElement, (command) => commandBus.enqueue(command));
 
   const gpu = await CombatFieldGpu.create(shell.canvas, {
@@ -71,7 +69,6 @@ export async function createApp(root: HTMLElement): Promise<AppInstance> {
     dispose() {
       runtime.stop();
       keyboardInput.dispose();
-      pointerInput.dispose();
       touchInput.dispose();
       if (gpu.ok) {
         gpu.renderer.dispose();

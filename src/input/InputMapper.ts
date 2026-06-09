@@ -2,7 +2,7 @@
 // Owner: input
 
 import type { GameCommand } from "../core/state/Command";
-import type { MovementKeys, NormalizedPointer } from "./InputTypes";
+import type { MovementKeys } from "./InputTypes";
 
 export function movementKeysToCommand(keys: MovementKeys): GameCommand {
   return {
@@ -19,14 +19,5 @@ export function touchVectorToCommand(x: number, y: number): GameCommand {
     x,
     y,
     source: "touch",
-  };
-}
-
-export function pointerToAimCommand(pointer: NormalizedPointer, source: "pointer" | "touch"): GameCommand {
-  return {
-    type: "AimAt",
-    x: pointer.x,
-    y: pointer.y,
-    source,
   };
 }

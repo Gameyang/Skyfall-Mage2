@@ -64,12 +64,6 @@ export class KeyboardInput {
       return;
     }
 
-    if (event.code === "Space" && !event.repeat) {
-      event.preventDefault();
-      this.sink({ type: "StartAttack", source: "keyboard" });
-      return;
-    }
-
     const hotbarIndex = hotbarCodeMap[event.code];
 
     if (hotbarIndex !== undefined && !event.repeat) {
@@ -88,10 +82,6 @@ export class KeyboardInput {
       return;
     }
 
-    if (event.code === "Space") {
-      event.preventDefault();
-      this.sink({ type: "StopAttack", source: "keyboard" });
-    }
   };
 
   private readonly handleBlur = (): void => {
@@ -100,6 +90,5 @@ export class KeyboardInput {
     this.keys.up = false;
     this.keys.down = false;
     this.sink(movementKeysToCommand(this.keys));
-    this.sink({ type: "StopAttack", source: "keyboard" });
   };
 }

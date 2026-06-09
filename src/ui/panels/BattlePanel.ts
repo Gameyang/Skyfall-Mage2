@@ -78,6 +78,7 @@ export class BattlePanel {
     this.playerMarker.style.top = `${viewModel.playerYPercent}%`;
     this.aimMarker.style.left = `${viewModel.aimXPercent}%`;
     this.aimMarker.style.top = `${viewModel.aimYPercent}%`;
+    this.aimMarker.hidden = !viewModel.hasAttackTarget;
     this.enemyLayer.replaceChildren(...viewModel.enemies.map(createEnemyMarker));
     this.dropLayer.replaceChildren(...viewModel.itemDrops.map(createDropMarker));
   }
