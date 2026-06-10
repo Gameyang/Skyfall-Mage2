@@ -10,7 +10,9 @@ const springColumns = 320;
 const maxInteractions = 24;
 const interactionStride = 4;
 const maxParticles = 1024;
+const maxParticleEmitters = maxInteractions * 2;
 const particleStride = 12;
+const particleEmitterStride = 8;
 const particleWorkgroupSize = 64;
 
 type WaterInteractionPhase = "surface-impact" | "submerged-body";
@@ -32,19 +34,17 @@ interface SpriteSample {
   readonly timeMs: number;
 }
 
-type WaterParticleKind = "foam" | "spray" | "bubble";
+type WaterParticleEmitterKind = "foam" | "spray" | "bubble";
 
-interface WaterParticle {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  ageMs: number;
-  lifeMs: number;
-  radius: number;
-  strength: number;
-  kind: WaterParticleKind;
-  seed: number;
+interface WaterParticleEmitter {
+  readonly x: number;
+  readonly y: number;
+  readonly radius: number;
+  readonly strength: number;
+  readonly kind: WaterParticleEmitterKind;
+  readonly count: number;
+  readonly seed: number;
+  readonly windX: number;
 }
 
 export class CombatFieldWaterRenderer {
@@ -61,13 +61,14 @@ export class CombatFieldWaterRenderer {
   private readonly particleSpawnPipeline: GPUComputePipeline;
   private readonly paramsData = new Float32Array(20);
   private readonly interactionData = new Float32Array(maxInteractions * interactionStride);
-  private readonly spawnData = new Float32Array(maxParticles * particleStride);
+  private readonly spawnData = new Float32Array(maxParticleEmitters * particleEmitterStride);
   private readonly spriteSamples = new Map<string, SpriteSample>();
   private readonly spriteWakeTimes = new Map<string, number>();
   private readonly spriteFoamTimes = new Map<string, number>();
   private lastTimeMs: number | null = null;
   private randomState = 0x9e37_79b9;
-  private pendingSpawnCount = 0;
+  private pendingSpawnEmitterCount = 0;
+  private pendingSpawnParticleCount = 0;
   private particleCursor = 0;
   private particleRenderCount = 0;
   private shouldRender = false;
@@ -97,7 +98,7 @@ export class CombatFieldWaterRenderer {
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
     this.spawnBuffer = device.createBuffer({
-      label: "Combat field water particle spawns",
+      label: "Combat field water particle emitters",
       size: this.spawnData.byteLength,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
@@ -218,7 +219,9 @@ export class CombatFieldWaterRenderer {
     this.shouldRender = true;
     const deltaMs = this.lastTimeMs === null ? 16.6667 : Math.min(50, Math.max(0, timeMs - this.lastTimeMs));
     this.lastTimeMs = timeMs;
-    this.pendingSpawnCount = 0;
+    this.pendingSpawnEmitterCount = 0;
+    this.pendingSpawnParticleCount = 0;
+    this.spawnData.fill(0);
     const interactions = this.collectInteractions(snapshot, timeMs);
     this.spawnInteractionParticles(interactions, visuals, deltaMs);
     this.simulation.addRainRipples(deltaMs, visuals.rainRate);
@@ -232,11 +235,11 @@ export class CombatFieldWaterRenderer {
     const nextParticleRenderCount = calculateNextParticleRenderCount(
       this.particleRenderCount,
       spawnStart,
-      this.pendingSpawnCount,
+      this.pendingSpawnParticleCount,
     );
-    this.writeParams(width, height, visuals, timeMs, interactions, deltaMs, spawnStart, this.pendingSpawnCount, nextParticleRenderCount);
-    this.dispatchParticleCompute(encoder, previousParticleRenderCount, this.pendingSpawnCount);
-    this.particleCursor = (spawnStart + this.pendingSpawnCount) % maxParticles;
+    this.writeParams(width, height, visuals, timeMs, interactions, deltaMs, spawnStart, this.pendingSpawnParticleCount, nextParticleRenderCount);
+    this.dispatchParticleCompute(encoder, previousParticleRenderCount, this.pendingSpawnParticleCount);
+    this.particleCursor = (spawnStart + this.pendingSpawnParticleCount) % maxParticles;
     this.particleRenderCount = nextParticleRenderCount;
   }
 
@@ -372,30 +375,29 @@ export class CombatFieldWaterRenderer {
         const foamCount = Math.min(5, Math.max(2, Math.round(strength * frameScale * 2.1)));
         const sprayCount = Math.round(50 + clamp((strength * frameScale - 0.12) / 1.28, 0, 1) * 50);
 
-        for (let index = 0; index < foamCount; index += 1) {
-          this.spawnParticle(createFoamParticle(interaction, visuals.waterStart, visuals.windX, this.nextRandom()));
-        }
-
-        for (let index = 0; index < sprayCount; index += 1) {
-          this.spawnParticle(createSprayParticle(interaction, visuals.waterStart, visuals.windX, this.nextRandom()));
-        }
+        this.queueParticleEmitter(createParticleEmitter(interaction, visuals.windX, "foam", foamCount, this.nextRandom()));
+        this.queueParticleEmitter(createParticleEmitter(interaction, visuals.windX, "spray", sprayCount, this.nextRandom()));
       } else {
         const submergedSprayCount = Math.round(20 + clamp((strength * frameScale - 0.08) / 0.92, 0, 1) * 30);
 
-        for (let index = 0; index < submergedSprayCount; index += 1) {
-          this.spawnParticle(createSubmergedSprayParticle(interaction, visuals.waterStart, visuals.windX, this.nextRandom()));
-        }
+        this.queueParticleEmitter(createParticleEmitter(interaction, visuals.windX, "bubble", submergedSprayCount, this.nextRandom()));
       }
     }
   }
 
-  private spawnParticle(particle: WaterParticle): void {
-    if (this.pendingSpawnCount >= maxParticles) {
+  private queueParticleEmitter(emitter: WaterParticleEmitter): void {
+    if (
+      this.pendingSpawnEmitterCount >= maxParticleEmitters ||
+      this.pendingSpawnParticleCount >= maxParticles ||
+      emitter.count <= 0
+    ) {
       return;
     }
 
-    writeParticle(this.spawnData, this.pendingSpawnCount * particleStride, particle);
-    this.pendingSpawnCount += 1;
+    const count = Math.min(emitter.count, maxParticles - this.pendingSpawnParticleCount);
+    writeParticleEmitter(this.spawnData, this.pendingSpawnEmitterCount * particleEmitterStride, emitter, count);
+    this.pendingSpawnEmitterCount += 1;
+    this.pendingSpawnParticleCount += count;
   }
 
   private writeInteractionData(interactions: readonly WaterInteraction[]): void {
@@ -411,11 +413,11 @@ export class CombatFieldWaterRenderer {
   }
 
   private writeSpawnData(): void {
-    if (this.pendingSpawnCount <= 0) {
+    if (this.pendingSpawnParticleCount <= 0) {
       return;
     }
 
-    this.device.queue.writeBuffer(this.spawnBuffer, 0, this.spawnData, 0, this.pendingSpawnCount * particleStride);
+    this.device.queue.writeBuffer(this.spawnBuffer, 0, this.spawnData);
   }
 
   private dispatchParticleCompute(
@@ -491,77 +493,26 @@ export class CombatFieldWaterRenderer {
   }
 }
 
-function createFoamParticle(
+function createParticleEmitter(
   interaction: WaterInteraction,
-  waterStart: number,
   windX: number,
+  kind: WaterParticleEmitterKind,
+  count: number,
   seed: number,
-): WaterParticle {
-  const offset = (seed - 0.5) * interaction.radius * 2.0;
-  const strength = clamp(Math.abs(interaction.strength), 0.08, 1.5);
-
+): WaterParticleEmitter {
   return {
-    x: wrap01(interaction.x + offset),
-    y: clamp(waterStart + (seed - 0.52) * 0.01, 0, 1),
-    vx: (seed - 0.5) * 0.018 + windX * 0.012,
-    vy: 0,
-    ageMs: 0,
-    lifeMs: 720 + seed * 820,
-    radius: clamp(0.004 + interaction.radius * 0.12 + strength * 0.0025, 0.004, 0.018),
-    strength,
-    kind: "foam",
+    x: interaction.x,
+    y: interaction.y,
+    radius: interaction.radius,
+    strength: Math.abs(interaction.strength),
+    kind,
+    count,
     seed,
+    windX,
   };
 }
 
-function createSprayParticle(
-  interaction: WaterInteraction,
-  waterStart: number,
-  windX: number,
-  seed: number,
-): WaterParticle {
-  const side = seed < 0.5 ? -1 : 1;
-  const strength = clamp(Math.abs(interaction.strength), 0.08, 1.6);
-  const lift = 0.16 + strength * 0.14 + seed * 0.07;
-
-  return {
-    x: wrap01(interaction.x + side * interaction.radius * (0.15 + seed * 0.55)),
-    y: clamp(Math.min(interaction.y, waterStart) - 0.004 - seed * 0.012, 0, 1),
-    vx: side * (0.045 + seed * 0.09) + windX * 0.026,
-    vy: -lift,
-    ageMs: 0,
-    lifeMs: 280 + seed * 320,
-    radius: clamp(0.0016 + strength * 0.0018 + interaction.radius * 0.018, 0.0016, 0.0065),
-    strength,
-    kind: "spray",
-    seed,
-  };
-}
-
-function createSubmergedSprayParticle(
-  interaction: WaterInteraction,
-  waterStart: number,
-  windX: number,
-  seed: number,
-): WaterParticle {
-  const strength = clamp(Math.abs(interaction.strength), 0.06, 1.2);
-  const lateral = seed - 0.5;
-
-  return {
-    x: wrap01(interaction.x + lateral * interaction.radius * 1.35),
-    y: clamp(Math.max(waterStart + 0.012, interaction.y + (seed - 0.45) * interaction.radius * 0.9), 0, 1),
-    vx: lateral * 0.026 + windX * 0.006,
-    vy: -(0.018 + seed * 0.035 + strength * 0.018),
-    ageMs: 0,
-    lifeMs: 520 + seed * 560,
-    radius: clamp(0.0018 + interaction.radius * 0.035 + strength * 0.0018, 0.0018, 0.007),
-    strength,
-    kind: "bubble",
-    seed,
-  };
-}
-
-function encodeParticleKind(kind: WaterParticleKind): number {
+function encodeParticleEmitterKind(kind: WaterParticleEmitterKind): number {
   switch (kind) {
     case "foam":
       return 0;
@@ -572,19 +523,20 @@ function encodeParticleKind(kind: WaterParticleKind): number {
   }
 }
 
-function writeParticle(data: Float32Array, offset: number, particle: WaterParticle): void {
-  data[offset] = particle.x;
-  data[offset + 1] = particle.y;
-  data[offset + 2] = particle.radius;
-  data[offset + 3] = encodeParticleKind(particle.kind);
-  data[offset + 4] = particle.vx;
-  data[offset + 5] = particle.vy;
-  data[offset + 6] = particle.ageMs;
-  data[offset + 7] = particle.lifeMs;
-  data[offset + 8] = particle.seed;
-  data[offset + 9] = particle.strength;
-  data[offset + 10] = 0;
-  data[offset + 11] = 0;
+function writeParticleEmitter(
+  data: Float32Array,
+  offset: number,
+  emitter: WaterParticleEmitter,
+  count: number,
+): void {
+  data[offset] = emitter.x;
+  data[offset + 1] = emitter.y;
+  data[offset + 2] = emitter.radius;
+  data[offset + 3] = emitter.strength;
+  data[offset + 4] = encodeParticleEmitterKind(emitter.kind);
+  data[offset + 5] = count;
+  data[offset + 6] = emitter.seed;
+  data[offset + 7] = emitter.windX;
 }
 
 function calculateNextParticleRenderCount(currentCount: number, spawnStart: number, spawnCount: number): number {
@@ -616,8 +568,4 @@ function encodeEnvironmentKind(kind: BattleEnvironmentVisuals["kind"]): number {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
-}
-
-function wrap01(value: number): number {
-  return ((value % 1) + 1) % 1;
 }
