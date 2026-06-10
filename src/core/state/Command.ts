@@ -14,6 +14,6 @@ export type GameCommand =
   | { readonly type: "RerollShopOffers" }
   | { readonly type: "BuyShopItem"; readonly offerId: string }
   | { readonly type: "DismissModal"; readonly modalId: string }
-  | { readonly type: "AnswerReviveQuiz"; readonly answer: string }
+  | { readonly type: "AnswerReviveQuiz"; readonly answerKey: string }
   | { readonly type: "PauseRuntime" }
   | { readonly type: "ResumeRuntime" };

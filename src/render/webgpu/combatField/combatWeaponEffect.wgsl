@@ -4,6 +4,7 @@ struct EffectParams {
   transform: vec4f,
   colorAndGlow: vec4f,
   sheetRect: vec4f,
+  frameGrid: vec4f,
 };
 
 @group(0) @binding(0) var<uniform> params: EffectParams;
@@ -69,9 +70,13 @@ fn sampleLayer(localUv: vec2f, drawMode: f32) -> vec4f {
 
   let frameCount = max(1.0, floor(params.atlas.y + 0.5));
   let frameIndex = clamp(floor(params.atlas.x + 0.5), 0.0, frameCount - 1.0);
+  let columns = max(1.0, floor(params.frameGrid.x + 0.5));
+  let rows = max(1.0, floor(params.frameGrid.y + 0.5));
+  let column = frameIndex - floor(frameIndex / columns) * columns;
+  let row = floor(frameIndex / columns);
   let frameUv = vec2f(
-    params.sheetRect.x + ((frameIndex + localUv.x) / frameCount) * params.sheetRect.z,
-    params.sheetRect.y + localUv.y * params.sheetRect.w
+    params.sheetRect.x + ((column + localUv.x) / columns) * params.sheetRect.z,
+    params.sheetRect.y + ((row + localUv.y) / rows) * params.sheetRect.w
   );
   let color = sampleEffect(frameUv);
   return vec4f(color.rgb * params.colorAndGlow.rgb, color.a);

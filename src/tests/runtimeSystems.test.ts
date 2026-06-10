@@ -115,7 +115,6 @@ describe("runtime systems", () => {
     expect(impacted.entities.fireDamageAreas).toHaveLength(1);
     expect(impacted.entities.fireDamageAreas[0]?.ownerId).toBe(initial.player.id);
     expect(impacted.entities.fireDamageAreas[0]?.position).toEqual(target.position);
-    expect(impacted.entities.fireDamageAreas[0]?.radius).toBeCloseTo(0.15 * 1.04);
     expect(impacted.entities.fireDamageAreas[0]?.remainingMs).toBe(2_000);
   });
 

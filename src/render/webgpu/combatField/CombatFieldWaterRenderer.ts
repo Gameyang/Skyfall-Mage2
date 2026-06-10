@@ -1,7 +1,13 @@
 // Responsibility: Composite the lower battlefield water surface in the WebGPU combat pass.
 // Owner: render/webgpu/combatField
 
-import type { BattleEnvironmentVisuals, RenderSnapshot, RenderableSprite } from "../../snapshots/RenderSnapshot";
+import type {
+  BattleEnvironmentVisuals,
+  RenderSnapshot,
+  RenderableSprite,
+  RenderableSpriteKind,
+  WeaponEffectSprite,
+} from "../../snapshots/RenderSnapshot";
 import particleShaderSource from "./combatFieldWaterParticles.wgsl?raw";
 import spriteEffectShaderSource from "./combatFieldWaterSpriteEffect.wgsl?raw";
 import waterShaderSource from "./combatFieldWater.wgsl?raw";
@@ -9,6 +15,11 @@ import { SpriteTextureCache } from "./SpriteTextureCache";
 import { WaterSurfaceSimulation, type WaterImpulseKind } from "./WaterSurfaceSimulation";
 
 const springColumns = 320;
+const waterSurfaceWaveDamping = 0.045;
+const waterSurfaceWaveSpread = 0.34;
+const waterSurfaceWaveTension = 0.027;
+const waterSurfaceContactReach = 0.035;
+const waterSurfaceContactDepth = 0.22;
 const maxInteractions = 24;
 const interactionStride = 4;
 const maxParticles = 1024;
@@ -78,7 +89,12 @@ interface WaterSpriteEffectDraw {
 }
 
 export class CombatFieldWaterRenderer {
-  private readonly simulation = new WaterSurfaceSimulation({ columns: springColumns });
+  private readonly simulation = new WaterSurfaceSimulation({
+    columns: springColumns,
+    damping: waterSurfaceWaveDamping,
+    spread: waterSurfaceWaveSpread,
+    tension: waterSurfaceWaveTension,
+  });
   private readonly spriteEffectTextureCache: SpriteTextureCache;
   private readonly spriteEffectSampler: GPUSampler;
   private readonly spriteEffectBindGroupLayout: GPUBindGroupLayout;
@@ -101,6 +117,7 @@ export class CombatFieldWaterRenderer {
   private readonly spriteSamples = new Map<string, SpriteSample>();
   private readonly spriteWakeTimes = new Map<string, number>();
   private readonly spriteFoamTimes = new Map<string, number>();
+  private readonly effectWakeTimes = new Map<string, number>();
   private lastTimeMs: number | null = null;
   private randomState = 0x9e37_79b9;
   private pendingSpawnEmitterCount = 0;
@@ -383,6 +400,7 @@ export class CombatFieldWaterRenderer {
     const waterStart = snapshot.environment.waterStart;
 
     this.collectSpriteWakeInteractions(snapshot.sprites, waterStart, timeMs, interactions);
+    this.collectWeaponEffectWakeInteractions(snapshot.weaponEffects, waterStart, timeMs, interactions);
     return interactions;
   }
 
@@ -405,8 +423,9 @@ export class CombatFieldWaterRenderer {
         continue;
       }
 
+      const profile = spriteWakeProfile(sprite.kind);
       const bottom = sprite.position.y + sprite.size.y * 0.46;
-      const depth = clamp((bottom - waterStart) / 0.18, 0, 1);
+      const depth = clamp((bottom - waterStart + waterSurfaceContactReach) / waterSurfaceContactDepth, 0, 1);
       const previous = this.spriteSamples.get(sprite.id);
       this.spriteSamples.set(sprite.id, { x: sprite.position.x, y: sprite.position.y, bottom, timeMs });
 
@@ -419,20 +438,27 @@ export class CombatFieldWaterRenderer {
         ? Math.hypot(sprite.position.x - previous.x, sprite.position.y - previous.y) / deltaSeconds
         : 0;
       const verticalSpeed = previous ? (bottom - previous.bottom) / deltaSeconds : 0;
-      const base = sprite.kind === "item" ? 0.16 : 0.36;
-      const strength = clamp(base + speed * 0.052 + depth * 0.24, 0.12, 1.15);
+      const strength = clamp(
+        profile.baseStrength + speed * profile.speedScale + depth * profile.depthScale,
+        profile.minStrength,
+        profile.maxStrength,
+      );
       const enteringWater = previous ? previous.bottom < waterStart && bottom >= waterStart : false;
       const surfaceHit = enteringWater || (depth < 0.54 && verticalSpeed > 0.035);
       const lastWakeMs = this.spriteWakeTimes.get(sprite.id) ?? -Infinity;
 
-      if (surfaceHit && timeMs - lastWakeMs >= (sprite.kind === "item" ? 220 : 96)) {
-        const impactStrength = clamp(strength + Math.max(0, verticalSpeed) * 0.75, 0.16, 1.45);
+      if (surfaceHit && timeMs - lastWakeMs >= profile.surfaceCooldownMs) {
+        const impactStrength = clamp(
+          strength + Math.max(0, verticalSpeed) * profile.verticalSpeedScale,
+          profile.minStrength,
+          profile.maxImpactStrength,
+        );
         interactions.push({
           x: clamp(sprite.position.x, 0, 1),
           y: waterStart,
-          radius: clamp(sprite.size.x * 0.72 + depth * 0.018, 0.02, 0.095),
+          radius: clamp(sprite.size.x * profile.surfaceRadiusScale + depth * 0.024, 0.02, profile.maxRadius),
           strength: impactStrength,
-          velocity: -impactStrength * 1.48,
+          velocity: -impactStrength * profile.surfaceVelocityScale,
           kind: "wake",
           phase: "surface-impact",
         });
@@ -444,13 +470,13 @@ export class CombatFieldWaterRenderer {
       }
 
       const lastFoamMs = this.spriteFoamTimes.get(sprite.id) ?? -Infinity;
-      if (interactions.length < maxInteractions && timeMs - lastFoamMs >= (sprite.kind === "item" ? 260 : 150)) {
+      if (interactions.length < maxInteractions && timeMs - lastFoamMs >= profile.bodyCooldownMs) {
         interactions.push({
           x: clamp(sprite.position.x, 0, 1),
           y: clamp(Math.max(waterStart + 0.01, bottom - sprite.size.y * 0.18), 0, 1),
-          radius: clamp(sprite.size.x * 0.54 + depth * 0.018, 0.014, 0.072),
-          strength: clamp(strength * 0.72, 0.1, 0.92),
-          velocity: -strength * 0.36,
+          radius: clamp(sprite.size.x * profile.bodyRadiusScale + depth * 0.022, 0.014, profile.maxRadius * 0.82),
+          strength: clamp(strength * profile.bodyStrengthScale, 0.1, profile.maxStrength),
+          velocity: -strength * profile.bodyVelocityScale,
           kind: "wake",
           phase: "submerged-body",
         });
@@ -463,6 +489,59 @@ export class CombatFieldWaterRenderer {
         this.spriteSamples.delete(spriteId);
         this.spriteWakeTimes.delete(spriteId);
         this.spriteFoamTimes.delete(spriteId);
+      }
+    }
+  }
+
+  private collectWeaponEffectWakeInteractions(
+    effects: readonly WeaponEffectSprite[],
+    waterStart: number,
+    timeMs: number,
+    interactions: WaterInteraction[],
+  ): void {
+    const activeIds = new Set<string>();
+
+    for (const effect of effects) {
+      if (interactions.length >= maxInteractions) {
+        break;
+      }
+
+      activeIds.add(effect.id);
+
+      if (!isWaterInteractiveEffect(effect)) {
+        continue;
+      }
+
+      const bottom = effect.position.y + effect.size.y * 0.5;
+      const depth = clamp((bottom - waterStart + waterSurfaceContactReach) / waterSurfaceContactDepth, 0, 1);
+
+      if (depth <= 0) {
+        continue;
+      }
+
+      const lastWakeMs = this.effectWakeTimes.get(effect.id) ?? -Infinity;
+
+      if (timeMs - lastWakeMs < 110) {
+        continue;
+      }
+
+      const size = Math.max(effect.size.x, effect.size.y);
+      const strength = clamp(effect.opacity * (0.22 + size * 2.6 + depth * 0.42), 0.12, 1.35);
+      interactions.push({
+        x: clamp(effect.position.x, 0, 1),
+        y: waterStart,
+        radius: clamp(size * 0.52 + depth * 0.026, 0.018, 0.12),
+        strength,
+        velocity: -strength * 1.16,
+        kind: "force",
+        phase: "surface-impact",
+      });
+      this.effectWakeTimes.set(effect.id, timeMs);
+    }
+
+    for (const effectId of this.effectWakeTimes.keys()) {
+      if (!activeIds.has(effectId)) {
+        this.effectWakeTimes.delete(effectId);
       }
     }
   }
@@ -858,8 +937,107 @@ function effectOpacity(kind: WaterSpriteEffectKind, ageRatio: number): number {
   }
 }
 
+interface SpriteWakeProfile {
+  readonly baseStrength: number;
+  readonly speedScale: number;
+  readonly depthScale: number;
+  readonly minStrength: number;
+  readonly maxStrength: number;
+  readonly maxImpactStrength: number;
+  readonly verticalSpeedScale: number;
+  readonly surfaceVelocityScale: number;
+  readonly bodyVelocityScale: number;
+  readonly bodyStrengthScale: number;
+  readonly surfaceRadiusScale: number;
+  readonly bodyRadiusScale: number;
+  readonly maxRadius: number;
+  readonly surfaceCooldownMs: number;
+  readonly bodyCooldownMs: number;
+}
+
+function spriteWakeProfile(kind: RenderableSpriteKind): SpriteWakeProfile {
+  switch (kind) {
+    case "boss":
+      return {
+        baseStrength: 0.58,
+        speedScale: 0.08,
+        depthScale: 0.42,
+        minStrength: 0.18,
+        maxStrength: 1.35,
+        maxImpactStrength: 1.72,
+        verticalSpeedScale: 1.05,
+        surfaceVelocityScale: 1.72,
+        bodyVelocityScale: 0.9,
+        bodyStrengthScale: 0.82,
+        surfaceRadiusScale: 0.92,
+        bodyRadiusScale: 0.72,
+        maxRadius: 0.13,
+        surfaceCooldownMs: 96,
+        bodyCooldownMs: 132,
+      };
+    case "enemy":
+      return {
+        baseStrength: 0.38,
+        speedScale: 0.07,
+        depthScale: 0.34,
+        minStrength: 0.14,
+        maxStrength: 1.12,
+        maxImpactStrength: 1.48,
+        verticalSpeedScale: 0.92,
+        surfaceVelocityScale: 1.58,
+        bodyVelocityScale: 0.72,
+        bodyStrengthScale: 0.78,
+        surfaceRadiusScale: 0.86,
+        bodyRadiusScale: 0.66,
+        maxRadius: 0.105,
+        surfaceCooldownMs: 104,
+        bodyCooldownMs: 145,
+      };
+    case "item":
+      return {
+        baseStrength: 0.2,
+        speedScale: 0.052,
+        depthScale: 0.24,
+        minStrength: 0.12,
+        maxStrength: 0.92,
+        maxImpactStrength: 1.3,
+        verticalSpeedScale: 0.82,
+        surfaceVelocityScale: 1.52,
+        bodyVelocityScale: 0.48,
+        bodyStrengthScale: 0.72,
+        surfaceRadiusScale: 0.78,
+        bodyRadiusScale: 0.58,
+        maxRadius: 0.09,
+        surfaceCooldownMs: 220,
+        bodyCooldownMs: 260,
+      };
+    case "player":
+      return {
+        baseStrength: 0.46,
+        speedScale: 0.074,
+        depthScale: 0.36,
+        minStrength: 0.16,
+        maxStrength: 1.2,
+        maxImpactStrength: 1.56,
+        verticalSpeedScale: 1.0,
+        surfaceVelocityScale: 1.64,
+        bodyVelocityScale: 0.78,
+        bodyStrengthScale: 0.8,
+        surfaceRadiusScale: 0.84,
+        bodyRadiusScale: 0.66,
+        maxRadius: 0.112,
+        surfaceCooldownMs: 96,
+        bodyCooldownMs: 145,
+      };
+  }
+}
+
 function isWaterInteractiveSprite(sprite: RenderableSprite): boolean {
-  return sprite.kind === "player" || sprite.kind === "item";
+  return sprite.kind === "player" || sprite.kind === "enemy" || sprite.kind === "boss" || sprite.kind === "item";
+}
+
+function isWaterInteractiveEffect(effect: WeaponEffectSprite): boolean {
+  return effect.opacity > 0.08 && effect.size.x > 0.001 && effect.size.y > 0.001;
 }
 
 function encodeEnvironmentKind(kind: BattleEnvironmentVisuals["kind"]): number {

@@ -80,6 +80,7 @@ export const effectPresets = [
           "anchors": []
         },
         "textureKey": "firestaffProjectile",
+        "sheetId": "effect-firestaff-projectile",
         "sheetRect": {
           "x": 0,
           "y": 0,
@@ -106,7 +107,7 @@ export const effectPresets = [
         "x": 1,
         "y": 0
       },
-      "radius": 0.15,
+      "radius": 0.075,
       "bodySize": {
         "x": 0.082,
         "y": 0.082
@@ -171,6 +172,7 @@ export const effectPresets = [
           "anchors": []
         },
         "textureKey": "firestaffImpact",
+        "sheetId": "effect-firestaff-impact",
         "sheetRect": {
           "x": 0,
           "y": 0,
@@ -197,7 +199,7 @@ export const effectPresets = [
         "x": 1,
         "y": 0
       },
-      "radius": 0.15,
+      "radius": 0.12,
       "bodySize": {
         "x": 0.082,
         "y": 0.082
@@ -260,6 +262,7 @@ export const effectPresets = [
           "anchors": []
         },
         "textureKey": "firestaffBurn",
+        "sheetId": "effect-firestaff-burn",
         "sheetRect": {
           "x": 0,
           "y": 0,
@@ -362,6 +365,7 @@ export const effectPresets = [
           ]
         },
         "textureKey": "firestaffBurn",
+        "sheetId": "effect-firestaff-burn",
         "sheetRect": {
           "x": 0,
           "y": 0,
@@ -511,6 +515,7 @@ export const effectPresets = [
           "anchors": []
         },
         "textureKey": null,
+        "sheetId": null,
         "sheetRect": {
           "x": 0,
           "y": 0,

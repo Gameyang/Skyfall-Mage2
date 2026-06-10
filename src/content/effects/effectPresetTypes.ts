@@ -3,6 +3,7 @@
 
 import type { Vec2 } from "../../core/math/vector";
 import type { assetUrls } from "../../platform/assets";
+import type { SheetRect } from "../sheets/sheetTypes";
 
 export type EffectTextureKey = keyof typeof assetUrls.effects;
 
@@ -13,6 +14,7 @@ export type EffectFrameMode = "loop" | "once" | "hold";
 export type EffectSizeMode = "absolute" | "radius" | "body";
 export type EffectSpawnDistribution = "point" | "box" | "anchors";
 export type EffectFacingMode = "fixed" | "context" | "random";
+export type EffectSheetDefinitionId = string;
 
 export type EffectOutputKind =
   | "fireball-projectile"
@@ -29,12 +31,7 @@ export interface EffectCurvePoint {
   readonly value: number;
 }
 
-export interface EffectSheetRect {
-  readonly x: number;
-  readonly y: number;
-  readonly width: number;
-  readonly height: number;
-}
+export type EffectSheetRect = SheetRect;
 
 export type EffectOpacitySource =
   | {
@@ -92,6 +89,7 @@ export interface EffectSpriteLayer extends EffectLayerBase {
   readonly kind: "sprite";
   readonly drawMode: "texture";
   readonly textureKey: EffectTextureKey;
+  readonly sheetId: EffectSheetDefinitionId | null;
   readonly sheetRect: EffectSheetRect;
   readonly frameCount: number;
   readonly frameMs: number;
@@ -101,6 +99,7 @@ export interface EffectSpriteLayer extends EffectLayerBase {
 export interface EffectParticleLayer extends EffectLayerBase {
   readonly kind: "particle";
   readonly textureKey: EffectTextureKey | null;
+  readonly sheetId: EffectSheetDefinitionId | null;
   readonly sheetRect: EffectSheetRect;
   readonly frameCount: number;
   readonly frameMs: number;
@@ -158,6 +157,7 @@ export interface EvaluatedEffectQuad {
   readonly kind: EffectOutputKind;
   readonly drawMode: EffectDrawMode;
   readonly textureKey: EffectTextureKey | null;
+  readonly sheetId: EffectSheetDefinitionId | null;
   readonly position: Vec2;
   readonly size: Vec2;
   readonly frameIndex: number;
@@ -171,4 +171,6 @@ export interface EvaluatedEffectQuad {
   readonly softness: number;
   readonly layer: number;
   readonly sheetRect: EffectSheetRect;
+  readonly sheetColumns: number;
+  readonly sheetRows: number;
 }

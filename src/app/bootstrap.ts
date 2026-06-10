@@ -2,6 +2,7 @@
 // Owner: app
 
 import { createApp } from "./createApp";
+import { t } from "../content/strings/GameStrings";
 
 export async function bootstrap(): Promise<void> {
   const root = document.querySelector<HTMLElement>("#app");
@@ -23,10 +24,10 @@ function createFatalErrorView(error: unknown): HTMLElement {
   frame.className = "fatal-error";
 
   const title = document.createElement("h1");
-  title.textContent = "Skyfall Mage2";
+  title.textContent = t("app.title");
 
   const message = document.createElement("p");
-  message.textContent = error instanceof Error ? error.message : "앱을 시작하지 못했습니다.";
+  message.textContent = error instanceof Error ? error.message : t("app.fatalStartFailed");
 
   frame.append(title, message);
   return frame;

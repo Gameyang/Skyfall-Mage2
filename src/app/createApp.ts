@@ -4,6 +4,7 @@
 import { createInitialGameState } from "../core/state/GameState";
 import { KeyboardInput } from "../input/KeyboardInput";
 import { TouchInput } from "../input/TouchInput";
+import { t } from "../content/strings/GameStrings";
 import { assetUrls, getPreloadAssetUrls } from "../platform/assets";
 import { preloadImageResources } from "../platform/ResourcePreloader";
 import { createRenderSnapshot } from "../render/snapshots/createRenderSnapshot";
@@ -58,13 +59,13 @@ export async function createApp(root: HTMLElement): Promise<AppInstance> {
   });
 
   if (gpu.ok) {
-    shell.setGpuStatus("WebGPU", "ready");
+    shell.setGpuStatus(t("system.webGpu"), "ready");
     runtime.setRenderFrame((snapshot, timeMs) => {
       gpu.renderer.resize();
       gpu.renderer.render(snapshot, timeMs);
     });
     gpu.renderer.device.lost.then((info) => {
-      shell.setGpuStatus(`WebGPU lost: ${info.reason}`, "degraded");
+      shell.setGpuStatus(t("system.webGpuLost", { reason: info.reason }), "degraded");
     });
   } else {
     shell.setGpuStatus(gpu.reason, "degraded");

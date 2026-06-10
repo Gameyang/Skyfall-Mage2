@@ -193,7 +193,7 @@ function impulseVelocityScale(kind: WaterImpulseKind): number {
     case "heat":
       return 0.78;
     case "wake":
-      return 0.62;
+      return 1.05;
     case "drop":
       return 1;
   }

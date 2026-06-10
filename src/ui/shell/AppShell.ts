@@ -3,6 +3,7 @@
 
 import type { GameCommand } from "../../core/state/Command";
 import type { GameState } from "../../core/state/GameState";
+import { t } from "../../content/strings/GameStrings";
 import type { ResourcePreloadProgress } from "../../platform/ResourcePreloader";
 import { BattlePanel } from "../panels/BattlePanel";
 import { InventoryPanel } from "../panels/InventoryPanel";
@@ -59,10 +60,10 @@ export class AppShell {
 
     const sidePanel = createPanelHost("side-panel");
     const tabs = new Tabs([
-      { id: "inventory", label: "Items", content: this.inventoryPanel.element },
-      { id: "skills", label: "Skills", content: this.skillTreePanel.element },
-      { id: "shop", label: "Shop", content: this.shopPanel.element },
-      { id: "locked", label: "Lock", content: createLockedPanel() },
+      { id: "inventory", label: t("tabs.items"), content: this.inventoryPanel.element },
+      { id: "skills", label: t("tabs.skills"), content: this.skillTreePanel.element },
+      { id: "shop", label: t("tabs.shop"), content: this.shopPanel.element },
+      { id: "locked", label: t("tabs.lock"), content: createLockedPanel() },
     ]);
     sidePanel.append(this.progressPanel.element, tabs.element);
 
@@ -129,7 +130,7 @@ function createLockedPanel(): HTMLElement {
   panel.className = "locked-panel";
   const badge = document.createElement("div");
   badge.className = "locked-badge";
-  badge.textContent = "Soon";
+  badge.textContent = t("common.soon");
   panel.append(badge);
   return panel;
 }

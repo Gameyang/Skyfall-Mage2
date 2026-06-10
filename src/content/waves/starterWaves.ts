@@ -18,7 +18,9 @@ export const starterWaves: readonly WaveDefinition[] = [
     durationMs: 55_000,
     spawns: [
       { atMs: 0, enemyId: "bat", count: 2 },
+      { atMs: 9_000, enemyId: "mini-tracking", count: 1 },
       { atMs: 18_000, enemyId: "bat", count: 2 },
+      { atMs: 32_000, enemyId: "mini-teleport", count: 1 },
     ],
     fieldCondition: { environmentKind: "rain-shelf", heatDelta: -0.04, rainRate: 0.26, emitterRateScale: 1.1 },
     maxActiveEnemies: 20,
@@ -29,6 +31,7 @@ export const starterWaves: readonly WaveDefinition[] = [
     durationMs: 70_000,
     spawns: [
       { atMs: 0, enemyId: "ember-miniboss", count: 1 },
+      { atMs: 14_000, enemyId: "mini-split", count: 2 },
       { atMs: 28_000, enemyId: "rain-boss", count: 1 },
     ],
     fieldCondition: { environmentKind: "ash-field", heatDelta: 0.08, windX: -0.12, rainRate: 0.12, emitterRateScale: 1.25 },

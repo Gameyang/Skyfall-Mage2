@@ -3,6 +3,7 @@
 
 import type { GameCommand } from "../../core/state/Command";
 import type { GameState } from "../../core/state/GameState";
+import { t } from "../../content/strings/GameStrings";
 import { levelRewards } from "../../features/progression/RewardSystem";
 import { bindPressAction } from "../components/PressAction";
 
@@ -43,7 +44,7 @@ export class ModalLayer {
     card.className = "modal-card";
 
     const title = document.createElement("h2");
-    title.textContent = "Level Up";
+    title.textContent = t("modal.levelUp");
 
     const rewardGrid = document.createElement("div");
     rewardGrid.className = "modal-actions";
@@ -52,7 +53,7 @@ export class ModalLayer {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "modal-action";
-        button.textContent = reward.label;
+        button.textContent = t(reward.labelKey);
         bindPressAction(button, () => this.sink({ type: "SelectLevelUpReward", rewardId: reward.id }));
         return button;
       }),
@@ -61,7 +62,7 @@ export class ModalLayer {
     const close = document.createElement("button");
     close.type = "button";
     close.className = "modal-close";
-    close.textContent = "Close";
+    close.textContent = t("common.close");
     bindPressAction(close, () => this.sink({ type: "DismissModal", modalId: "level-up" }));
 
     card.append(title, rewardGrid, close);
@@ -75,21 +76,21 @@ export class ModalLayer {
     card.className = "modal-card";
 
     const title = document.createElement("h2");
-    title.textContent = "Revive";
+    title.textContent = t("modal.revive");
 
     const prompt = document.createElement("div");
     prompt.className = "modal-prompt";
-    prompt.textContent = quiz.prompt;
+    prompt.textContent = t(quiz.promptKey);
 
     const actions = document.createElement("div");
     actions.className = "modal-actions";
     actions.append(
-      ...quiz.choices.map((choice) => {
+      ...quiz.choiceKeys.map((choiceKey) => {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "modal-action";
-        button.textContent = choice;
-        bindPressAction(button, () => this.sink({ type: "AnswerReviveQuiz", answer: choice }));
+        button.textContent = t(choiceKey);
+        bindPressAction(button, () => this.sink({ type: "AnswerReviveQuiz", answerKey: choiceKey }));
         return button;
       }),
     );

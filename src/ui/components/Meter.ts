@@ -1,6 +1,8 @@
 // Responsibility: Render reusable resource meters.
 // Owner: ui/components
 
+import { t } from "../../content/strings/GameStrings";
+
 export interface MeterHandle {
   readonly element: HTMLElement;
   update(current: number, max: number): void;
@@ -23,7 +25,7 @@ export function createMeter(className: string): MeterHandle {
     update(current: number, max: number) {
       const ratio = max <= 0 ? 0 : Math.max(0, Math.min(1, current / max));
       fill.style.transform = `scaleX(${ratio})`;
-      label.textContent = `${Math.ceil(current)} / ${Math.ceil(max)}`;
+      label.textContent = t("meter.value", { current: Math.ceil(current), max: Math.ceil(max) });
     },
   };
 }

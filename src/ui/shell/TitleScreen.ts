@@ -2,6 +2,7 @@
 // Owner: ui/shell
 
 import type { ResourcePreloadProgress } from "../../platform/ResourcePreloader";
+import { t } from "../../content/strings/GameStrings";
 
 export interface TitleScreenStartEvent {
   readonly originalEvent: Event;
@@ -23,7 +24,7 @@ export class TitleScreen {
     this.element.className = "title-screen";
     this.element.tabIndex = 0;
     this.element.setAttribute("role", "button");
-    this.element.setAttribute("aria-label", "Start Skyfall Mage2");
+    this.element.setAttribute("aria-label", t("app.startAriaLabel"));
 
     const frame = document.createElement("div");
     frame.className = "title-frame";
@@ -31,7 +32,7 @@ export class TitleScreen {
     this.logo = document.createElement("img");
     this.logo.className = "title-logo";
     this.logo.src = logoUrl;
-    this.logo.alt = "Skyfall Mage2";
+    this.logo.alt = t("app.title");
     this.logo.decoding = "async";
 
     const loading = document.createElement("div");
@@ -62,14 +63,14 @@ export class TitleScreen {
     const ratio = clampRatio(progress.ratio);
     this.progressFill.style.transform = `scaleX(${ratio})`;
     this.progressValue.textContent = `${Math.round(ratio * 100)}%`;
-    this.status.textContent = progress.loaded >= progress.total ? "WARMING UP" : "LOADING";
+    this.status.textContent = progress.loaded >= progress.total ? t("title.warmingUp") : t("title.loading");
     this.element.dataset.ready = String(this.ready);
   }
 
   setReady(): void {
     this.ready = true;
     this.element.dataset.ready = "true";
-    this.status.textContent = "PRESS ANY KEY";
+    this.status.textContent = t("title.pressAnyKey");
   }
 
   hide(): void {

@@ -26,7 +26,7 @@ export class CombatSpriteRenderer {
   private readonly textureCache: SpriteTextureCache;
   private readonly sampler: GPUSampler;
   private readonly paramsBuffers: GPUBuffer[] = [];
-  private readonly paramsData = new Float32Array(16);
+  private readonly paramsData = new Float32Array(20);
   private readonly bindGroupLayout: GPUBindGroupLayout;
   private readonly pipeline: GPURenderPipeline;
   private readonly previousHpPercentBySpriteId = new Map<string, number>();
@@ -189,10 +189,14 @@ export class CombatSpriteRenderer {
     this.paramsData[9] = frameIndex;
     this.paramsData[10] = sprite.animation?.frameCount ?? 1;
     this.paramsData[11] = 0;
-    this.paramsData[12] = 0;
-    this.paramsData[13] = encodeMotion(sprite.motionPreset);
-    this.paramsData[14] = sprite.hpPercent ?? -1;
-    this.paramsData[15] = 0;
+    this.paramsData[12] = sprite.animation?.sheetRect?.x ?? 0;
+    this.paramsData[13] = sprite.animation?.sheetRect?.y ?? 0;
+    this.paramsData[14] = sprite.animation?.sheetRect?.width ?? 1;
+    this.paramsData[15] = sprite.animation?.sheetRect?.height ?? 1;
+    this.paramsData[16] = sprite.animation?.sheetColumns ?? sprite.animation?.frameCount ?? 1;
+    this.paramsData[17] = sprite.animation?.sheetRows ?? 1;
+    this.paramsData[18] = encodeMotion(sprite.motionPreset);
+    this.paramsData[19] = sprite.hpPercent ?? -1;
     this.device.queue.writeBuffer(buffer, 0, this.paramsData);
   }
 

@@ -105,7 +105,7 @@ fn fragmentMain(@builtin(position) position: vec4f) -> @location(0) vec4f {
 }
 
 fn waterWavePx(x: f32, time: f32) -> f32 {
-  return proceduralWave(x, time) + detailWave(x, time) + springWave(x) * 1.78 + springDetailWave(x) * 0.62;
+  return proceduralWave(x, time) + detailWave(x, time) + springWave(x) * 2.05 + springDetailWave(x) * 0.42;
 }
 
 fn waterSlope(x: f32, time: f32, canvasSize: vec2f) -> f32 {

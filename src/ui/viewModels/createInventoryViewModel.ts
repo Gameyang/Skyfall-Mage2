@@ -2,6 +2,7 @@
 // Owner: ui/viewModels
 
 import { starterItemById } from "../../content/items/starterItems";
+import { t } from "../../content/strings/GameStrings";
 import type { GameState } from "../../core/state/GameState";
 import type { EquipmentSlotKind } from "../../core/state/InventoryState";
 import type { SlotView } from "../components/SlotGrid";
@@ -17,11 +18,11 @@ export interface InventoryViewModel {
   readonly bag: readonly SlotView[];
 }
 
-const equipmentLabels: Record<EquipmentSlotKind, string> = {
-  weapon: "Weapon",
-  head: "Head",
-  body: "Body",
-  feet: "Feet",
+const equipmentLabelKeys: Record<EquipmentSlotKind, string> = {
+  weapon: "inventory.slot.weapon",
+  head: "inventory.slot.head",
+  body: "inventory.slot.body",
+  feet: "inventory.slot.feet",
 };
 
 export function createInventoryViewModel(state: GameState): InventoryViewModel {
@@ -34,7 +35,7 @@ export function createInventoryViewModel(state: GameState): InventoryViewModel {
       return {
         key: slot.slot,
         slot: slot.slot,
-        label: item?.name ?? equipmentLabels[slot.slot],
+        label: item ? t(item.nameKey) : t(equipmentLabelKeys[slot.slot]),
         iconUrl: item?.iconUrl ?? null,
         empty: !item,
       };
@@ -44,7 +45,7 @@ export function createInventoryViewModel(state: GameState): InventoryViewModel {
 
       return {
         key: String(slot.index),
-        label: item?.name ?? "Empty",
+        label: item ? t(item.nameKey) : t("common.empty"),
         iconUrl: item?.iconUrl ?? null,
         quantity: slot.quantity,
         selected: state.inventory.selectedSlotIndex === slot.index,

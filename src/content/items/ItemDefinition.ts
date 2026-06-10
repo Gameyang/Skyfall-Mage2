@@ -42,7 +42,7 @@ export type WeaponAttackBlock = FireballWeaponAttackBlock;
 
 export interface ItemDefinition {
   readonly id: string;
-  readonly name: string;
+  readonly nameKey: string;
   readonly kind: ItemKind;
   readonly rarity: ItemRarity;
   readonly iconUrl: string;

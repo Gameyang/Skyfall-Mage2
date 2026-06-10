@@ -6,17 +6,23 @@ import type {
   EffectBlendMode,
   EffectDrawMode,
   EffectFacingMode,
+  EffectFrameMode,
   EffectLayer,
   EffectLayerKind,
   EffectOpacitySource,
   EffectOutputKind,
   EffectPreset,
+  EffectSheetRect,
   EffectSizeMode,
   EffectSpawnDistribution,
   EffectTextureKey,
 } from "../../content/effects/effectPresetTypes";
+import { sheetDefinitions } from "../../content/sheets/sheetLibrary";
+import { resolveSheetAssetUrl, resolveSheetRect } from "../../content/sheets/sheetResolver";
+import type { SheetDefinition } from "../../content/sheets/sheetTypes";
 import { assetUrls } from "../../platform/assets";
 import { createEffectSpritesFromPreset } from "../../render/snapshots/createEffectSpritesFromPreset";
+import { createSheetRectEditor } from "../sheets/SheetRectEditor";
 import { EffectPreviewGpu } from "./EffectPreviewGpu";
 import "./effectsTool.css";
 
@@ -28,6 +34,11 @@ type Mutable<T> = T extends readonly (infer U)[]
 
 type EffectPresetDraft = Mutable<EffectPreset>;
 type EffectLayerDraft = Mutable<EffectLayer>;
+type SheetEditableLayer = Extract<
+  EffectLayerDraft,
+  { sheetId: string | null; sheetRect: EffectSheetRect; textureKey: EffectTextureKey | null }
+>;
+type SheetDefinitionDraft = Mutable<SheetDefinition>;
 
 const outputKinds: readonly EffectOutputKind[] = [
   "fireball-projectile",
@@ -45,6 +56,14 @@ const blendModes: readonly EffectBlendMode[] = ["alpha", "screen", "additive"];
 const facingModes: readonly EffectFacingMode[] = ["fixed", "context", "random"];
 const distributions: readonly EffectSpawnDistribution[] = ["point", "box", "anchors"];
 const textureEntries = Object.keys(assetUrls.effects).map((key) => key as EffectTextureKey);
+const defaultSheetIdByEffectTextureKey: Partial<Record<EffectTextureKey, string>> = {
+  firestaffProjectile: "effect-firestaff-projectile",
+  firestaffImpact: "effect-firestaff-impact",
+  firestaffBurn: "effect-firestaff-burn",
+  waterEntrySurface: "effect-water-entry-surface",
+  waterEntryUnderwater: "effect-water-entry-underwater",
+  waterUnderwaterLoop: "effect-water-underwater-loop",
+};
 
 export async function bootstrapEffectTool(): Promise<void> {
   const root = document.querySelector<HTMLElement>("#app");
@@ -58,6 +77,7 @@ export async function bootstrapEffectTool(): Promise<void> {
 
 class EffectToolApp {
   private presets: EffectPresetDraft[] = [];
+  private sheetDefinitions: SheetDefinitionDraft[] = [];
   private selectedPresetId = "";
   private selectedLayerId = "";
   private playing = true;
@@ -78,6 +98,7 @@ class EffectToolApp {
   constructor(private readonly root: HTMLElement) {}
 
   async init(): Promise<void> {
+    this.sheetDefinitions = await loadSheetDefinitions();
     this.presets = await loadPresets();
     this.selectedPresetId = this.presets[0]?.id ?? "";
     this.selectedLayerId = this.presets[0]?.layers[0]?.id ?? "";
@@ -470,7 +491,12 @@ class EffectToolApp {
       section.append(
         createSelectControl("Texture", textureEntries, layer.textureKey, (value) => {
           layer.textureKey = value;
+          this.applyDefaultSheetRef(layer);
+          this.renderInspector();
+          this.renderPreview();
         }),
+        this.createSheetRefControl(layer),
+        this.createSheetEditor(layer),
         createNumberControl("Frames", layer.frameCount, 1, 1, 64, (value) => {
           layer.frameCount = Math.max(1, Math.floor(value));
         }),
@@ -487,7 +513,12 @@ class EffectToolApp {
       section.append(
         createSelectControl("Texture", ["none", ...textureEntries] as const, layer.textureKey ?? "none", (value) => {
           layer.textureKey = value === "none" ? null : value;
+          this.applyDefaultSheetRef(layer);
+          this.renderInspector();
+          this.renderPreview();
         }),
+        this.createSheetRefControl(layer),
+        this.createSheetEditor(layer),
         createNumberControl("Frames", layer.frameCount, 1, 1, 64, (value) => {
           layer.frameCount = Math.max(1, Math.floor(value));
         }),
@@ -519,6 +550,80 @@ class EffectToolApp {
     }
 
     return section;
+  }
+
+  private createSheetRefControl(layer: SheetEditableLayer): HTMLElement {
+    if (!layer.textureKey) {
+      return createTextValue("Sheet", "none");
+    }
+
+    const options = ["custom", ...this.getSheetOptionsForTexture(layer.textureKey).map((definition) => definition.id)];
+    return createSelectControl("Sheet", options, layer.sheetId ?? "custom", (value) => {
+      layer.sheetId = value === "custom" ? null : value;
+      this.applySheetDefinitionToLayer(layer);
+      this.renderInspector();
+      this.renderPreview();
+    });
+  }
+
+  private createSheetEditor(layer: SheetEditableLayer): HTMLElement {
+    const section = createSection("Sheet Rect");
+
+    if (!layer.textureKey) {
+      section.append(createTextValue("Texture", "none"));
+      return section;
+    }
+
+    const sheetDefinition = this.getSheetDefinition(layer.sheetId);
+    const textureUrl = sheetDefinition ? resolveSheetAssetUrl(sheetDefinition.asset) : assetUrls.effects[layer.textureKey];
+    const rect = sheetDefinition ? resolveSheetRect(sheetDefinition.id, layer.sheetRect) : resolveSheetRect(null, layer.sheetRect);
+    section.append(
+      createSheetRectEditor({
+        textureUrl,
+        textureLabel: sheetDefinition?.label ?? layer.textureKey,
+        rect,
+        disabled: sheetDefinition !== null,
+        onChange: (nextRect) => {
+          layer.sheetId = null;
+          layer.sheetRect = nextRect;
+          this.renderPreview();
+        },
+      }),
+    );
+    return section;
+  }
+
+  private applyDefaultSheetRef(layer: SheetEditableLayer): void {
+    layer.sheetId = layer.textureKey ? this.getDefaultSheetForTexture(layer.textureKey)?.id ?? null : null;
+    this.applySheetDefinitionToLayer(layer);
+  }
+
+  private applySheetDefinitionToLayer(layer: SheetEditableLayer): void {
+    const sheetDefinition = this.getSheetDefinition(layer.sheetId);
+
+    if (!sheetDefinition) {
+      return;
+    }
+
+    layer.sheetRect = { ...sheetDefinition.rect };
+    layer.frameCount = Math.max(1, Math.floor(sheetDefinition.frameCount));
+    layer.frameMs = Math.max(1, sheetDefinition.frameMs);
+    layer.frameMode = sheetDefinition.frameMode as EffectFrameMode;
+  }
+
+  private getDefaultSheetForTexture(textureKey: EffectTextureKey): SheetDefinitionDraft | null {
+    const configuredDefault = defaultSheetIdByEffectTextureKey[textureKey];
+    return this.getSheetDefinition(configuredDefault) ?? this.getSheetOptionsForTexture(textureKey)[0] ?? null;
+  }
+
+  private getSheetOptionsForTexture(textureKey: EffectTextureKey): readonly SheetDefinitionDraft[] {
+    return this.sheetDefinitions.filter(
+      (definition) => definition.asset.scope === "effects" && definition.asset.key === textureKey,
+    );
+  }
+
+  private getSheetDefinition(sheetId: string | null | undefined): SheetDefinitionDraft | null {
+    return this.sheetDefinitions.find((definition) => definition.id === sheetId) ?? null;
   }
 
   private createVecControl(
@@ -659,8 +764,26 @@ async function loadPresets(): Promise<EffectPresetDraft[]> {
   return clonePresets(effectPresets);
 }
 
+async function loadSheetDefinitions(): Promise<SheetDefinitionDraft[]> {
+  try {
+    const response = await fetch("/__local/sheets/definitions");
+
+    if (response.ok) {
+      return cloneSheetDefinitions((await response.json()) as readonly SheetDefinition[]);
+    }
+  } catch {
+    // The effect editor can still run with bundled sheet metadata.
+  }
+
+  return cloneSheetDefinitions(sheetDefinitions);
+}
+
 function clonePresets(source: readonly EffectPreset[]): EffectPresetDraft[] {
   return JSON.parse(JSON.stringify(source)) as EffectPresetDraft[];
+}
+
+function cloneSheetDefinitions(source: readonly SheetDefinition[]): SheetDefinitionDraft[] {
+  return JSON.parse(JSON.stringify(source)) as SheetDefinitionDraft[];
 }
 
 function clonePreset(source: EffectPresetDraft): EffectPresetDraft {
@@ -721,7 +844,21 @@ function createLayerDraft(kind: EffectLayerKind, id: string): EffectLayerDraft {
       spread: { x: kind === "particle" ? 0.25 : 0, y: kind === "particle" ? 0.18 : 0 },
       anchors: [],
     },
-  } satisfies Omit<EffectLayerDraft, "textureKey" | "frameCount" | "frameMs" | "frameMode" | "lifetimeMs" | "velocity" | "speedJitter" | "spreadAngleRadians" | "gravity" | "drag">;
+  } satisfies Omit<
+    EffectLayerDraft,
+    | "textureKey"
+    | "sheetId"
+    | "sheetRect"
+    | "frameCount"
+    | "frameMs"
+    | "frameMode"
+    | "lifetimeMs"
+    | "velocity"
+    | "speedJitter"
+    | "spreadAngleRadians"
+    | "gravity"
+    | "drag"
+  >;
 
   if (kind === "sprite") {
     return {
@@ -729,6 +866,8 @@ function createLayerDraft(kind: EffectLayerKind, id: string): EffectLayerDraft {
       kind,
       drawMode: "texture",
       textureKey: textureEntries[0],
+      sheetId: getDefaultSheetIdForTexture(textureEntries[0]),
+      sheetRect: { x: 0, y: 0, width: 1, height: 1 },
       frameCount: 8,
       frameMs: 80,
       frameMode: "loop",
@@ -740,6 +879,8 @@ function createLayerDraft(kind: EffectLayerKind, id: string): EffectLayerDraft {
       ...base,
       kind,
       textureKey: null,
+      sheetId: null,
+      sheetRect: { x: 0, y: 0, width: 1, height: 1 },
       frameCount: 1,
       frameMs: 80,
       frameMode: "hold",
@@ -769,6 +910,10 @@ function createOpacitySource(kind: EffectOpacitySource["kind"]): EffectOpacitySo
     default:
       return { kind: "none" };
   }
+}
+
+function getDefaultSheetIdForTexture(textureKey: EffectTextureKey | undefined): string | null {
+  return textureKey ? defaultSheetIdByEffectTextureKey[textureKey] ?? null : null;
 }
 
 function createSection(title: string): HTMLElement {
@@ -872,6 +1017,14 @@ function createSelectControl<T extends string>(
     element.textContent = option;
     element.selected = option === value;
     select.append(element);
+  }
+
+  if (!options.includes(value)) {
+    const element = document.createElement("option");
+    element.value = value;
+    element.textContent = value;
+    element.selected = true;
+    select.prepend(element);
   }
 
   select.addEventListener("change", () => onInput(select.value as T));

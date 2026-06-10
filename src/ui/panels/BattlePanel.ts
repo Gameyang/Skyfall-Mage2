@@ -2,6 +2,7 @@
 // Owner: ui/panels
 
 import type { BattleViewModel } from "../viewModels/createBattleViewModel";
+import { t } from "../../content/strings/GameStrings";
 
 export class BattlePanel {
   readonly element: HTMLElement;
@@ -66,9 +67,9 @@ export class BattlePanel {
 
   update(viewModel: BattleViewModel): void {
     this.waveChip.textContent = viewModel.waveLabel;
-    this.timeChip.textContent = `${viewModel.elapsedSeconds}s`;
+    this.timeChip.textContent = t("battle.elapsedSeconds", { seconds: viewModel.elapsedSeconds });
     this.fieldChip.textContent = viewModel.fieldLabel;
-    this.emitterChip.textContent = `Emitters ${viewModel.emitterCount}`;
+    this.emitterChip.textContent = t("battle.emitters", { count: viewModel.emitterCount });
     this.playerMarker.style.left = `${viewModel.playerXPercent}%`;
     this.playerMarker.style.top = `${viewModel.playerYPercent}%`;
     this.aimMarker.style.left = `${viewModel.aimXPercent}%`;

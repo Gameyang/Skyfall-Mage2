@@ -5,15 +5,15 @@ import type { GameState } from "../../core/state/GameState";
 
 export interface SkillDefinition {
   readonly id: string;
-  readonly label: string;
+  readonly labelKey: string;
   readonly cost: number;
   readonly requiredSkillIds: readonly string[];
 }
 
 export const starterSkills: readonly SkillDefinition[] = [
-  { id: "ember-root", label: "Ember", cost: 0, requiredSkillIds: [] },
-  { id: "steam-veil", label: "Steam", cost: 1, requiredSkillIds: ["ember-root"] },
-  { id: "force-ring", label: "Force", cost: 2, requiredSkillIds: ["ember-root"] },
+  { id: "ember-root", labelKey: "skill.ember-root.label", cost: 0, requiredSkillIds: [] },
+  { id: "steam-veil", labelKey: "skill.steam-veil.label", cost: 1, requiredSkillIds: ["ember-root"] },
+  { id: "force-ring", labelKey: "skill.force-ring.label", cost: 2, requiredSkillIds: ["ember-root"] },
 ];
 
 export function canUnlockSkill(state: GameState, skillId: string): boolean {

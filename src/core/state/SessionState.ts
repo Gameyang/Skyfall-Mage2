@@ -5,9 +5,9 @@ export type RuntimePhase = "booting" | "running" | "paused" | "stopped";
 
 export interface ReviveQuizState {
   readonly id: string;
-  readonly prompt: string;
-  readonly answer: string;
-  readonly choices: readonly string[];
+  readonly promptKey: string;
+  readonly answerKey: string;
+  readonly choiceKeys: readonly string[];
   readonly attemptsRemaining: number;
 }
 

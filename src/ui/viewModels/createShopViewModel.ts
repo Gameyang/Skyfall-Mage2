@@ -2,6 +2,7 @@
 // Owner: ui/viewModels
 
 import { starterItemById } from "../../content/items/starterItems";
+import { t } from "../../content/strings/GameStrings";
 import type { GameState } from "../../core/state/GameState";
 import { quoteShopPrice } from "../../features/shop/PriceRules";
 import { getShopRerollCost, starterShopOfferById } from "../../features/shop/ShopSystem";
@@ -44,7 +45,7 @@ export function createShopViewModel(state: GameState): ShopViewModel {
       return [
         {
           id: offer.id,
-          label: item?.name ?? offer.itemId,
+          label: item ? t(item.nameKey) : offer.itemId,
           price,
           remainingStock,
           disabled: remainingStock <= 0 || state.inventory.gold < price,

@@ -3,6 +3,7 @@
 
 import type { GameCommand } from "../../core/state/Command";
 import type { EquipmentSlotKind } from "../../core/state/InventoryState";
+import { t } from "../../content/strings/GameStrings";
 import { createSlotGrid, type SlotGridHandle, type SlotLocation } from "../components/SlotGrid";
 import type { InventoryViewModel } from "../viewModels/createInventoryViewModel";
 
@@ -41,7 +42,7 @@ export class InventoryPanel {
     }
 
     this.lastSignature = signature;
-    this.wallet.textContent = `Gold ${viewModel.gold}  Gems ${viewModel.gems}`;
+    this.wallet.textContent = t("inventory.wallet", { gold: viewModel.gold, gems: viewModel.gems });
     this.selectedSlotIndex = viewModel.bag.findIndex((slot) => slot.selected);
     this.selectedSlotIndex = this.selectedSlotIndex >= 0 ? this.selectedSlotIndex : null;
     this.equipmentSlots = viewModel.equipment.map((slot) => slot.slot);

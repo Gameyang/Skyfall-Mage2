@@ -65,6 +65,8 @@ export function applyWaveFieldCondition(environment: EnvironmentState, wave: Wav
 
 const proceduralEnvironmentKinds: readonly EnvironmentKind[] = ["ember-cavern", "rain-shelf", "ash-field"];
 const authoredWaveCount = starterWaves.length;
+const proceduralNormalEnemyIds = ["bat", "mini-tracking", "mini-teleport", "mini-split"] as const;
+const proceduralBossEnemyIds = ["tracking-boss", "teleport-boss", "split-boss"] as const;
 
 function createProceduralTestWave(waveIndex: number): WaveDefinition {
   const environmentKind = proceduralEnvironmentKinds[(waveIndex - 1) % proceduralEnvironmentKinds.length]!;
@@ -114,12 +116,16 @@ function createRandomTestSpawns(
 
 function createRandomTestSpawn(waveIndex: number, atMs: number, burstIndex: number): WaveSpawnDefinition {
   const enemyRoll = randomUnit(waveIndex * 19_417 + burstIndex * 193 + atMs);
+  const normalEnemyId =
+    proceduralNormalEnemyIds[randomInt(waveIndex * 5_239 + burstIndex * 421 + atMs, 0, proceduralNormalEnemyIds.length - 1)]!;
+  const bossEnemyId =
+    proceduralBossEnemyIds[randomInt(waveIndex * 6_157 + burstIndex * 733 + atMs, 0, proceduralBossEnemyIds.length - 1)]!;
   const enemyId =
     waveIndex > authoredWaveCount + 1 && enemyRoll > 0.93
-      ? "rain-boss"
+      ? bossEnemyId
       : waveIndex > 2 && enemyRoll > 0.82
         ? "ember-miniboss"
-        : "bat";
+        : normalEnemyId;
 
   return {
     atMs,

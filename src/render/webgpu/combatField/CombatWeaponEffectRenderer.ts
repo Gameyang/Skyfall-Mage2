@@ -17,7 +17,7 @@ export class CombatWeaponEffectRenderer {
   private readonly proceduralTexture: SpriteTextureResource;
   private readonly sampler: GPUSampler;
   private readonly paramsBuffers: GPUBuffer[] = [];
-  private readonly paramsData = new Float32Array(20);
+  private readonly paramsData = new Float32Array(24);
   private readonly bindGroupLayout: GPUBindGroupLayout;
   private readonly pipeline: GPURenderPipeline;
   private draws: readonly WeaponEffectDraw[] = [];
@@ -175,6 +175,10 @@ export class CombatWeaponEffectRenderer {
     this.paramsData[17] = effect.sheetRect?.y ?? 0;
     this.paramsData[18] = effect.sheetRect?.width ?? 1;
     this.paramsData[19] = effect.sheetRect?.height ?? 1;
+    this.paramsData[20] = effect.sheetColumns ?? effect.frameCount;
+    this.paramsData[21] = effect.sheetRows ?? 1;
+    this.paramsData[22] = 0;
+    this.paramsData[23] = 0;
     this.device.queue.writeBuffer(buffer, 0, this.paramsData);
   }
 

@@ -193,7 +193,7 @@ export function applyCommand(state: GameState, command: GameCommand): GameState 
         },
       };
     case "AnswerReviveQuiz":
-      return answerReviveQuiz(state, command.answer);
+      return answerReviveQuiz(state, command.answerKey);
     default:
       return state;
   }

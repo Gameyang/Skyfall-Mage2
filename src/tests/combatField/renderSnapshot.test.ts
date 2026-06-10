@@ -13,6 +13,8 @@ describe("createRenderSnapshot", () => {
     expect(snapshot.sprites.find((sprite) => sprite.kind === "enemy")).toMatchObject({
       textureUrl: expect.stringContaining("bat-animation-sheet.webp"),
       animation: {
+        sheetId: "enemy-bat-animation",
+        sheetRect: { x: 0, y: 0, width: 1, height: 1 },
         frameCount: 12,
         movementFrameCount: 8,
         hitFrameCount: 4,

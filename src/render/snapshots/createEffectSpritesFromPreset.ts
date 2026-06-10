@@ -4,6 +4,7 @@
 import { clamp } from "../../core/math/vector";
 import { evaluateEffectPreset } from "../../content/effects/effectEvaluation";
 import type { EffectEvaluationContext, EffectPreset } from "../../content/effects/effectPresetTypes";
+import { resolveSheetAssetUrlById } from "../../content/sheets/sheetResolver";
 import { assetUrls } from "../../platform/assets";
 import type { WeaponEffectSprite } from "./RenderSnapshot";
 
@@ -17,7 +18,7 @@ export function createEffectSpritesFromPreset(
     kind: quad.kind,
     position: quad.position,
     size: quad.size,
-    textureUrl: quad.textureKey ? assetUrls.effects[quad.textureKey] : "",
+    textureUrl: resolveSheetAssetUrlById(quad.sheetId) || (quad.textureKey ? assetUrls.effects[quad.textureKey] : ""),
     frameIndex: clamp(quad.frameIndex, 0, Math.max(0, quad.frameCount - 1)),
     frameCount: Math.max(1, quad.frameCount),
     opacity: clamp(quad.opacity, 0, 1),
@@ -30,5 +31,7 @@ export function createEffectSpritesFromPreset(
     softness: quad.softness,
     layer: quad.layer,
     sheetRect: quad.sheetRect,
+    sheetColumns: quad.sheetColumns,
+    sheetRows: quad.sheetRows,
   }));
 }

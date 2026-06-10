@@ -2,6 +2,7 @@
 // Owner: ui/viewModels
 
 import type { GameState } from "../../core/state/GameState";
+import { t } from "../../content/strings/GameStrings";
 
 export interface BattleViewModel {
   readonly elapsedSeconds: number;
@@ -30,8 +31,11 @@ export interface BattleViewModel {
 export function createBattleViewModel(state: GameState): BattleViewModel {
   return {
     elapsedSeconds: Math.floor(state.session.elapsedMs / 1000),
-    waveLabel: `Wave ${state.session.waveIndex}`,
-    fieldLabel: `${state.battleField.gridWidth} x ${state.battleField.gridHeight}`,
+    waveLabel: t("battle.wave", { waveIndex: state.session.waveIndex }),
+    fieldLabel: t("battle.fieldGrid", {
+      width: state.battleField.gridWidth,
+      height: state.battleField.gridHeight,
+    }),
     playerXPercent: state.player.position.x * 100,
     playerYPercent: state.player.position.y * 100,
     aimXPercent: state.player.aim.x * 100,

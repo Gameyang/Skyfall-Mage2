@@ -3,6 +3,7 @@ struct SpriteParams {
   transform: vec4f,
   effects: vec4f,
   effects2: vec4f,
+  presentation: vec4f,
 };
 
 @group(0) @binding(0) var<uniform> params: SpriteParams;
@@ -52,7 +53,15 @@ fn fragmentMain(in: VertexOut) -> @location(0) vec4f {
 fn sampleSprite(uv: vec2f) -> vec4f {
   let frameCount = max(1.0, floor(params.effects.z + 0.5));
   let frameIndex = clamp(floor(params.effects.y + 0.5), 0.0, frameCount - 1.0);
-  let frameUv = vec2f((frameIndex + uv.x) / frameCount, uv.y);
+  let sheetRect = params.effects2;
+  let columns = max(1.0, floor(params.presentation.x + 0.5));
+  let rows = max(1.0, floor(params.presentation.y + 0.5));
+  let column = frameIndex - floor(frameIndex / columns) * columns;
+  let row = floor(frameIndex / columns);
+  let frameUv = vec2f(
+    sheetRect.x + ((column + uv.x) / columns) * sheetRect.z,
+    sheetRect.y + ((row + uv.y) / rows) * sheetRect.w
+  );
   let inside = select(0.0, 1.0, uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0);
   return textureSampleLevel(spriteTexture, spriteSampler, clamp(frameUv, vec2f(0.0), vec2f(1.0)), 0.0) * inside;
 }

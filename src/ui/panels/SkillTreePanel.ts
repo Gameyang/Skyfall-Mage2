@@ -3,6 +3,7 @@
 
 import type { GameCommand } from "../../core/state/Command";
 import type { GameState } from "../../core/state/GameState";
+import { t } from "../../content/strings/GameStrings";
 import { canUnlockSkill, starterSkills } from "../../features/progression/SkillTreeSystem";
 import { bindPressAction } from "../components/PressAction";
 
@@ -37,7 +38,7 @@ export class SkillTreePanel {
         button.className = "skill-node";
         button.dataset.active = String(active);
         button.disabled = active || !canUnlockSkill(state, skill.id);
-        button.textContent = `${skill.label} ${active ? "On" : skill.cost}`;
+        button.textContent = `${t(skill.labelKey)} ${active ? t("common.on") : skill.cost}`;
         bindPressAction(button, () => this.sink({ type: "UnlockSkill", skillId: skill.id }));
         return button;
       }),

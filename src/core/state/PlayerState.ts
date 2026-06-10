@@ -11,7 +11,7 @@ export interface ResourceMeterState {
 
 export interface PlayerState {
   readonly id: string;
-  readonly name: string;
+  readonly nameKey: string;
   readonly skinId: string;
   readonly position: Vec2;
   readonly aim: Vec2;
@@ -34,7 +34,7 @@ export const defaultPlayerSkinId = "skin_화염마법사";
 export function createInitialPlayerState(): PlayerState {
   return {
     id: "player",
-    name: "Skyfall Mage",
+    nameKey: "player.defaultName",
     skinId: defaultPlayerSkinId,
     position: { x: 0.5, y: 0.58 },
     aim: { x: 0.72, y: 0.42 },

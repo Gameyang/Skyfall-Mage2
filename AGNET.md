@@ -35,3 +35,6 @@ All new combat visual effects should use the shared effect preset pipeline inste
 - Local preset save/load is handled by the Vite dev middleware at `/__local/effects/presets`; do not depend on that endpoint in production code.
 - Effect presets must remain JSON-compatible and must not store DOM nodes, GPU resources, renderer instances, or gameplay state.
 - Registered effect textures come from `assetUrls.effects`; do not add arbitrary remote image URLs to presets.
+- Sprite and textured particle layers should reference shared sprite-sheet metadata with `sheetId`; `sheetRect` is only the custom fallback when no shared sheet is selected.
+- Shared sheet metadata lives in `src/content/sheets/sheetLibrary.ts` and is edited through the local-only `/sheets` tool. Use the same registry for effects, units, items, projectiles, and any future sheet-backed visual content.
+- Local sheet save/load is handled by the Vite dev middleware at `/__local/sheets/definitions`; do not depend on that endpoint in production code.

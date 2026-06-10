@@ -2,6 +2,7 @@
 // Owner: ui/panels
 
 import { createMeter, type MeterHandle } from "../components/Meter";
+import { t } from "../../content/strings/GameStrings";
 import type { ProgressViewModel } from "../viewModels/createProgressViewModel";
 
 export class ProgressPanel {
@@ -28,7 +29,11 @@ export class ProgressPanel {
 
     const stats = document.createElement("div");
     stats.className = "status-grid";
-    stats.append(createStatusCell("Level", this.level), createStatusCell("Field", this.environment), createStatusCell("SP", this.skillPoints));
+    stats.append(
+      createStatusCell(t("progress.level"), this.level),
+      createStatusCell(t("progress.field"), this.environment),
+      createStatusCell(t("progress.skillPoints"), this.skillPoints),
+    );
 
     this.element.append(this.title, this.hpMeter.element, this.manaMeter.element, stats);
   }

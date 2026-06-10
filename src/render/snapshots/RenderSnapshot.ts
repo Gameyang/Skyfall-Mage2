@@ -3,12 +3,8 @@
 
 import type { Vec2 } from "../../core/math/vector";
 import type { EnvironmentKind } from "../../core/state/EnvironmentState";
-import type {
-  EffectBlendMode,
-  EffectDrawMode,
-  EffectOutputKind,
-  EffectSheetRect,
-} from "../../content/effects/effectPresetTypes";
+import type { EffectBlendMode, EffectDrawMode, EffectOutputKind } from "../../content/effects/effectPresetTypes";
+import type { SheetRect } from "../../content/sheets/sheetTypes";
 import type { MaterialEmitter } from "../../features/combatField/CombatFieldTypes";
 
 export type RenderableSpriteKind = "player" | "enemy" | "boss" | "item";
@@ -24,6 +20,10 @@ export type RenderableSpriteStatusEffect =
 export type RenderableSpriteMotionPreset = "idle" | "bounce" | "shake" | "pulse" | "sway";
 
 export interface RenderableSpriteAnimation {
+  readonly sheetId?: string | null;
+  readonly sheetRect?: SheetRect;
+  readonly sheetColumns?: number;
+  readonly sheetRows?: number;
   readonly frameCount: number;
   readonly movementFrameCount: number;
   readonly hitFrameCount: number;
@@ -64,7 +64,9 @@ export interface WeaponEffectSprite {
   readonly glowStrength?: number;
   readonly softness?: number;
   readonly layer?: number;
-  readonly sheetRect?: EffectSheetRect;
+  readonly sheetRect?: SheetRect;
+  readonly sheetColumns?: number;
+  readonly sheetRows?: number;
 }
 
 export interface BattleEnvironmentVisuals {

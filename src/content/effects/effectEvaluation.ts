@@ -2,18 +2,23 @@
 // Owner: content/effects
 
 import { clamp, normalizeVec2, type Vec2 } from "../../core/math/vector";
+import { defaultSheetRect, resolveSheetDefinition, resolveSheetFrameGrid, resolveSheetRect } from "../sheets/sheetResolver";
 import type {
   EffectEvaluationContext,
   EffectLayer,
   EffectOpacitySource,
   EffectPreset,
-  EffectSheetRect,
   EffectSizeMode,
   EvaluatedEffectQuad,
 } from "./effectPresetTypes";
 
 const defaultOpacityCurve = [{ at: 0, value: 1 }, { at: 1, value: 1 }] as const;
-const defaultSheetRect: EffectSheetRect = { x: 0, y: 0, width: 1, height: 1 };
+
+interface EffectFrameTiming {
+  readonly frameCount: number;
+  readonly frameMs: number;
+  readonly frameMode: string;
+}
 
 export function evaluateEffectPreset(
   preset: EffectPreset,
@@ -42,8 +47,22 @@ export function evaluateEffectPreset(
       const position = resolvePosition(layer, index, context, seed);
       const movedPosition = applyLayerMotion(layer, position, localTime, layerProgress, seed);
       const opacity = resolveOpacity(layer.opacitySource, layer.opacity, context) * sampleCurve(layer.opacityCurve, layerProgress);
-      const frameCount = "frameCount" in layer ? Math.max(1, layer.frameCount) : 1;
-      const frameIndex = "frameMode" in layer ? resolveFrameIndex(layer, localTime, layerProgress, seed) : 0;
+      const sheetDefinition = "sheetId" in layer ? resolveSheetDefinition(layer.sheetId) : null;
+      const frameCount = Math.max(1, Math.floor(sheetDefinition?.frameCount ?? ("frameCount" in layer ? layer.frameCount : 1)));
+      const sheetGrid = "sheetId" in layer ? resolveSheetFrameGrid(layer.sheetId, frameCount) : { columns: frameCount, rows: 1 };
+      const frameIndex =
+        "frameMode" in layer
+          ? resolveFrameIndex(
+              {
+                frameCount,
+                frameMs: sheetDefinition?.frameMs ?? layer.frameMs,
+                frameMode: sheetDefinition?.frameMode ?? layer.frameMode,
+              },
+              localTime,
+              layerProgress,
+              seed,
+            )
+          : 0;
       const directionRotation = layer.alignToDirection ? Math.atan2(context.direction.y, context.direction.x) : 0;
       const rotation =
         layer.rotationRadians + directionRotation + hashSigned(`${seed}:rotation`) * layer.randomRotationRadians;
@@ -53,6 +72,7 @@ export function evaluateEffectPreset(
         kind: layer.outputKind,
         drawMode: layer.drawMode,
         textureKey: "textureKey" in layer ? layer.textureKey : null,
+        sheetId: "sheetId" in layer ? layer.sheetId : null,
         position: movedPosition,
         size,
         frameIndex,
@@ -65,7 +85,9 @@ export function evaluateEffectPreset(
         glowStrength: layer.glowStrength,
         softness: layer.softness,
         layer: layer.sortLayer,
-        sheetRect: "sheetRect" in layer ? normalizeSheetRect(layer.sheetRect) : defaultSheetRect,
+        sheetRect: "sheetId" in layer ? resolveSheetRect(layer.sheetId, layer.sheetRect) : defaultSheetRect,
+        sheetColumns: sheetGrid.columns,
+        sheetRows: sheetGrid.rows,
       });
     }
   }
@@ -130,12 +152,7 @@ function applyLayerMotion(
   };
 }
 
-function resolveFrameIndex(
-  layer: Extract<EffectLayer, { frameCount: number; frameMs: number; frameMode: string }>,
-  localTime: number,
-  progress: number,
-  seed: string,
-): number {
+function resolveFrameIndex(layer: EffectFrameTiming, localTime: number, progress: number, seed: string): number {
   const frameCount = Math.max(1, layer.frameCount);
 
   if (layer.frameMode === "hold") {
@@ -226,17 +243,6 @@ function parseHexColor(color: string): readonly [number, number, number] {
   const value = /^[0-9a-fA-F]{6}$/.test(normalized) ? normalized : "ffffff";
   const numeric = Number.parseInt(value, 16);
   return [((numeric >> 16) & 255) / 255, ((numeric >> 8) & 255) / 255, (numeric & 255) / 255];
-}
-
-function normalizeSheetRect(rect: EffectSheetRect): EffectSheetRect {
-  const x = clamp(Number.isFinite(rect.x) ? rect.x : 0, 0, 0.999);
-  const y = clamp(Number.isFinite(rect.y) ? rect.y : 0, 0, 0.999);
-  return {
-    x,
-    y,
-    width: clamp(Number.isFinite(rect.width) ? rect.width : 1, 0.001, 1 - x),
-    height: clamp(Number.isFinite(rect.height) ? rect.height : 1, 0.001, 1 - y),
-  };
 }
 
 function positiveModulo(value: number, divisor: number): number {

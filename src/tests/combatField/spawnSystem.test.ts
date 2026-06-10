@@ -24,6 +24,17 @@ describe("SpawnSystem", () => {
     expect(boss.patternId).toBe("rain-pressure");
   });
 
+  it("creates generated enemy variants from starter definitions", () => {
+    const enemyIds = ["mini-tracking", "mini-teleport", "mini-split", "tracking-boss", "teleport-boss", "split-boss"];
+
+    for (const [index, enemyId] of enemyIds.entries()) {
+      const enemy = createEnemySpawn(enemyId, { x: 0.5, y: 0.4 }, index + 1);
+
+      expect(enemy.definitionId).toBe(enemyId);
+      expect(enemy.hp).toBeGreaterThan(0);
+    }
+  });
+
   it("supports a wave-less single spawn test mode", () => {
     const emptyState = {
       ...createInitialGameState(),

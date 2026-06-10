@@ -8,7 +8,7 @@ const projectRoot = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   base: process.env.VITE_BASE_PATH ?? "./",
-  plugins: [localEffectPresetPlugin()],
+  plugins: [localEffectPresetPlugin(), localSheetDefinitionPlugin()],
   server: {
     host: "127.0.0.1",
     port: 5173,
@@ -55,12 +55,59 @@ function localEffectPresetPlugin(): Plugin {
   };
 }
 
+function localSheetDefinitionPlugin(): Plugin {
+  const definitionPath = resolve(projectRoot, "src/content/sheets/sheetLibrary.ts");
+
+  return {
+    name: "skyfall-local-sheet-definitions",
+    apply: "serve",
+    configureServer(server) {
+      server.middlewares.use("/__local/sheets/definitions", async (request, response) => {
+        if (!isLoopbackRequest(request)) {
+          sendText(response, 403, "Local sheet definitions are available from loopback only.");
+          return;
+        }
+
+        try {
+          if (request.method === "GET") {
+            sendJson(response, 200, await readSheetDefinitionJson(definitionPath));
+            return;
+          }
+
+          if (request.method === "POST") {
+            const body = await readRequestBody(request);
+            const definitions = sanitizeSheetDefinitionPayload(JSON.parse(body));
+            await writeFile(definitionPath, formatSheetDefinitionSource(definitions), "utf8");
+            sendJson(response, 200, { ok: true });
+            return;
+          }
+
+          sendText(response, 405, "Method not allowed.");
+        } catch (error) {
+          sendText(response, 400, error instanceof Error ? error.message : "Invalid sheet definition request.");
+        }
+      });
+    },
+  };
+}
+
 async function readPresetJson(path: string): Promise<unknown> {
   const source = await readFile(path, "utf8");
   const match = source.match(/export const effectPresets = ([\s\S]*?) as const satisfies readonly EffectPreset\[\];/);
 
   if (!match) {
     throw new Error("Could not locate effect preset JSON in effectPresets.ts.");
+  }
+
+  return JSON.parse(match[1]);
+}
+
+async function readSheetDefinitionJson(path: string): Promise<unknown> {
+  const source = await readFile(path, "utf8");
+  const match = source.match(/export const sheetDefinitions = ([\s\S]*?) as const satisfies readonly SheetDefinition\[\];/);
+
+  if (!match) {
+    throw new Error("Could not locate sheet definition JSON in sheetLibrary.ts.");
   }
 
   return JSON.parse(match[1]);
@@ -102,6 +149,79 @@ function sanitizePresetPayload(value: unknown): unknown[] {
   return JSON.parse(JSON.stringify(value)) as unknown[];
 }
 
+function sanitizeSheetDefinitionPayload(value: unknown): unknown[] {
+  if (!Array.isArray(value)) {
+    throw new Error("Sheet definition payload must be an array.");
+  }
+
+  if (JSON.stringify(value).length > 400_000) {
+    throw new Error("Sheet definition payload is too large.");
+  }
+
+  const ids = new Set<string>();
+
+  for (const definition of value) {
+    if (!isRecord(definition)) {
+      throw new Error("Each sheet definition must be an object.");
+    }
+
+    const id = definition.id;
+
+    if (typeof id !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id)) {
+      throw new Error("Sheet definition ids must be lowercase slugs.");
+    }
+
+    if (ids.has(id)) {
+      throw new Error(`Duplicate sheet definition id: ${id}`);
+    }
+
+    ids.add(id);
+
+    if (typeof definition.label !== "string") {
+      throw new Error(`Sheet definition ${id} must include a label.`);
+    }
+
+    if (!isRecord(definition.asset)) {
+      throw new Error(`Sheet definition ${id} must include an asset ref.`);
+    }
+
+    if (
+      !["effects", "enemies", "items", "projectiles", "skins", "ui"].includes(String(definition.asset.scope)) ||
+      typeof definition.asset.key !== "string"
+    ) {
+      throw new Error(`Sheet definition ${id} has an invalid asset ref.`);
+    }
+
+    if (!isRecord(definition.rect)) {
+      throw new Error(`Sheet definition ${id} must include a rect.`);
+    }
+
+    for (const key of ["x", "y", "width", "height"]) {
+      if (typeof definition.rect[key] !== "number" || !Number.isFinite(definition.rect[key])) {
+        throw new Error(`Sheet definition ${id} has an invalid rect ${key}.`);
+      }
+    }
+
+    if (typeof definition.frameCount !== "number" || definition.frameCount < 1) {
+      throw new Error(`Sheet definition ${id} must include a positive frameCount.`);
+    }
+
+    if (typeof definition.frameMs !== "number" || definition.frameMs < 1) {
+      throw new Error(`Sheet definition ${id} must include a positive frameMs.`);
+    }
+
+    if (!["loop", "once", "hold"].includes(String(definition.frameMode))) {
+      throw new Error(`Sheet definition ${id} has an invalid frameMode.`);
+    }
+
+    if (!Array.isArray(definition.tags) || !definition.tags.every((tag) => typeof tag === "string")) {
+      throw new Error(`Sheet definition ${id} must include string tags.`);
+    }
+  }
+
+  return JSON.parse(JSON.stringify(value)) as unknown[];
+}
+
 function formatPresetSource(presets: unknown[]): string {
   return `// Responsibility: Store editable effect presets used by the local effect tool and render snapshots.
 // Owner: content/effects
@@ -120,6 +240,38 @@ export function getEffectPreset(id: string): EffectPreset {
   }
 
   return preset;
+}
+`;
+}
+
+function formatSheetDefinitionSource(definitions: unknown[]): string {
+  return `// Responsibility: Store editable sprite-sheet frame and crop metadata.
+// Owner: content/sheets
+
+import type { SheetAssetRef, SheetDefinition } from "./sheetTypes";
+
+// @sheet-definitions-start
+export const sheetDefinitions = ${JSON.stringify(definitions, null, 2)} as const satisfies readonly SheetDefinition[];
+// @sheet-definitions-end
+
+export function getSheetDefinition(id: string): SheetDefinition {
+  const definition = findSheetDefinition(id);
+
+  if (!definition) {
+    throw new Error(\`Missing sheet definition: \${id}\`);
+  }
+
+  return definition;
+}
+
+export function findSheetDefinition(id: string | null | undefined): SheetDefinition | null {
+  return sheetDefinitions.find((definition) => definition.id === id) ?? null;
+}
+
+export function findSheetDefinitionsByAsset(asset: SheetAssetRef): readonly SheetDefinition[] {
+  return sheetDefinitions.filter(
+    (definition) => definition.asset.scope === asset.scope && definition.asset.key === asset.key,
+  );
 }
 `;
 }

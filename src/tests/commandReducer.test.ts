@@ -83,16 +83,22 @@ describe("applyCommand", () => {
         ...createInitialGameState().session,
         reviveQuiz: {
           id: "revive-arcana-1",
-          prompt: "2 + 2",
-          answer: "4",
-          choices: ["4", "5"],
+          promptKey: "revive.quiz.basic.prompt",
+          answerKey: "revive.quiz.basic.choice.correct",
+          choiceKeys: ["revive.quiz.basic.choice.correct", "revive.quiz.basic.choice.wrong"],
           attemptsRemaining: 1,
         },
       },
     };
 
-    const revived = applyCommand(initial, { type: "AnswerReviveQuiz", answer: "4" });
-    const failed = applyCommand(initial, { type: "AnswerReviveQuiz", answer: "5" });
+    const revived = applyCommand(initial, {
+      type: "AnswerReviveQuiz",
+      answerKey: "revive.quiz.basic.choice.correct",
+    });
+    const failed = applyCommand(initial, {
+      type: "AnswerReviveQuiz",
+      answerKey: "revive.quiz.basic.choice.wrong",
+    });
 
     expect(revived.player.hp.current).toBeGreaterThan(1);
     expect(revived.progression.activeBuffIds).toContain("revive-focus");

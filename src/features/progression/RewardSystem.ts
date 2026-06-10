@@ -7,7 +7,7 @@ export type LevelRewardId = "field-heat" | "force-radius" | "skill-point";
 
 export interface LevelReward {
   readonly id: LevelRewardId;
-  readonly label: string;
+  readonly labelKey: string;
   readonly fieldModifier?: {
     readonly heatDelta?: number;
     readonly forceDelta?: number;
@@ -16,9 +16,9 @@ export interface LevelReward {
 }
 
 export const levelRewards: readonly LevelReward[] = [
-  { id: "field-heat", label: "Field Heat", fieldModifier: { heatDelta: 0.08 } },
-  { id: "force-radius", label: "Force Radius", fieldModifier: { forceDelta: 0.08 } },
-  { id: "skill-point", label: "Skill Point", skillPoints: 1 },
+  { id: "field-heat", labelKey: "reward.field-heat.label", fieldModifier: { heatDelta: 0.08 } },
+  { id: "force-radius", labelKey: "reward.force-radius.label", fieldModifier: { forceDelta: 0.08 } },
+  { id: "skill-point", labelKey: "reward.skill-point.label", skillPoints: 1 },
 ];
 
 export function selectLevelUpReward(state: GameState, rewardId: string): GameState {

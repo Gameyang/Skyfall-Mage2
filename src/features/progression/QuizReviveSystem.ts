@@ -7,9 +7,9 @@ import type { ReviveQuizState } from "../../core/state/SessionState";
 export function createReviveQuiz(): ReviveQuizState {
   return {
     id: "revive-arcana-1",
-    prompt: "2 + 2",
-    answer: "4",
-    choices: ["4", "5"],
+    promptKey: "revive.quiz.basic.prompt",
+    answerKey: "revive.quiz.basic.choice.correct",
+    choiceKeys: ["revive.quiz.basic.choice.correct", "revive.quiz.basic.choice.wrong"],
     attemptsRemaining: 1,
   };
 }
@@ -36,14 +36,14 @@ export function startReviveQuiz(state: GameState): GameState {
   };
 }
 
-export function answerReviveQuiz(state: GameState, answer: string): GameState {
+export function answerReviveQuiz(state: GameState, answerKey: string): GameState {
   const quiz = state.session.reviveQuiz;
 
   if (!quiz) {
     return state;
   }
 
-  if (answer.trim() === quiz.answer) {
+  if (answerKey.trim() === quiz.answerKey) {
     return {
       ...state,
       player: {

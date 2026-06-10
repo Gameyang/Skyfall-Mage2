@@ -1,6 +1,8 @@
 // Responsibility: Build stable top-level DOM regions for the game shell.
 // Owner: ui/shell
 
+import { t } from "../../content/strings/GameStrings";
+
 export interface AppLayoutOptions {
   readonly battlePanelElement: HTMLElement;
   readonly sidePanelElement: HTMLElement;
@@ -25,10 +27,10 @@ function createRotateNotice(): HTMLElement {
   rotateNotice.className = "rotate-notice";
 
   const rotateTitle = document.createElement("h1");
-  rotateTitle.textContent = "Skyfall Mage2";
+  rotateTitle.textContent = t("app.title");
 
   const rotateText = document.createElement("p");
-  rotateText.textContent = "Rotate device";
+  rotateText.textContent = t("layout.rotateDevice");
 
   rotateNotice.append(rotateTitle, rotateText);
   return rotateNotice;

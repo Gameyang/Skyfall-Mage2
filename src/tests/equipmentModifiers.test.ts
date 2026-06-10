@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { t } from "../content/strings/GameStrings";
 import { createInitialInventoryState } from "../core/state/InventoryState";
 import { generateEquipment, generateEquipmentForDrop } from "../features/equipment/EquipmentGeneratorRegistry";
 import { resolveEquipmentModifiers } from "../features/equipment/EquipmentModifierResolver";
@@ -9,7 +10,8 @@ describe("equipment and item factories", () => {
   it("creates item instances from definitions", () => {
     const item = createItemInstance("fire-staff", 1);
 
-    expect(item.definition.name).toBe("Fire Staff");
+    expect(item.definition.nameKey).toBe("item.fire-staff.name");
+    expect(t(item.definition.nameKey)).toBe("Fire Staff");
     expect(item.definition.equipmentSlot).toBe("weapon");
     expect(item.quantity).toBe(1);
   });

@@ -8,6 +8,8 @@ import "./ui/styles/title.css";
 
 if (import.meta.env.DEV && window.location.pathname === "/effects") {
   void import("./tools/effects/bootstrapEffectTool").then(({ bootstrapEffectTool }) => bootstrapEffectTool());
+} else if (import.meta.env.DEV && window.location.pathname === "/sheets") {
+  void import("./tools/sheets/bootstrapSheetTool").then(({ bootstrapSheetTool }) => bootstrapSheetTool());
 } else {
   void bootstrap();
 }

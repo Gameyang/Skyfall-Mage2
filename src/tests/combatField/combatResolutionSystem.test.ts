@@ -241,7 +241,7 @@ describe("resolveCombatFieldResults", () => {
     );
 
     expect(result.state.session.gameOver).toBe(false);
-    expect(result.state.session.reviveQuiz?.answer).toBe("4");
+    expect(result.state.session.reviveQuiz?.answerKey).toBe("revive.quiz.basic.choice.correct");
     expect(result.state.player.hp.current).toBe(1);
   });
 });

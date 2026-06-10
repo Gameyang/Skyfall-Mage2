@@ -320,13 +320,28 @@ src/content/effects/
   effectPresetTypes.ts
   effectPresets.ts
   effectEvaluation.ts
+
+src/content/strings/
+  GameStrings.ts
+  gameStrings.csv
+
+src/content/sheets/
+  sheetTypes.ts
+  sheetLibrary.ts
+  sheetResolver.ts
 ```
 
 content는 data와 registry를 둔다. behavior 구현은 `features`에 둔다.
 
 `src/content/effects` stores serializable effect preset data shared by the game renderer and the local effect editor.
 
+`src/content/strings` stores game-facing display strings in CSV form and exposes runtime lookup for localization.
+
+`src/content/sheets` stores shared sprite-sheet crop/frame metadata referenced by effects, enemies, units, items, and future sheet-backed visual content.
+
 `src/tools/effects` owns local-only effect editing UI and preview code. It must stay behind dev-only entrypoints and must not own gameplay state.
+
+`src/tools/sheets` owns local-only shared sheet metadata editing UI. It must stay behind dev-only entrypoints and must not be imported by production gameplay or renderer code.
 
 ## 14. inventory, equipment, progression, shop
 
