@@ -10,6 +10,7 @@ export const starterWaves: readonly WaveDefinition[] = [
     durationMs: 45_000,
     spawns: [{ atMs: 0, enemyId: "bat", count: 1 }],
     fieldCondition: { environmentKind: "ember-cavern", heatDelta: 0.02, windX: 0.18, emitterRateScale: 1 },
+    maxActiveEnemies: 18,
   },
   {
     id: "wave-2",
@@ -20,6 +21,7 @@ export const starterWaves: readonly WaveDefinition[] = [
       { atMs: 18_000, enemyId: "bat", count: 2 },
     ],
     fieldCondition: { environmentKind: "rain-shelf", heatDelta: -0.04, rainRate: 0.26, emitterRateScale: 1.1 },
+    maxActiveEnemies: 20,
   },
   {
     id: "wave-3",
@@ -30,6 +32,7 @@ export const starterWaves: readonly WaveDefinition[] = [
       { atMs: 28_000, enemyId: "rain-boss", count: 1 },
     ],
     fieldCondition: { environmentKind: "ash-field", heatDelta: 0.08, windX: -0.12, rainRate: 0.12, emitterRateScale: 1.25 },
+    maxActiveEnemies: 22,
   },
 ];
 

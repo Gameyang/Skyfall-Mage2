@@ -34,9 +34,27 @@ describe("runtime systems", () => {
     expect(result.state.battleField.terrainProfile).toBe("rain-shelf");
     expect(result.state.battleField.fluidLevel).toBeGreaterThan(initial.battleField.fluidLevel);
     expect(result.state.battleField.gasLevel).toBeGreaterThan(0);
-    expect(result.state.entities.enemies.length).toBe(3);
+    expect(result.state.entities.enemies.length).toBeGreaterThanOrEqual(3);
     expect(result.events.map((event) => event.type)).toContain("WaveStarted");
     expect(result.events.map((event) => event.type)).toContain("EnvironmentChanged");
+  });
+
+  it("spawns randomized test enemies after authored waves", () => {
+    const initial = createInitialGameState();
+    const result = advanceWaveRuntime(
+      {
+        ...initial,
+        session: {
+          ...initial.session,
+          waveIndex: 4,
+          waveElapsedMs: 12_000,
+        },
+      },
+      12_000,
+    );
+
+    expect(result.state.session.waveIndex).toBe(4);
+    expect(result.state.entities.enemies.length).toBeGreaterThan(initial.entities.enemies.length);
   });
 
   it("collects nearby drops into inventory resources", () => {

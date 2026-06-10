@@ -28,9 +28,22 @@ describe("progression rules", () => {
     const initial = createInitialGameState();
     const plan = planWaveStep(2, 20_000, 1_000, initial.environment);
 
-    expect(plan?.dueSpawns).toHaveLength(1);
+    expect(plan?.dueSpawns).toEqual(
+      expect.arrayContaining([expect.objectContaining({ atMs: 18_000, enemyId: "bat", count: 2 })]),
+    );
     expect(plan?.environment.kind).toBe("rain-shelf");
     expect(plan?.environment.rainRate).toBeGreaterThan(initial.environment.rainRate);
+  });
+
+  it("plans randomized test spawns and continues after authored waves", () => {
+    const initial = createInitialGameState();
+    const starterPlan = planWaveStep(1, 12_000, 0, initial.environment);
+    const proceduralPlan = planWaveStep(4, 12_000, 0, initial.environment);
+
+    expect(starterPlan?.dueSpawns.length).toBeGreaterThan(0);
+    expect(proceduralPlan?.wave.id).toBe("test-wave-4");
+    expect(proceduralPlan?.dueSpawns.length).toBeGreaterThan(0);
+    expect(proceduralPlan?.dueSpawns.every((spawn) => spawn.count >= 1)).toBe(true);
   });
 
   it("scales enemies by wave and player level", () => {

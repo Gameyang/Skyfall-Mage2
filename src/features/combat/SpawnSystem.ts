@@ -27,15 +27,13 @@ export function createEnemySpawn(definitionId: string, position: Vec2, sequence:
 
 export function spawnEnemy(state: GameState, definitionId: string, position: Vec2): GameState {
   const scaling = calculateEnemyScaling(state.session.waveIndex, state.player.level);
+  const sequence = createSpawnSequence(state);
 
   return {
     ...state,
     entities: {
       ...state.entities,
-      enemies: [
-        ...state.entities.enemies,
-        createEnemySpawn(definitionId, position, state.entities.enemies.length + 1, scaling.hpScale),
-      ],
+      enemies: [...state.entities.enemies, createEnemySpawn(definitionId, position, sequence, scaling.hpScale)],
     },
   };
 }
@@ -46,4 +44,11 @@ export function createSingleSpawnTestState(state: GameState): GameState {
   }
 
   return spawnEnemy(state, "bat", { x: 0.72, y: 0.52 });
+}
+
+function createSpawnSequence(state: GameState): number {
+  return Math.max(
+    state.entities.enemies.length + 1,
+    Math.floor(state.session.elapsedMs) * 10 + state.battleField.queryFrame * 1_000 + state.entities.enemies.length + 1,
+  );
 }

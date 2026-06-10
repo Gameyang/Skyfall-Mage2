@@ -80,10 +80,15 @@ function applyWaveEnvironment(state: GameState, plan: WavePlan, events: GameEven
 function spawnDueEnemies(state: GameState, plan: WavePlan): GameState {
   let nextState = state;
   let spawnOrdinal = 0;
+  const maxActiveEnemies = plan.wave.maxActiveEnemies ?? Number.POSITIVE_INFINITY;
 
   for (const spawn of plan.dueSpawns) {
     for (let index = 0; index < spawn.count; index += 1) {
-      nextState = spawnEnemy(nextState, spawn.enemyId, createSpawnPosition(plan.wave.index, spawnOrdinal, index));
+      if (spawn.source === "random-test" && nextState.entities.enemies.length >= maxActiveEnemies) {
+        break;
+      }
+
+      nextState = spawnEnemy(nextState, spawn.enemyId, createSpawnPosition(plan.wave.index, spawn.atMs, spawnOrdinal, index));
     }
 
     spawnOrdinal += 1;
@@ -92,9 +97,18 @@ function spawnDueEnemies(state: GameState, plan: WavePlan): GameState {
   return nextState;
 }
 
-function createSpawnPosition(waveIndex: number, spawnOrdinal: number, index: number): Vec2 {
+function createSpawnPosition(waveIndex: number, spawnAtMs: number, spawnOrdinal: number, index: number): Vec2 {
+  const seed = waveIndex * 73_856_093 + spawnAtMs * 19_349 + spawnOrdinal * 83_492 + index * 2_654;
+
   return {
-    x: clamp(0.7 + index * 0.06 - spawnOrdinal * 0.04, 0.58, 0.9),
-    y: clamp(0.38 + ((waveIndex + index + spawnOrdinal) % 4) * 0.08, 0.22, 0.78),
+    x: clamp(0.58 + randomUnit(seed) * 0.32, 0.58, 0.9),
+    y: clamp(0.22 + randomUnit(seed + 1_013) * 0.56, 0.22, 0.78),
   };
+}
+
+function randomUnit(seed: number): number {
+  let value = Math.imul(seed ^ 0x45d9f3b, 0x45d9f3b);
+  value = Math.imul(value ^ (value >>> 16), 0x45d9f3b);
+
+  return ((value ^ (value >>> 16)) >>> 0) / 0xffffffff;
 }

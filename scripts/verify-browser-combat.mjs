@@ -30,7 +30,7 @@ try {
   await page.mouse.down();
   await page.waitForTimeout(4_200);
   await page.mouse.up();
-  await page.waitForFunction(() => document.querySelectorAll(".enemy-marker").length === 0, null, { timeout: 15_000 });
+  await page.waitForFunction(() => document.querySelectorAll(".item-drop-marker").length > 0, null, { timeout: 15_000 });
   const dropCount = await page.locator(".item-drop-marker").count();
   await browser.close();
   browser = null;

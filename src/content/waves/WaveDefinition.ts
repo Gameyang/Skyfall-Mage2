@@ -7,6 +7,7 @@ export interface WaveSpawnDefinition {
   readonly atMs: number;
   readonly enemyId: string;
   readonly count: number;
+  readonly source?: "scripted" | "random-test";
 }
 
 export interface WaveFieldCondition {
@@ -23,4 +24,5 @@ export interface WaveDefinition {
   readonly durationMs: number;
   readonly spawns: readonly WaveSpawnDefinition[];
   readonly fieldCondition: WaveFieldCondition;
+  readonly maxActiveEnemies?: number;
 }
