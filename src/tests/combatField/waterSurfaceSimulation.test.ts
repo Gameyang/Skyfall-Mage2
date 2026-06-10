@@ -36,8 +36,37 @@ describe("WaterSurfaceSimulation", () => {
     expect(Math.max(...widerHeights)).toBeLessThanOrEqual(Math.max(...baseHeights));
   });
 
+  it("uses speed to advance wave motion faster without changing the impulse", () => {
+    const base = new WaterSurfaceSimulation({ columns: 24, damping: 0, tension: 0.02, spread: 0.18 });
+    const fast = new WaterSurfaceSimulation({ columns: 24, damping: 0, tension: 0.02, spread: 0.18, speed: 1.8 });
+
+    base.applyImpulse({ x: 0.5, radius: 1 / 24, velocity: 3, kind: "drop" });
+    fast.applyImpulse({ x: 0.5, radius: 1 / 24, velocity: 3, kind: "drop" });
+    base.update(16.6667);
+    fast.update(16.6667);
+
+    const baseHeights = base.readHeights();
+    const fastHeights = fast.readHeights();
+    const baseOuterWave = Math.abs(baseHeights[9] ?? 0) + Math.abs(baseHeights[14] ?? 0);
+    const fastOuterWave = Math.abs(fastHeights[9] ?? 0) + Math.abs(fastHeights[14] ?? 0);
+
+    expect(fastOuterWave).toBeGreaterThan(baseOuterWave * 1.5);
+  });
+
+  it("keeps wake impulses strong enough to be visible", () => {
+    const drop = new WaterSurfaceSimulation({ columns: 16, damping: 0, tension: 0, spread: 0.08 });
+    const wake = new WaterSurfaceSimulation({ columns: 16, damping: 0, tension: 0, spread: 0.08 });
+
+    drop.applyImpulse({ x: 0.5, radius: 1 / 16, velocity: 3, kind: "drop" });
+    wake.applyImpulse({ x: 0.5, radius: 1 / 16, velocity: 3, kind: "wake" });
+    drop.update(16.6667);
+    wake.update(16.6667);
+
+    expect(maxAbs(wake.readHeights())).toBeGreaterThan(maxAbs(drop.readHeights()));
+  });
+
   it("keeps battlefield water tuning bounded under repeated impacts", () => {
-    const simulation = new WaterSurfaceSimulation({ columns: 64, damping: 0.045, tension: 0.027, spread: 0.32 });
+    const simulation = new WaterSurfaceSimulation({ columns: 64, damping: 0.045, tension: 0.027, spread: 0.34 });
 
     for (let frame = 0; frame < 48; frame += 1) {
       if (frame % 6 === 0) {

@@ -19,6 +19,8 @@ export const sheetDefinitions = [
       "height": 1
     },
     "frameCount": 8,
+    "columns": 8,
+    "rows": 1,
     "frameMs": 70,
     "frameMode": "loop",
     "tags": [
@@ -41,6 +43,8 @@ export const sheetDefinitions = [
       "height": 1
     },
     "frameCount": 8,
+    "columns": 8,
+    "rows": 1,
     "frameMs": 70,
     "frameMode": "once",
     "tags": [
@@ -63,6 +67,8 @@ export const sheetDefinitions = [
       "height": 1
     },
     "frameCount": 8,
+    "columns": 8,
+    "rows": 1,
     "frameMs": 90,
     "frameMode": "loop",
     "tags": [
@@ -85,6 +91,8 @@ export const sheetDefinitions = [
       "height": 1
     },
     "frameCount": 8,
+    "columns": 8,
+    "rows": 1,
     "frameMs": 70,
     "frameMode": "once",
     "tags": [
@@ -106,6 +114,8 @@ export const sheetDefinitions = [
       "height": 1
     },
     "frameCount": 8,
+    "columns": 8,
+    "rows": 1,
     "frameMs": 70,
     "frameMode": "once",
     "tags": [
@@ -127,6 +137,8 @@ export const sheetDefinitions = [
       "height": 1
     },
     "frameCount": 8,
+    "columns": 8,
+    "rows": 1,
     "frameMs": 90,
     "frameMode": "loop",
     "tags": [
@@ -148,6 +160,8 @@ export const sheetDefinitions = [
       "height": 1
     },
     "frameCount": 12,
+    "columns": 12,
+    "rows": 1,
     "frameMs": 90,
     "frameMode": "loop",
     "movementFrameCount": 8,
@@ -173,6 +187,8 @@ export const sheetDefinitions = [
       "height": 1
     },
     "frameCount": 12,
+    "columns": 12,
+    "rows": 1,
     "frameMs": 90,
     "frameMode": "loop",
     "movementFrameCount": 8,
@@ -198,6 +214,8 @@ export const sheetDefinitions = [
       "height": 1
     },
     "frameCount": 12,
+    "columns": 12,
+    "rows": 1,
     "frameMs": 90,
     "frameMode": "loop",
     "movementFrameCount": 8,
@@ -223,6 +241,8 @@ export const sheetDefinitions = [
       "height": 1
     },
     "frameCount": 12,
+    "columns": 12,
+    "rows": 1,
     "frameMs": 90,
     "frameMode": "loop",
     "movementFrameCount": 8,
@@ -248,6 +268,8 @@ export const sheetDefinitions = [
       "height": 1
     },
     "frameCount": 12,
+    "columns": 12,
+    "rows": 1,
     "frameMs": 90,
     "frameMode": "loop",
     "movementFrameCount": 8,
@@ -273,6 +295,8 @@ export const sheetDefinitions = [
       "height": 1
     },
     "frameCount": 12,
+    "columns": 12,
+    "rows": 1,
     "frameMs": 90,
     "frameMode": "loop",
     "movementFrameCount": 8,
@@ -298,6 +322,8 @@ export const sheetDefinitions = [
       "height": 1
     },
     "frameCount": 12,
+    "columns": 12,
+    "rows": 1,
     "frameMs": 90,
     "frameMode": "loop",
     "movementFrameCount": 8,

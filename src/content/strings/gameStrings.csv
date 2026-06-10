@@ -1,68 +1,68 @@
-key,en,ko
-app.title,Skyfall Mage2,
-app.startAriaLabel,Start Skyfall Mage2,
-app.fatalStartFailed,Failed to start app.,
-title.loading,LOADING,
-title.warmingUp,WARMING UP,
-title.pressAnyKey,PRESS ANY KEY,
-layout.rotateDevice,Rotate device,
-tabs.items,Items,
-tabs.skills,Skills,
-tabs.shop,Shop,
-tabs.lock,Lock,
-common.empty,Empty,
-common.close,Close,
-common.on,On,
-common.soon,Soon,
-battle.wave,Wave {waveIndex},
-battle.fieldGrid,{width} x {height},
-battle.emitters,Emitters {count},
-battle.elapsedSeconds,{seconds}s,
-meter.value,{current} / {max},
-progress.level,Level,
-progress.field,Field,
-progress.skillPoints,SP,
-inventory.wallet,Gold {gold}  Gems {gems},
-inventory.slot.weapon,Weapon,
-inventory.slot.head,Head,
-inventory.slot.body,Body,
-inventory.slot.feet,Feet,
-shop.reroll,Reroll,
-shop.offerStock,{label} x{remainingStock},
-modal.levelUp,Level Up,
-modal.revive,Revive,
-player.defaultName,Skyfall Mage,
-environment.ember-cavern,Ember Cavern,
-environment.rain-shelf,Rain Shelf,
-environment.ash-field,Ash Field,
-item.fire-staff.name,Fire Staff,
-item.blizzard-staff.name,Blizzard Staff,
-item.chain-lightning-staff.name,Chain Staff,
-item.hp-potion.name,HP Potion,
-item.mp-potion.name,MP Potion,
-item.coin.name,Coin,
-item.gem.name,Gem,
-item.skill-book.name,Skill Book,
-item.blinkstep-boots.name,Blinkstep,
-item.mana-regen-cap.name,Mana Cap,
-item.mana-pulse-armor.name,Pulse Armor,
-enemy.bat.name,Ash Bat,
-enemy.ember-miniboss.name,Ember Warden,
-enemy.rain-boss.name,Rain Tyrant,
-enemy.mini-tracking.name,Mini Tracker,
-enemy.mini-teleport.name,Mini Teleporter,
-enemy.mini-split.name,Mini Splitter,
-enemy.tracking-boss.name,Tracking Boss,
-enemy.teleport-boss.name,Teleport Boss,
-enemy.split-boss.name,Split Boss,
-skill.ember-root.label,Ember,
-skill.steam-veil.label,Steam,
-skill.force-ring.label,Force,
-reward.field-heat.label,Field Heat,
-reward.force-radius.label,Force Radius,
-reward.skill-point.label,Skill Point,
-revive.quiz.basic.prompt,2 + 2,
-revive.quiz.basic.choice.correct,4,
-revive.quiz.basic.choice.wrong,5,
-system.webGpu,WebGPU,
-system.webGpuLost,WebGPU lost: {reason},
+key,ko,en
+app.title,Skyfall Mage2,Skyfall Mage2
+app.startAriaLabel,Skyfall Mage2 시작,Start Skyfall Mage2
+app.fatalStartFailed,앱 시작에 실패했습니다.,Failed to start app.
+title.loading,로딩 중,LOADING
+title.warmingUp,준비 중,WARMING UP
+title.pressAnyKey,아무 키나 누르세요,PRESS ANY KEY
+layout.rotateDevice,기기를 가로로 돌려주세요,Rotate device
+tabs.items,아이템,Items
+tabs.skills,스킬,Skills
+tabs.shop,상점,Shop
+tabs.lock,잠김,Lock
+common.empty,비어 있음,Empty
+common.close,닫기,Close
+common.on,활성,On
+common.soon,준비 중,Soon
+battle.wave,웨이브 {waveIndex},Wave {waveIndex}
+battle.fieldGrid,{width} x {height},{width} x {height}
+battle.emitters,방출 {count},Emitters {count}
+battle.elapsedSeconds,{seconds}초,{seconds}s
+meter.value,{current} / {max},{current} / {max}
+progress.level,레벨,Level
+progress.field,필드,Field
+progress.skillPoints,SP,SP
+inventory.wallet,골드 {gold}  젬 {gems},Gold {gold}  Gems {gems}
+inventory.slot.weapon,무기,Weapon
+inventory.slot.head,머리,Head
+inventory.slot.body,갑옷,Body
+inventory.slot.feet,신발,Feet
+shop.reroll,새로고침,Reroll
+shop.offerStock,{label} x{remainingStock},{label} x{remainingStock}
+modal.levelUp,레벨 업,Level Up
+modal.revive,부활,Revive
+player.defaultName,스카이폴 마법사,Skyfall Mage
+environment.ember-cavern,잿불 동굴,Ember Cavern
+environment.rain-shelf,비의 절벽,Rain Shelf
+environment.ash-field,잿빛 들판,Ash Field
+item.fire-staff.name,화염 지팡이,Fire Staff
+item.blizzard-staff.name,눈보라 지팡이,Blizzard Staff
+item.chain-lightning-staff.name,연쇄 번개 지팡이,Chain Staff
+item.hp-potion.name,HP 물약,HP Potion
+item.mp-potion.name,MP 물약,MP Potion
+item.coin.name,동전,Coin
+item.gem.name,젬,Gem
+item.skill-book.name,스킬북,Skill Book
+item.blinkstep-boots.name,점멸 장화,Blinkstep
+item.mana-regen-cap.name,마나 회복 모자,Mana Cap
+item.mana-pulse-armor.name,마나 파동 갑옷,Pulse Armor
+enemy.bat.name,잿빛 박쥐,Ash Bat
+enemy.ember-miniboss.name,잿불 감시자,Ember Warden
+enemy.rain-boss.name,폭우 폭군,Rain Tyrant
+enemy.mini-tracking.name,소형 추적자,Mini Tracker
+enemy.mini-teleport.name,소형 순간이동자,Mini Teleporter
+enemy.mini-split.name,소형 분열자,Mini Splitter
+enemy.tracking-boss.name,추적 보스,Tracking Boss
+enemy.teleport-boss.name,순간이동 보스,Teleport Boss
+enemy.split-boss.name,분열 보스,Split Boss
+skill.ember-root.label,잿불,Ember
+skill.steam-veil.label,증기,Steam
+skill.force-ring.label,포스,Force
+reward.field-heat.label,필드 열기,Field Heat
+reward.force-radius.label,포스 범위,Force Radius
+reward.skill-point.label,스킬 포인트,Skill Point
+revive.quiz.basic.prompt,2 + 2,2 + 2
+revive.quiz.basic.choice.correct,4,4
+revive.quiz.basic.choice.wrong,5,5
+system.webGpu,WebGPU,WebGPU
+system.webGpuLost,WebGPU 손실: {reason},WebGPU lost: {reason}

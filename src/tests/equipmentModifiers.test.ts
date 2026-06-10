@@ -11,7 +11,7 @@ describe("equipment and item factories", () => {
     const item = createItemInstance("fire-staff", 1);
 
     expect(item.definition.nameKey).toBe("item.fire-staff.name");
-    expect(t(item.definition.nameKey)).toBe("Fire Staff");
+    expect(t(item.definition.nameKey)).toBe("화염 지팡이");
     expect(item.definition.equipmentSlot).toBe("weapon");
     expect(item.quantity).toBe(1);
   });

@@ -16,6 +16,7 @@ import { WaterSurfaceSimulation, type WaterImpulseKind } from "./WaterSurfaceSim
 
 const springColumns = 320;
 const waterSurfaceWaveDamping = 0.045;
+const waterSurfaceWaveSpeed = 1.8;
 const waterSurfaceWaveSpread = 0.34;
 const waterSurfaceWaveTension = 0.027;
 const waterSurfaceContactReach = 0.035;
@@ -92,6 +93,7 @@ export class CombatFieldWaterRenderer {
   private readonly simulation = new WaterSurfaceSimulation({
     columns: springColumns,
     damping: waterSurfaceWaveDamping,
+    speed: waterSurfaceWaveSpeed,
     spread: waterSurfaceWaveSpread,
     tension: waterSurfaceWaveTension,
   });

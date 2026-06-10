@@ -15,6 +15,8 @@ describe("createRenderSnapshot", () => {
       animation: {
         sheetId: "enemy-bat-animation",
         sheetRect: { x: 0, y: 0, width: 1, height: 1 },
+        sheetColumns: 12,
+        sheetRows: 1,
         frameCount: 12,
         movementFrameCount: 8,
         hitFrameCount: 4,

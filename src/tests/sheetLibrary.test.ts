@@ -10,6 +10,8 @@ describe("sheet library", () => {
     expect(resolveSheetAssetUrl(sheet.asset)).toContain("firestaff-projectile");
     expect(resolveSheetRect(sheet.id)).toEqual({ x: 0, y: 0, width: 1, height: 1 });
     expect(sheet.frameCount).toBe(8);
+    expect(sheet.columns).toBe(8);
+    expect(sheet.rows).toBe(1);
     expect(sheet.frameMode).toBe("loop");
   });
 

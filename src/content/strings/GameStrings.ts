@@ -11,7 +11,8 @@ export interface ParsedGameStrings {
   readonly entries: ReadonlyMap<string, Readonly<Record<string, string>>>;
 }
 
-export const defaultGameStringLocale = "en";
+export const defaultGameStringLocale = "ko";
+export const englishGameStringLocale = "en";
 
 let currentGameStringLocale = defaultGameStringLocale;
 const gameStrings = parseGameStringsCsv(gameStringsCsv);
@@ -35,7 +36,7 @@ export function formatGameString(
   params: GameStringParams = {},
 ): string {
   const entry = strings.entries.get(key);
-  const template = entry?.[locale] || entry?.[defaultGameStringLocale] || key;
+  const template = entry?.[locale] || entry?.[defaultGameStringLocale] || entry?.[englishGameStringLocale] || key;
   return interpolateGameString(template, params);
 }
 

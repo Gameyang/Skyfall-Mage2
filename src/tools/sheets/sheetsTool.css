@@ -159,7 +159,8 @@
 }
 
 .sheet-control input,
-.sheet-control select {
+.sheet-control select,
+.sheet-control output {
   min-width: 0;
   width: 100%;
   min-height: 31px;
@@ -169,6 +170,11 @@
   color: #fff0c9;
   font: inherit;
   letter-spacing: 0;
+}
+
+.sheet-control output {
+  display: block;
+  overflow-wrap: anywhere;
 }
 
 .sheet-status {

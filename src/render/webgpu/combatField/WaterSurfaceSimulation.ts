@@ -20,6 +20,7 @@ export interface WaterSurfaceSimulationOptions {
   readonly damping?: number;
   readonly tension?: number;
   readonly spread?: number;
+  readonly speed?: number;
   readonly maxVelocity?: number;
   readonly maxHeight?: number;
 }
@@ -33,6 +34,7 @@ export class WaterSurfaceSimulation {
   private readonly damping: number;
   private readonly tension: number;
   private readonly spread: number;
+  private readonly speed: number;
   private readonly maxVelocity: number;
   private readonly maxHeight: number;
   private rainAccumulator = 0;
@@ -43,6 +45,7 @@ export class WaterSurfaceSimulation {
     this.damping = options.damping ?? 0.05;
     this.tension = options.tension ?? 0.025;
     this.spread = options.spread ?? 0.15;
+    this.speed = options.speed ?? 1;
     this.maxVelocity = options.maxVelocity ?? 8;
     this.maxHeight = options.maxHeight ?? 16;
     this.springs = Array.from({ length: this.columns }, () => ({ height: 0, velocity: 0 }));
@@ -52,7 +55,8 @@ export class WaterSurfaceSimulation {
   }
 
   update(deltaMs: number): void {
-    const steps = Math.max(1, Math.min(5, Math.round(Math.max(1, deltaMs) / 16.6667)));
+    const scaledDeltaMs = Math.max(1, deltaMs) * this.speed;
+    const steps = Math.max(1, Math.min(8, Math.round(scaledDeltaMs / 16.6667)));
 
     for (let step = 0; step < steps; step += 1) {
       this.updateStep();

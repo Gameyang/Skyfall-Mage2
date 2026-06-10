@@ -6,6 +6,7 @@ import { resolveSheetAssetUrl } from "../../content/sheets/sheetResolver";
 import type { SheetAssetScope, SheetDefinition, SheetFrameMode } from "../../content/sheets/sheetTypes";
 import { assetUrls, skinAssetUrls } from "../../platform/assets";
 import { createSheetRectEditor, normalizeEditableSheetRect } from "./SheetRectEditor";
+import { analyzeSpriteSheetUrl } from "./spriteAutoMapper";
 import "./sheetsTool.css";
 
 type Mutable<T> = T extends readonly (infer U)[]
@@ -134,7 +135,9 @@ class SheetToolApp {
     const title = document.createElement("h2");
     title.textContent = definition.label;
     const meta = document.createElement("span");
-    meta.textContent = `${definition.frameCount} frames / ${definition.frameMs} ms`;
+    meta.textContent = `${definition.frameCount} frames / ${definition.columns ?? definition.frameCount} x ${
+      definition.rows ?? 1
+    } / ${definition.frameMs} ms`;
     header.append(title, meta);
     content.append(
       header,
@@ -191,6 +194,14 @@ class SheetToolApp {
           definition.frameCount = Math.max(1, Math.floor(value));
           this.renderStage();
         }),
+        createNumberControl("Columns", definition.columns ?? definition.frameCount, 1, 1, 256, (value) => {
+          definition.columns = Math.max(1, Math.floor(value));
+          this.renderStage();
+        }),
+        createNumberControl("Rows", definition.rows ?? 1, 1, 1, 64, (value) => {
+          definition.rows = Math.max(1, Math.floor(value));
+          this.renderStage();
+        }),
         createNumberControl("Frame Ms", definition.frameMs, 1, 1, 5_000, (value) => {
           definition.frameMs = Math.max(1, value);
           this.renderStage();
@@ -210,6 +221,13 @@ class SheetToolApp {
         createOptionalNumberControl("Hit Ms", definition.hitFrameMs, 1, 1, 5_000, (value) => {
           definition.hitFrameMs = value === null ? undefined : Math.max(1, value);
         }),
+      ]),
+      createSection("Auto Map", [
+        createButton("Detect Grid", () => void this.autoMapSelectedDefinition()),
+        createTextValue(
+          "Source",
+          "Projection + autocorrelation grid detection for local sprite sheets",
+        ),
       ]),
       createSection("Tags", [
         createTextControl("Tags", definition.tags.join(", "), (value) => {
@@ -290,6 +308,30 @@ class SheetToolApp {
   private getAssetOptionsForScope(scope: SheetAssetScope): readonly AssetOption[] {
     return this.assetOptions.filter((option) => option.scope === scope);
   }
+
+  private async autoMapSelectedDefinition(): Promise<void> {
+    const definition = this.getSelectedDefinition();
+
+    if (!definition) {
+      return;
+    }
+
+    this.status.textContent = "Detecting grid";
+
+    try {
+      const result = await analyzeSpriteSheetUrl(resolveSheetAssetUrl(definition.asset));
+      definition.rect = result.rect;
+      definition.frameCount = result.frameCount;
+      definition.columns = result.columns;
+      definition.rows = result.rows;
+      this.status.textContent = `Detected ${result.columns} x ${result.rows}, ${result.frameCount} frames, confidence ${Math.round(
+        result.confidence * 100,
+      )}%`;
+      this.renderAll();
+    } catch (error) {
+      this.status.textContent = error instanceof Error ? error.message : "Auto map failed";
+    }
+  }
 }
 
 async function loadSheetDefinitions(): Promise<SheetDefinitionDraft[]> {
@@ -347,6 +389,14 @@ function createTextControl(label: string, value: string, onInput: (value: string
   input.value = value;
   input.addEventListener("input", () => onInput(input.value));
   wrapper.append(input);
+  return wrapper;
+}
+
+function createTextValue(label: string, value: string): HTMLElement {
+  const wrapper = createControlWrapper(label);
+  const output = document.createElement("output");
+  output.textContent = value;
+  wrapper.append(output);
   return wrapper;
 }
 

@@ -206,6 +206,20 @@ function sanitizeSheetDefinitionPayload(value: unknown): unknown[] {
       throw new Error(`Sheet definition ${id} must include a positive frameCount.`);
     }
 
+    if (
+      "columns" in definition &&
+      (typeof definition.columns !== "number" || !Number.isFinite(definition.columns) || definition.columns < 1)
+    ) {
+      throw new Error(`Sheet definition ${id} has an invalid columns value.`);
+    }
+
+    if (
+      "rows" in definition &&
+      (typeof definition.rows !== "number" || !Number.isFinite(definition.rows) || definition.rows < 1)
+    ) {
+      throw new Error(`Sheet definition ${id} has an invalid rows value.`);
+    }
+
     if (typeof definition.frameMs !== "number" || definition.frameMs < 1) {
       throw new Error(`Sheet definition ${id} must include a positive frameMs.`);
     }

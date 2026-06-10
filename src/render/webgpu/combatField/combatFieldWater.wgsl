@@ -77,7 +77,7 @@ fn fragmentMain(@builtin(position) position: vec4f) -> @location(0) vec4f {
 
   let waveIntensity = abs(wavePx);
   let surfaceSkin = smoothstep(0.026, 0.0, depth);
-  let meniscus = smoothstep(0.014, 0.0, depth) * (0.55 + 0.45 * sin(uv.x * 52.0 + time * 0.85 + wavePx * 0.05));
+  let meniscus = smoothstep(0.014, 0.0, depth) * (0.62 + 0.38 * sin(uv.x * 28.0 + time * 0.85 + wavePx * 0.05));
   let slopeFoam = smoothstep(16.0, 62.0, abs(slope)) * edge;
   let foam = max(smoothstep(3.8, 11.0, waveIntensity) * edge, max(slopeFoam, localFoam * edge));
   color = mix(color, vec3f(0.84, 0.95, 1.0), foam * 0.5);
@@ -105,7 +105,8 @@ fn fragmentMain(@builtin(position) position: vec4f) -> @location(0) vec4f {
 }
 
 fn waterWavePx(x: f32, time: f32) -> f32 {
-  return proceduralWave(x, time) + detailWave(x, time) + springWave(x) * 2.05 + springDetailWave(x) * 0.42;
+  let waveTime = time * 1.45;
+  return proceduralWave(x, waveTime) + detailWave(x, waveTime) + springSmoothWave(x) * 2.45 + springDetailWave(x) * 0.16;
 }
 
 fn waterSlope(x: f32, time: f32, canvasSize: vec2f) -> f32 {
@@ -231,6 +232,18 @@ fn springWave(x: f32) -> f32 {
   return mix(springs[left], springs[right], fract(scaled));
 }
 
+fn springSmoothWave(x: f32) -> f32 {
+  let springCount = max(2u, u32(params.canvasAndTime.w));
+  let dx = clamp(1.5 / f32(springCount), 0.002, 0.008);
+  let farDx = dx * 2.5;
+  let farLeft = springWave(clamp(x - farDx, 0.0, 0.999));
+  let left = springWave(clamp(x - dx, 0.0, 0.999));
+  let center = springWave(x);
+  let right = springWave(clamp(x + dx, 0.0, 0.999));
+  let farRight = springWave(clamp(x + farDx, 0.0, 0.999));
+  return center * 0.42 + (left + right) * 0.22 + (farLeft + farRight) * 0.07;
+}
+
 fn springDetailWave(x: f32) -> f32 {
   let springCount = max(2u, u32(params.canvasAndTime.w));
   let dx = clamp(0.72 / f32(springCount), 0.0012, 0.004);
@@ -264,11 +277,11 @@ fn detailWave(x: f32, time: f32) -> f32 {
   let direction = select(-1.0, 1.0, wind >= 0.0);
   let noiseA = noise(vec2f(x * 28.0 + time * 0.2, time * 0.07));
   let noiseB = noise(vec2f(x * 74.0 - time * 0.34, time * 0.19 + wind * 0.13));
-  let capillaryA = sin(x * 188.0 + time * 3.8 * direction + noiseA * 2.8);
-  let capillaryB = sin(x * 276.0 - time * 4.9 + noise(vec2f(x * 18.0, time * 0.13)) * 2.0);
-  let capillaryC = sin(x * 352.0 + time * (2.7 + abs(wind) * 1.4));
-  let capillaryD = sin(x * 468.0 - time * (5.9 + abs(wind) * 1.9) + noiseB * 2.4);
-  return (capillaryA * 0.40 + capillaryB * 0.29 + capillaryC * 0.19 + capillaryD * 0.12) * activity * (0.58 + interactionEnergy * 0.92);
+  let capillaryA = sin(x * 142.0 + time * 3.2 * direction + noiseA * 2.4);
+  let capillaryB = sin(x * 218.0 - time * 4.2 + noise(vec2f(x * 18.0, time * 0.13)) * 1.8);
+  let capillaryC = sin(x * 286.0 + time * (2.4 + abs(wind) * 1.2));
+  let capillaryD = sin(x * 348.0 - time * (5.0 + abs(wind) * 1.5) + noiseB * 2.0);
+  return (capillaryA * 0.22 + capillaryB * 0.16 + capillaryC * 0.10 + capillaryD * 0.06) * activity * (0.44 + interactionEnergy * 0.68);
 }
 
 fn random(st: vec2f) -> f32 {
