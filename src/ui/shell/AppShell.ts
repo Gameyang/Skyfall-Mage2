@@ -27,7 +27,6 @@ export class AppShell {
   readonly element: HTMLElement;
   readonly canvas: HTMLCanvasElement;
   readonly playfieldElement: HTMLElement;
-  readonly joystickElement: HTMLElement;
   private readonly layoutController: ViewportLayoutController;
   private readonly mobileFullscreenController: MobileFullscreenController;
   private readonly battlePanel: BattlePanel;
@@ -63,7 +62,6 @@ export class AppShell {
     this.mobileFullscreenController = createMobileFullscreenController(this.element);
     this.canvas = this.battlePanel.canvas;
     this.playfieldElement = this.battlePanel.playfieldElement;
-    this.joystickElement = this.battlePanel.joystickElement;
   }
 
   setGpuStatus(label: string, status: "ready" | "degraded"): void {

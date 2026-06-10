@@ -14,7 +14,6 @@
   --bag-grid-columns: repeat(5, minmax(34px, 1fr));
   --item-slot-padding: 3px;
   --slot-label-font-size: 8px;
-  --virtual-joystick-display: block;
 }
 
 .playfield,
@@ -317,6 +316,5 @@
     --bag-grid-columns: repeat(5, minmax(34px, 1fr));
     --item-slot-padding: 3px;
     --slot-label-font-size: 8px;
-    --virtual-joystick-display: block;
   }
 }

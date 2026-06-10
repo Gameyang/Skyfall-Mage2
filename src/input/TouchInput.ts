@@ -5,6 +5,7 @@ import type { GameCommand } from "../core/state/Command";
 import { touchVectorToCommand } from "./InputMapper";
 
 type CommandSink = (command: GameCommand) => void;
+const defaultMovementRadius = 48;
 
 export interface MovementAnchor {
   readonly x: number;
@@ -15,8 +16,7 @@ export interface MovementAnchor {
 export interface MovementAnchorOptions {
   readonly clientX: number;
   readonly clientY: number;
-  readonly joystickRect: Pick<DOMRectReadOnly, "left" | "top" | "width" | "height">;
-  readonly useJoystickCenter: boolean;
+  readonly maxRadius?: number;
 }
 
 export class TouchInput {
@@ -24,7 +24,6 @@ export class TouchInput {
 
   constructor(
     private readonly playfieldElement: HTMLElement,
-    private readonly joystickElement: HTMLElement,
     private readonly sink: CommandSink,
   ) {
     playfieldElement.addEventListener("pointerdown", this.handlePointerDown);
@@ -47,13 +46,9 @@ export class TouchInput {
       return;
     }
 
-    const joystickRect = this.joystickElement.getBoundingClientRect();
-    const useJoystickCenter = event.target instanceof Node && this.joystickElement.contains(event.target);
     const anchor = createMovementAnchor({
       clientX: event.clientX,
       clientY: event.clientY,
-      joystickRect,
-      useJoystickCenter,
     });
 
     this.activeMovement = { pointerId: event.pointerId, anchor };
@@ -113,15 +108,7 @@ export function canClaimMovementPointer(
 }
 
 export function createMovementAnchor(options: MovementAnchorOptions): MovementAnchor {
-  const maxRadius = Math.max(1, Math.min(options.joystickRect.width, options.joystickRect.height) / 2);
-
-  if (options.useJoystickCenter) {
-    return {
-      x: options.joystickRect.left + options.joystickRect.width / 2,
-      y: options.joystickRect.top + options.joystickRect.height / 2,
-      maxRadius,
-    };
-  }
+  const maxRadius = Math.max(1, options.maxRadius ?? defaultMovementRadius);
 
   return {
     x: options.clientX,

@@ -1,4 +1,4 @@
-// Responsibility: Render the combat canvas, HUD, markers, and mobile joystick surface.
+// Responsibility: Render the combat canvas, HUD, and combat markers.
 // Owner: ui/panels
 
 import type { BattleViewModel } from "../viewModels/createBattleViewModel";
@@ -7,7 +7,6 @@ export class BattlePanel {
   readonly element: HTMLElement;
   readonly canvas: HTMLCanvasElement;
   readonly playfieldElement: HTMLElement;
-  readonly joystickElement: HTMLElement;
   private readonly gpuBadge: HTMLElement;
   private readonly waveChip: HTMLElement;
   private readonly timeChip: HTMLElement;
@@ -48,9 +47,6 @@ export class BattlePanel {
     this.enemyLayer.className = "enemy-layer";
     this.dropLayer = document.createElement("div");
     this.dropLayer.className = "drop-layer";
-    this.joystickElement = document.createElement("div");
-    this.joystickElement.className = "virtual-joystick";
-
     this.playfieldElement.append(
       this.canvas,
       hud,
@@ -58,7 +54,6 @@ export class BattlePanel {
       this.enemyLayer,
       this.playerMarker,
       this.aimMarker,
-      this.joystickElement,
     );
     this.element.append(this.playfieldElement);
   }
