@@ -2,7 +2,6 @@
 // Owner: render/webgpu/combatField
 
 import type { BattleEnvironmentVisuals, RenderSnapshot, RenderableSprite } from "../../snapshots/RenderSnapshot";
-import type { CombatMaterialName, MaterialEmitter } from "../../../features/combatField/CombatFieldTypes";
 import waterShaderSource from "./combatFieldWater.wgsl?raw";
 import { WaterSurfaceSimulation, type WaterImpulseKind } from "./WaterSurfaceSimulation";
 
@@ -27,7 +26,7 @@ interface SpriteSample {
   readonly timeMs: number;
 }
 
-type WaterParticleKind = "foam" | "droplet" | "steam";
+type WaterParticleKind = "foam" | "droplet";
 
 interface WaterParticle {
   x: number;
@@ -156,7 +155,7 @@ export class CombatFieldWaterRenderer {
 
     const deltaMs = this.lastTimeMs === null ? 16.6667 : Math.min(50, Math.max(0, timeMs - this.lastTimeMs));
     this.lastTimeMs = timeMs;
-    const interactions = this.collectInteractions(snapshot, deltaMs, timeMs);
+    const interactions = this.collectInteractions(snapshot, timeMs);
     this.spawnInteractionParticles(interactions, visuals, deltaMs);
     this.updateParticles(deltaMs, visuals);
     this.simulation.addRainRipples(deltaMs, visuals.rainRate);
@@ -179,21 +178,9 @@ export class CombatFieldWaterRenderer {
     this.particleBuffer.destroy();
   }
 
-  private collectInteractions(snapshot: RenderSnapshot, deltaMs: number, timeMs: number): readonly WaterInteraction[] {
+  private collectInteractions(snapshot: RenderSnapshot, timeMs: number): readonly WaterInteraction[] {
     const interactions: WaterInteraction[] = [];
     const waterStart = snapshot.environment.waterStart;
-
-    for (const emitter of snapshot.materialEmitters) {
-      const interaction = createEmitterInteraction(emitter, waterStart, deltaMs);
-
-      if (interaction) {
-        interactions.push(interaction);
-      }
-
-      if (interactions.length >= maxInteractions) {
-        return interactions;
-      }
-    }
 
     this.collectSpriteWakeInteractions(snapshot.sprites, waterStart, timeMs, interactions);
     return interactions;
@@ -208,6 +195,10 @@ export class CombatFieldWaterRenderer {
     const activeIds = new Set<string>();
 
     for (const sprite of sprites) {
+      if (!isWaterInteractiveSprite(sprite)) {
+        continue;
+      }
+
       activeIds.add(sprite.id);
 
       if (interactions.length >= maxInteractions) {
@@ -234,7 +225,7 @@ export class CombatFieldWaterRenderer {
       const speed = previous
         ? Math.hypot(sprite.position.x - previous.x, sprite.position.y - previous.y) / deltaSeconds
         : 0;
-      const base = sprite.kind === "item" ? 0.16 : sprite.kind === "player" ? 0.36 : 0.28;
+      const base = sprite.kind === "item" ? 0.16 : 0.36;
       const strength = clamp(base + speed * 0.055 + depth * 0.26, 0.12, 1.15);
 
       if (previous && speed < 0.015 && depth < 0.3) {
@@ -287,15 +278,8 @@ export class CombatFieldWaterRenderer {
         this.spawnParticle(createFoamParticle(interaction, visuals.waterStart, visuals.windX, this.nextRandom()));
       }
 
-      if (interaction.kind === "heat") {
-        const steamCount = Math.min(3, Math.max(1, Math.round(strength * frameScale * 1.35)));
-        for (let index = 0; index < steamCount; index += 1) {
-          this.spawnParticle(createSteamParticle(interaction, visuals.waterStart, visuals.windX, this.nextRandom()));
-        }
-      } else {
-        for (let index = 0; index < dropletCount; index += 1) {
-          this.spawnParticle(createDropletParticle(interaction, visuals.waterStart, visuals.windX, this.nextRandom()));
-        }
+      for (let index = 0; index < dropletCount; index += 1) {
+        this.spawnParticle(createDropletParticle(interaction, visuals.waterStart, visuals.windX, this.nextRandom()));
       }
     }
   }
@@ -327,10 +311,6 @@ export class CombatFieldWaterRenderer {
       if (particle.kind === "droplet") {
         particle.vy += 0.78 * deltaSeconds;
         particle.vx += wind * 0.028 * deltaSeconds;
-      } else if (particle.kind === "steam") {
-        particle.vy -= 0.03 * deltaSeconds;
-        particle.vx += wind * 0.035 * deltaSeconds;
-        particle.radius += 0.004 * deltaSeconds;
       } else {
         particle.vy += (waterStart - particle.y) * 0.16 * deltaSeconds;
         particle.vx += wind * 0.018 * deltaSeconds;
@@ -458,104 +438,17 @@ function createDropletParticle(
   };
 }
 
-function createSteamParticle(
-  interaction: WaterInteraction,
-  waterStart: number,
-  windX: number,
-  seed: number,
-): WaterParticle {
-  const strength = clamp(Math.abs(interaction.strength), 0.08, 1.4);
-
-  return {
-    x: wrap01(interaction.x + (seed - 0.5) * interaction.radius * 1.3),
-    y: clamp(waterStart - 0.006 - seed * 0.018, 0, 1),
-    vx: (seed - 0.5) * 0.05 + windX * 0.04,
-    vy: -(0.035 + seed * 0.04),
-    ageMs: 0,
-    lifeMs: 560 + seed * 500,
-    radius: clamp(0.008 + strength * 0.004 + seed * 0.006, 0.008, 0.024),
-    strength,
-    kind: "steam",
-    seed,
-  };
-}
-
 function encodeParticleKind(kind: WaterParticleKind): number {
   switch (kind) {
     case "foam":
       return 0;
     case "droplet":
       return 1;
-    case "steam":
-      return 2;
   }
 }
 
-function createEmitterInteraction(
-  emitter: MaterialEmitter,
-  waterStart: number,
-  deltaMs: number,
-): WaterInteraction | null {
-  const materialEffect = resolveMaterialWaterEffect(emitter.material);
-
-  if (!materialEffect) {
-    return null;
-  }
-
-  const reach = emitter.radius + 0.07;
-  const distanceToSurface = emitter.y - waterStart;
-
-  if (distanceToSurface < -reach || distanceToSurface > 0.42) {
-    return null;
-  }
-
-  const proximity =
-    distanceToSurface >= 0
-      ? clamp(1 - distanceToSurface / 0.42, 0.24, 1)
-      : clamp(1 + distanceToSurface / reach, 0, 1);
-
-  if (proximity <= 0) {
-    return null;
-  }
-
-  const frameScale = clamp(deltaMs / 16.6667, 0.35, 1.2);
-  const strength = clamp(emitter.strength * materialEffect.strengthScale * proximity, 0.05, 1.8);
-  const interactionY = distanceToSurface < 0 ? waterStart : emitter.y;
-
-  return {
-    x: clamp(emitter.x, 0, 1),
-    y: clamp(interactionY, waterStart, 1),
-    radius: clamp(emitter.radius * materialEffect.radiusScale, 0.018, 0.18),
-    strength: materialEffect.heat ? -strength : strength,
-    velocity: materialEffect.velocity * strength * frameScale,
-    kind: materialEffect.kind,
-  };
-}
-
-function resolveMaterialWaterEffect(material: CombatMaterialName):
-  | {
-      readonly kind: WaterImpulseKind;
-      readonly velocity: number;
-      readonly strengthScale: number;
-      readonly radiusScale: number;
-      readonly heat?: boolean;
-    }
-  | null {
-  switch (material) {
-    case "water":
-    case "magicLiquid":
-      return { kind: "drop", velocity: -0.82, strengthScale: 0.58, radiusScale: 1.45 };
-    case "force":
-      return { kind: "force", velocity: 1.05, strengthScale: 0.72, radiusScale: 1.35 };
-    case "magicEnergy":
-      return { kind: "force", velocity: 0.76, strengthScale: 0.62, radiusScale: 1.2 };
-    case "fire":
-    case "spark":
-    case "lava":
-      return { kind: "heat", velocity: 0.55, strengthScale: 0.5, radiusScale: 1.15, heat: true };
-    default:
-      return null;
-  }
+function isWaterInteractiveSprite(sprite: RenderableSprite): boolean {
+  return sprite.kind === "player" || sprite.kind === "item";
 }
 
 function encodeEnvironmentKind(kind: BattleEnvironmentVisuals["kind"]): number {
