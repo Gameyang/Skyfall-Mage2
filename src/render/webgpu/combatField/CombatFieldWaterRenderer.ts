@@ -8,7 +8,7 @@ import { WaterSurfaceSimulation, type WaterImpulseKind } from "./WaterSurfaceSim
 const springColumns = 320;
 const maxInteractions = 24;
 const interactionStride = 4;
-const maxParticles = 240;
+const maxParticles = 1024;
 const particleStride = 8;
 
 type WaterInteractionPhase = "surface-impact" | "submerged-body";
@@ -295,7 +295,7 @@ export class CombatFieldWaterRenderer {
 
       if (interaction.phase === "surface-impact") {
         const foamCount = Math.min(5, Math.max(2, Math.round(strength * frameScale * 2.1)));
-        const sprayCount = Math.min(9, Math.max(3, Math.round(strength * frameScale * 5.2)));
+        const sprayCount = Math.round(50 + clamp((strength * frameScale - 0.12) / 1.28, 0, 1) * 50);
 
         for (let index = 0; index < foamCount; index += 1) {
           this.spawnParticle(createFoamParticle(interaction, visuals.waterStart, visuals.windX, this.nextRandom()));
@@ -305,10 +305,10 @@ export class CombatFieldWaterRenderer {
           this.spawnParticle(createSprayParticle(interaction, visuals.waterStart, visuals.windX, this.nextRandom()));
         }
       } else {
-        const bubbleCount = Math.min(4, Math.max(1, Math.round(strength * frameScale * 2.0)));
+        const submergedSprayCount = Math.round(20 + clamp((strength * frameScale - 0.08) / 0.92, 0, 1) * 30);
 
-        for (let index = 0; index < bubbleCount; index += 1) {
-          this.spawnParticle(createBubbleParticle(interaction, visuals.waterStart, visuals.windX, this.nextRandom()));
+        for (let index = 0; index < submergedSprayCount; index += 1) {
+          this.spawnParticle(createSubmergedSprayParticle(interaction, visuals.waterStart, visuals.windX, this.nextRandom()));
         }
       }
     }
@@ -468,7 +468,7 @@ function createSprayParticle(
 ): WaterParticle {
   const side = seed < 0.5 ? -1 : 1;
   const strength = clamp(Math.abs(interaction.strength), 0.08, 1.6);
-  const lift = 0.18 + strength * 0.16 + seed * 0.08;
+  const lift = 0.16 + strength * 0.14 + seed * 0.07;
 
   return {
     x: wrap01(interaction.x + side * interaction.radius * (0.15 + seed * 0.55)),
@@ -476,15 +476,15 @@ function createSprayParticle(
     vx: side * (0.045 + seed * 0.09) + windX * 0.026,
     vy: -lift,
     ageMs: 0,
-    lifeMs: 360 + seed * 420,
-    radius: clamp(0.0028 + strength * 0.0035 + interaction.radius * 0.035, 0.0025, 0.012),
+    lifeMs: 280 + seed * 320,
+    radius: clamp(0.0016 + strength * 0.0018 + interaction.radius * 0.018, 0.0016, 0.0065),
     strength,
     kind: "spray",
     seed,
   };
 }
 
-function createBubbleParticle(
+function createSubmergedSprayParticle(
   interaction: WaterInteraction,
   waterStart: number,
   windX: number,
@@ -496,11 +496,11 @@ function createBubbleParticle(
   return {
     x: wrap01(interaction.x + lateral * interaction.radius * 1.35),
     y: clamp(Math.max(waterStart + 0.012, interaction.y + (seed - 0.45) * interaction.radius * 0.9), 0, 1),
-    vx: lateral * 0.018 + windX * 0.006,
-    vy: -(0.014 + seed * 0.024 + strength * 0.014),
+    vx: lateral * 0.026 + windX * 0.006,
+    vy: -(0.018 + seed * 0.035 + strength * 0.018),
     ageMs: 0,
-    lifeMs: 820 + seed * 780,
-    radius: clamp(0.0035 + interaction.radius * 0.08 + strength * 0.003, 0.0035, 0.016),
+    lifeMs: 520 + seed * 560,
+    radius: clamp(0.0018 + interaction.radius * 0.035 + strength * 0.0018, 0.0018, 0.007),
     strength,
     kind: "bubble",
     seed,

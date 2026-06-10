@@ -137,12 +137,12 @@ fn waterSlope(x: f32, time: f32, canvasSize: vec2f) -> f32 {
 }
 
 fn particleLayer(uv: vec2f, canvasSize: vec2f, surfaceY: f32) -> vec4f {
-  let count = min(u32(params.particles.x), 240u);
+  let count = min(u32(params.particles.x), 1024u);
   let aspect = canvasSize.x / max(1.0, canvasSize.y);
   var color = vec3f(0.0);
   var alpha = 0.0;
 
-  for (var i = 0u; i < 240u; i = i + 1u) {
+  for (var i = 0u; i < 1024u; i = i + 1u) {
     if (i >= count) {
       break;
     }
