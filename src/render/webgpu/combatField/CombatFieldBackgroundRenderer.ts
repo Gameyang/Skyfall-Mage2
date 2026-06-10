@@ -125,9 +125,6 @@ function createBackgroundMesh(): Float32Array<ArrayBuffer> {
   const vertices: number[] = [];
 
   addQuad(vertices, 0, 0, 1, 1, 0);
-  addQuad(vertices, 0.03, 0.12, 0.96, 0.58, 1);
-  addQuad(vertices, 0.52, 0.19, 0.98, 0.66, 1);
-  addQuad(vertices, 0, 0.48, 1, 0.88, 4);
   addRidge(vertices, 2, 0.86, [
     [0, 0.61],
     [0.1, 0.58],
@@ -153,8 +150,6 @@ function createBackgroundMesh(): Float32Array<ArrayBuffer> {
     [0.94, 0.72],
     [1, 0.76],
   ]);
-  addRainMesh(vertices);
-
   return new Float32Array(vertices);
 }
 
@@ -180,15 +175,6 @@ function addRidge(vertices: number[], layer: number, bottom: number, points: rea
     addVertex(vertices, leftX, bottom, leftX, leftBottomUv, layer);
     addVertex(vertices, rightX, rightTop, rightX, 0, layer);
     addVertex(vertices, rightX, bottom, rightX, rightBottomUv, layer);
-  }
-}
-
-function addRainMesh(vertices: number[]): void {
-  for (let index = 0; index < 18; index += 1) {
-    const x = index / 18;
-    const width = 0.008 + (index % 3) * 0.002;
-    const top = (index % 5) * 0.12;
-    addQuad(vertices, x, top, Math.min(1, x + width), Math.min(1, top + 0.54), 5);
   }
 }
 

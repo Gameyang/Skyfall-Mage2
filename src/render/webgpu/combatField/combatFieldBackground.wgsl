@@ -29,14 +29,9 @@ fn vertexMain(
 @fragment
 fn fragmentMain(in: VertexOut) -> @location(0) vec4f {
   let uv = clamp(in.sceneUv, vec2f(0.0), vec2f(1.0));
-  let time = params.canvasAndTime.z;
 
   if (in.layer < 0.5) {
-    return vec4f(skyColor(uv, time), 1.0);
-  }
-
-  if (in.layer < 1.5) {
-    return auroraRibbon(uv, in.localUv, time);
+    return vec4f(skyColor(uv), 1.0);
   }
 
   if (in.layer < 2.5) {
@@ -47,14 +42,10 @@ fn fragmentMain(in: VertexOut) -> @location(0) vec4f {
     return ridgeColor(uv, in.localUv, vec3f(0.11, 0.09, 0.19), 0.9);
   }
 
-  if (in.layer < 4.5) {
-    return horizonHaze(uv, in.localUv, time);
-  }
-
-  return rainStreak(uv, in.localUv, time);
+  return vec4f(0.0);
 }
 
-fn skyColor(uv: vec2f, time: f32) -> vec3f {
+fn skyColor(uv: vec2f) -> vec3f {
   let rain = params.environment.x;
   let heat = params.environment.y;
   let frost = params.environment.z;
@@ -69,31 +60,7 @@ fn skyColor(uv: vec2f, time: f32) -> vec3f {
 
   var color = mix(zenith, middle, smoothstep(0.0, 0.68, uv.y));
   color = mix(color, dusk, horizon * 0.72);
-
-  let starLayerA = starField(uv * vec2f(74.0, 44.0), time, 0.974);
-  let starLayerB = starField(uv * vec2f(132.0, 76.0) + 8.3, time * 1.25, 0.988);
-  let starMask = (1.0 - smoothstep(0.08, 0.82, uv.y)) * (1.0 - rain * 0.85);
-  color += vec3f(0.72, 0.86, 1.0) * starLayerA * starMask;
-  color += vec3f(1.0, 0.76, 0.44) * starLayerB * starMask;
-
-  let scan = 0.012 * sin((uv.x * 18.0 + uv.y * 9.0) + time * 0.35);
-  return max(vec3f(0.0), color + vec3f(scan));
-}
-
-fn auroraRibbon(uv: vec2f, localUv: vec2f, time: f32) -> vec4f {
-  let rain = params.environment.x;
-  let heat = params.environment.y;
-  let lava = params.environment.w;
-  let wave = sin(localUv.x * 12.0 + time * 0.42) * 0.12 + sin(localUv.x * 21.0 - time * 0.24) * 0.05;
-  let center = 0.48 + wave;
-  let band = 1.0 - smoothstep(0.0, 0.48, abs(localUv.y - center));
-  let edgeFade = smoothstep(0.0, 0.16, localUv.x) * (1.0 - smoothstep(0.72, 1.0, localUv.x));
-  let verticalFade = 1.0 - smoothstep(0.12, 0.84, uv.y);
-  let alpha = band * edgeFade * verticalFade * (0.24 + heat * 0.04 + lava * 0.12) * (1.0 - rain * 0.58);
-  let cool = vec3f(0.12, 0.55, 0.56);
-  let hot = vec3f(0.82, 0.28, 0.1);
-  let color = mix(cool, hot, clamp(heat * 0.45 + lava * 0.8, 0.0, 1.0));
-  return vec4f(color, alpha);
+  return max(vec3f(0.0), color);
 }
 
 fn ridgeColor(uv: vec2f, localUv: vec2f, base: vec3f, alpha: f32) -> vec4f {
@@ -108,36 +75,4 @@ fn ridgeColor(uv: vec2f, localUv: vec2f, base: vec3f, alpha: f32) -> vec4f {
   color += vec3f(0.16, 0.04, 0.01) * clamp(heat * 0.22 + lava * 0.5, 0.0, 1.0) * depth;
   let atmosphericFade = smoothstep(0.18, 0.92, uv.y);
   return vec4f(color, alpha * atmosphericFade);
-}
-
-fn horizonHaze(uv: vec2f, localUv: vec2f, time: f32) -> vec4f {
-  let rain = params.environment.x;
-  let heat = params.environment.y;
-  let wind = params.canvasAndTime.w;
-  let drift = sin((uv.x + wind * time * 0.035) * 18.0 + time * 0.18) * 0.5 + 0.5;
-  let band = smoothstep(0.0, 0.36, localUv.y) * (1.0 - smoothstep(0.24, 1.0, localUv.y));
-  let color = mix(vec3f(0.34, 0.22, 0.34), vec3f(0.42, 0.46, 0.52), rain * 0.48);
-  let alpha = band * (0.18 + rain * 0.16 + heat * 0.04) * (0.72 + drift * 0.28);
-  return vec4f(color, alpha);
-}
-
-fn rainStreak(uv: vec2f, localUv: vec2f, time: f32) -> vec4f {
-  let rain = params.environment.x;
-  let wind = params.canvasAndTime.w;
-  let travel = fract(localUv.y - time * (0.72 + rain * 0.8) + localUv.x * 0.38);
-  let core = 1.0 - smoothstep(0.0, 0.18, abs(travel - 0.18));
-  let xFade = smoothstep(0.0, 0.35, localUv.x) * (1.0 - smoothstep(0.55, 1.0, localUv.x + wind * 0.08));
-  let alpha = core * xFade * rain * 0.18 * smoothstep(0.08, 0.82, uv.y);
-  return vec4f(vec3f(0.72, 0.86, 0.92), alpha);
-}
-
-fn starField(st: vec2f, time: f32, threshold: f32) -> f32 {
-  let cell = floor(st);
-  let seed = random(cell);
-  let twinkle = 0.55 + 0.45 * sin(time * (0.8 + seed * 1.7) + seed * 6.28318);
-  return smoothstep(threshold, 1.0, seed) * twinkle;
-}
-
-fn random(st: vec2f) -> f32 {
-  return fract(sin(dot(st, vec2f(12.9898, 78.233))) * 43758.5453);
 }
