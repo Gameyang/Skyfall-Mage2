@@ -31,6 +31,7 @@ export class TouchInput {
     private readonly sink: CommandSink,
     private readonly options: TouchInputOptions = {},
   ) {
+    playfieldElement.addEventListener("touchstart", this.handleTouchStart, { capture: true, passive: true });
     playfieldElement.addEventListener("pointerdown", this.handlePointerDown);
     playfieldElement.addEventListener("pointermove", this.handlePointerMove);
     playfieldElement.addEventListener("pointerup", this.handlePointerUp);
@@ -39,6 +40,7 @@ export class TouchInput {
   }
 
   dispose(): void {
+    this.playfieldElement.removeEventListener("touchstart", this.handleTouchStart, { capture: true });
     this.playfieldElement.removeEventListener("pointerdown", this.handlePointerDown);
     this.playfieldElement.removeEventListener("pointermove", this.handlePointerMove);
     this.playfieldElement.removeEventListener("pointerup", this.handlePointerUp);
@@ -51,9 +53,7 @@ export class TouchInput {
       return;
     }
 
-    if (shouldRequestFullscreenForMovementPointer(event.pointerType)) {
-      this.options.onMovementGestureStart?.();
-    }
+    this.requestFullscreenFromMovementGesture(event.pointerType);
 
     const anchor = createMovementAnchor({
       clientX: event.clientX,
@@ -80,10 +80,19 @@ export class TouchInput {
       return;
     }
 
+    this.requestFullscreenFromMovementGesture(event.pointerType);
     preventBattleGestureDefault(event);
     this.activeMovement = null;
     this.releasePointerCapture(event.pointerId);
     this.sink(touchVectorToCommand(0, 0));
+  };
+
+  private readonly handleTouchStart = (): void => {
+    if (this.activeMovement !== null) {
+      return;
+    }
+
+    this.options.onMovementGestureStart?.();
   };
 
   private emitVector(event: PointerEvent): void {
@@ -101,6 +110,12 @@ export class TouchInput {
     }
 
     this.playfieldElement.releasePointerCapture(pointerId);
+  }
+
+  private requestFullscreenFromMovementGesture(pointerType: string): void {
+    if (shouldRequestFullscreenForMovementPointer(pointerType)) {
+      this.options.onMovementGestureStart?.();
+    }
   }
 }
 

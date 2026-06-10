@@ -18,6 +18,9 @@ export function resolveSkinUrl(skinId: string): string {
 }
 
 export const assetUrls = {
+  title: {
+    logo: new URL("../assets/title/skyfall-mage2-title.webp", import.meta.url).href,
+  },
   items: {
     fireStaff: new URL("../assets/items/fire_staff.webp", import.meta.url).href,
     blizzardStaff: new URL("../assets/items/blizzard_staff.webp", import.meta.url).href,
@@ -33,4 +36,17 @@ export const assetUrls = {
   enemies: {
     bat: new URL("../assets/enemies/bat.webp", import.meta.url).href,
   },
+  projectiles: {
+    meteorRock: new URL("../assets/projectiles/meteor-rock.webp", import.meta.url).href,
+  },
 } as const;
+
+export function getPreloadAssetUrls(): readonly string[] {
+  return [
+    assetUrls.title.logo,
+    ...Object.values(assetUrls.items),
+    ...Object.values(assetUrls.enemies),
+    ...Object.values(assetUrls.projectiles),
+    ...Object.values(skinAssetUrls),
+  ];
+}

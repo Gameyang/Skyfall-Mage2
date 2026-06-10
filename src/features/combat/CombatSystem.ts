@@ -6,6 +6,7 @@ import type { ActiveEmitterState } from "../../core/state/BattleFieldState";
 import type { EnemyState } from "../../core/state/EntityState";
 import type { InventoryState } from "../../core/state/InventoryState";
 import { starterItemById } from "../../content/items/starterItems";
+import type { WeaponAttackBlock } from "../../content/items/ItemDefinition";
 import type { MaterialEmitter } from "../combatField/CombatFieldTypes";
 
 export const fallbackWeaponTargetDetectionRange = 0.36;
@@ -37,6 +38,13 @@ export function resolveEquippedWeaponTargeting(inventory: InventoryState): Weapo
   return {
     detectionRange: weapon?.weaponTargeting?.detectionRange ?? fallbackWeaponTargetDetectionRange,
   };
+}
+
+export function resolveEquippedWeaponAttack(inventory: InventoryState): WeaponAttackBlock | null {
+  const weaponItemId = inventory.equipment.find((slot) => slot.slot === "weapon")?.itemId;
+  const weapon = weaponItemId ? starterItemById.get(weaponItemId) : null;
+
+  return weapon?.weaponAttack ?? null;
 }
 
 export function selectNearestAttackTarget(

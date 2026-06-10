@@ -3,5 +3,6 @@ import "./ui/styles/base.css";
 import "./ui/styles/layout.css";
 import "./ui/styles/panels.css";
 import "./ui/styles/controls.css";
+import "./ui/styles/title.css";
 
 bootstrap();

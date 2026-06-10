@@ -3,6 +3,7 @@
 
 import type { GameCommand } from "../../core/state/Command";
 import type { GameState } from "../../core/state/GameState";
+import type { ResourcePreloadProgress } from "../../platform/ResourcePreloader";
 import { BattlePanel } from "../panels/BattlePanel";
 import { InventoryPanel } from "../panels/InventoryPanel";
 import { ModalLayer } from "../panels/ModalLayer";
@@ -17,10 +18,13 @@ import { createShopViewModel } from "../viewModels/createShopViewModel";
 import { createAppLayout } from "./AppLayout";
 import { createMobileFullscreenController, type MobileFullscreenController } from "./MobileFullscreenController";
 import { createPanelHost } from "./PanelHost";
+import { TitleScreen, type TitleScreenStartEvent } from "./TitleScreen";
 import { createViewportLayoutController, type ViewportLayoutController } from "./ViewportLayoutController";
 
 export interface AppShellOptions {
   readonly dispatch: (command: GameCommand) => void;
+  readonly titleLogoUrl: string;
+  readonly onTitleStart: (event: TitleScreenStartEvent) => void;
 }
 
 export class AppShell {
@@ -29,6 +33,7 @@ export class AppShell {
   readonly playfieldElement: HTMLElement;
   private readonly layoutController: ViewportLayoutController;
   private readonly mobileFullscreenController: MobileFullscreenController;
+  private readonly titleScreen: TitleScreen;
   private readonly battlePanel: BattlePanel;
   private readonly progressPanel: ProgressPanel;
   private readonly inventoryPanel: InventoryPanel;
@@ -43,6 +48,7 @@ export class AppShell {
     this.skillTreePanel = new SkillTreePanel(options.dispatch);
     this.shopPanel = new ShopPanel(options.dispatch);
     this.modalLayer = new ModalLayer(options.dispatch);
+    this.titleScreen = new TitleScreen(options.titleLogoUrl, options.onTitleStart);
 
     const sidePanel = createPanelHost("side-panel");
     const tabs = new Tabs([
@@ -58,10 +64,13 @@ export class AppShell {
       sidePanelElement: sidePanel,
       modalLayerElement: this.modalLayer.element,
     });
-    this.layoutController = createViewportLayoutController(this.element);
-    this.mobileFullscreenController = createMobileFullscreenController(this.element);
+    this.element.append(this.titleScreen.element);
     this.canvas = this.battlePanel.canvas;
     this.playfieldElement = this.battlePanel.playfieldElement;
+    this.layoutController = createViewportLayoutController(this.element);
+    this.mobileFullscreenController = createMobileFullscreenController(this.element, undefined, {
+      ignoredGestureTargets: [this.playfieldElement, this.titleScreen.element],
+    });
   }
 
   setGpuStatus(label: string, status: "ready" | "degraded"): void {
@@ -70,6 +79,18 @@ export class AppShell {
 
   requestMobileFullscreen(): void {
     this.mobileFullscreenController.requestIfNeeded();
+  }
+
+  setTitleLoadingProgress(progress: ResourcePreloadProgress): void {
+    this.titleScreen.setProgress(progress);
+  }
+
+  setTitleReady(): void {
+    this.titleScreen.setReady();
+  }
+
+  hideTitleScreen(): void {
+    this.titleScreen.hide();
   }
 
   update(state: GameState): void {
@@ -84,6 +105,7 @@ export class AppShell {
   dispose(): void {
     this.layoutController.dispose();
     this.mobileFullscreenController.dispose();
+    this.titleScreen.dispose();
     this.element.replaceChildren();
   }
 }

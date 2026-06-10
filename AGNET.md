@@ -11,12 +11,12 @@
 
 ## Sprite combat presentation
 
-전투 스프라이트의 상태 이펙트와 모션은 gameplay state가 아니라 renderer-facing presentation 계약이다.
+전투 스프라이트의 상태 이펙트와 모션은 gameplay state가 아니라 renderer-facing presentation 계약이다. 기본 상태에서는 스프라이트에 장식 효과를 붙이지 않는다.
 
 - canonical data는 `src/render/snapshots/RenderSnapshot.ts`의 `RenderableSprite`다.
-- `src/render/snapshots/createRenderableSprites.ts`에서 game state를 `statusEffects`와 `motionPreset`으로 변환한다.
-- `src/render/webgpu/combatField/CombatSpriteRenderer.ts`는 해당 값을 uniform float slot으로 packing한다.
-- `src/render/webgpu/combatField/combatSpriteRender.wgsl`이 outline, tint, flash, 흔들림, pulse, sway 같은 실제 시각 효과를 만든다.
+- `src/render/snapshots/createRenderableSprites.ts`는 player/enemy/item을 sprite data로만 변환하고, 현재 기본 `statusEffects`는 빈 배열이며 `motionPreset`은 `idle`이다.
+- `src/render/webgpu/combatField/CombatSpriteRenderer.ts`는 player sprite의 이전 `hpPercent`를 기억하고 유저 캐릭터 HP가 감소하면 1초 동안 hit flash uniform을 켠다.
+- `src/render/webgpu/combatField/combatSpriteRender.wgsl`은 hit flash uniform이 켜진 동안 흰색 tint 깜빡임만 만든다.
 - 새 전투 연출을 추가할 때는 gameplay 판정/데미지는 `src/features/combat`와 combat field query에 두고, 스프라이트 장식은 위 render snapshot 계약을 통해 넘긴다.
 - unit test는 스프라이트 이펙트/모션의 세부 presentation 값을 고정하지 않는다. 렌더 스냅샷 테스트는 구조와 데이터 경계만 보고, 시각 변경은 typecheck/build와 browser/WebGPU 검증으로 확인한다.
 

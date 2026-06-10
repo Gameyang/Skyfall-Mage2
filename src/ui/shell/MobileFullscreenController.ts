@@ -10,6 +10,10 @@ export interface MobileFullscreenController {
 
 export type MobileFullscreenViewportReader = () => LayoutViewport;
 
+export interface MobileFullscreenControllerOptions {
+  readonly ignoredGestureTargets?: readonly HTMLElement[];
+}
+
 export interface MobileFullscreenDecision {
   readonly viewport: LayoutViewport;
   readonly fullscreenElement: Element | null;
@@ -31,6 +35,7 @@ const fullscreenAttemptCooldownMs = 1000;
 export function createMobileFullscreenController(
   root: HTMLElement,
   readViewport: MobileFullscreenViewportReader = readBrowserFullscreenViewport,
+  options: MobileFullscreenControllerOptions = {},
 ): MobileFullscreenController {
   let disposed = false;
   let requestPending = false;
@@ -58,10 +63,10 @@ export function createMobileFullscreenController(
     }
 
     requestPending = true;
-    lastAttemptTimeMs = now;
 
     try {
       await requester({ navigationUI: "hide" });
+      lastAttemptTimeMs = now;
     } catch {
       // Some mobile browsers reject fullscreen requests outside installed/PWA contexts.
     } finally {
@@ -70,14 +75,18 @@ export function createMobileFullscreenController(
   };
 
   const handlePointerDown = (event: PointerEvent): void => {
-    if (event.pointerType === "mouse") {
+    if (event.pointerType === "mouse" || isIgnoredGestureTarget(event.target, options.ignoredGestureTargets ?? [])) {
       return;
     }
 
     void requestFullscreenIfNeeded();
   };
 
-  const handleTouchStart = (): void => {
+  const handleTouchStart = (event: TouchEvent): void => {
+    if (isIgnoredGestureTarget(event.target, options.ignoredGestureTargets ?? [])) {
+      return;
+    }
+
     void requestFullscreenIfNeeded();
   };
 
@@ -95,6 +104,14 @@ export function createMobileFullscreenController(
       root.removeEventListener("touchstart", handleTouchStart, { capture: true });
     },
   };
+}
+
+function isIgnoredGestureTarget(target: EventTarget | null, ignoredTargets: readonly HTMLElement[]): boolean {
+  if (!(target instanceof Node)) {
+    return false;
+  }
+
+  return ignoredTargets.some((ignoredTarget) => ignoredTarget.contains(target));
 }
 
 export function shouldRequestMobileFullscreen(decision: MobileFullscreenDecision): boolean {

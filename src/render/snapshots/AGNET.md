@@ -10,9 +10,10 @@
 
 `RenderableSprite`는 전투 스프라이트 연출을 위한 render-only 계약이다.
 
-- `statusEffects`는 shader가 색/외곽선/flash를 고르기 위한 tag다. 현재 값은 `hit`, `buff`, `burning-field`, `slowed-field`, `magic-field`, `poisoned`, `frozen`이다.
-- `motionPreset`은 shader vertex transform용 tag다. 현재 값은 `idle`, `bounce`, `shake`, `pulse`, `sway`이다.
-- `createRenderableSprites.ts`에서 player/enemy/item의 상태를 이 tag로 변환한다. gameplay 판정이나 지속시간 계산은 여기서 하지 않는다.
+- 기본 상태에서는 `statusEffects`를 비워 둔다.
+- 기본 상태에서는 `motionPreset`을 `idle`로 둔다. shader가 기본 idle 흔들림을 만들지 않기 때문에 정지 sprite로 렌더링된다.
+- player/enemy의 HP 비율은 `hpPercent`로 넘긴다. 현재 피격 flash는 player sprite에만 적용한다.
+- gameplay 판정이나 지속시간 계산은 여기서 하지 않는다.
 - 새 연출 tag를 추가하면 `RenderSnapshot.ts` 타입, `createRenderableSprites.ts` 매핑, `CombatSpriteRenderer.ts` packing, `combatSpriteRender.wgsl` 소비 코드를 함께 갱신한다.
 - 테스트는 특정 tag가 붙는지보다 snapshot이 serializable renderer data로 유지되는지에 집중한다.
 

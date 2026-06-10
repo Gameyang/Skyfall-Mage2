@@ -11,9 +11,11 @@
 전투 스프라이트 이펙트는 `CombatSpriteRenderer.ts`와 `combatSpriteRender.wgsl`이 담당한다.
 
 - 입력은 `RenderSnapshot.sprites`뿐이다. WebGPU renderer가 game state를 직접 읽지 않는다.
-- uniform packing은 `CombatSpriteRenderer.writeSpriteParams`에 모은다. `effects.x/y/z/w`는 `hit/buff/burning/slowed`, `effects2.x`는 `magic/poison`, `effects2.y`는 motion preset이다.
-- WGSL에서는 `vertexMain`이 `idle/bounce/shake/pulse/sway` 모션을 만들고, `fragmentMain`이 rarity/status 기반 outline, hit flash, burning tint, ice shimmer, magic pulse를 만든다.
-- 새 전투 연출은 먼저 snapshot tag를 추가하고, 그 tag를 renderer packing에 연결한 뒤 shader에서만 시각화한다. gameplay damage/status source of truth는 combat system과 field query에 둔다.
+- uniform packing은 `CombatSpriteRenderer.writeSpriteParams`에 모은다.
+- `CombatSpriteRenderer`는 player sprite의 이전 `hpPercent`를 저장하고, 유저 캐릭터 HP 감소가 감지되면 `effects.x`를 1초 동안 켠다.
+- WGSL에서는 `effects.x`가 켜진 동안 흰색 tint 깜빡임을 만든다.
+- 적 피격 flash, 기본 rarity outline, buff outline, 상태 tint, idle/bounce/shake/pulse/sway 모션은 현재 꺼져 있다.
+- 새 전투 연출은 먼저 snapshot tag 또는 renderer-local trigger를 정하고, renderer packing에 연결한 뒤 shader에서만 시각화한다. gameplay damage/status source of truth는 combat system과 field query에 둔다.
 - shader 시각 변경은 unit test에 세부 수치를 묶지 말고 `npm run typecheck`, `npm run build`, 필요 시 browser/WebGPU 검증으로 확인한다.
 
 ## V2 responsive layout reference

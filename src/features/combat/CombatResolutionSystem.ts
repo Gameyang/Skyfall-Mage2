@@ -2,12 +2,15 @@
 // Owner: features/combat
 
 import { clamp } from "../../core/math/vector";
+import type { EnemyStatusEffectState, EnemyState, FireDamageAreaState } from "../../core/state/EntityState";
 import type { GameEvent } from "../../core/state/Event";
 import type { GameState } from "../../core/state/GameState";
 import type { CombatFieldQueryResult } from "../combatField/CombatFieldTypes";
 import { resolveEquipmentModifiers } from "../equipment/EquipmentModifierResolver";
 import { addExperience } from "../progression/ExperienceSystem";
 import { startReviveQuiz } from "../progression/QuizReviveSystem";
+
+const enemyHitboxRadius = 0.045;
 
 export interface CombatResolutionResult {
   readonly state: GameState;
@@ -28,13 +31,25 @@ export function resolveCombatFieldResults(
       const query = resultById.get(enemy.id);
 
       if (!query) {
-        return enemy;
+        const fireAreaExposure = calculateFireAreaExposure(enemy, state.entities.fireDamageAreas);
+        const burnDamage = calculateEnemyBurnDamage(enemy.statusEffects ?? [], deltaScale);
+        const fireAreaDamage = (fireAreaExposure?.damagePerSecond ?? 0) * deltaScale;
+
+        return {
+          ...enemy,
+          hp: clamp(enemy.hp - burnDamage - fireAreaDamage, 0, enemy.maxHp),
+          statusEffects: resolveEnemyStatusEffects(enemy.statusEffects ?? [], fireAreaExposure, deltaMs),
+        };
       }
 
-      const damage = query.damage * deltaScale;
+      const fireAreaExposure = calculateFireAreaExposure(enemy, state.entities.fireDamageAreas);
+      const burnDamage = calculateEnemyBurnDamage(enemy.statusEffects ?? [], deltaScale);
+      const fireAreaDamage = (fireAreaExposure?.damagePerSecond ?? 0) * deltaScale;
+      const damage = query.damage * deltaScale + burnDamage + fireAreaDamage;
       return {
         ...enemy,
         hp: clamp(enemy.hp - damage, 0, enemy.maxHp),
+        statusEffects: resolveEnemyStatusEffects(enemy.statusEffects ?? [], fireAreaExposure, deltaMs),
       };
     })
     .filter((enemy) => {
@@ -129,6 +144,66 @@ function createResolvedCombatState(
       lastQueryResults: queryResults,
     },
   };
+}
+
+interface FireAreaExposure {
+  readonly damagePerSecond: number;
+  readonly burnDurationMs: number;
+  readonly burnDamagePerSecond: number;
+}
+
+function calculateFireAreaExposure(
+  enemy: EnemyState,
+  fireDamageAreas: readonly FireDamageAreaState[],
+): FireAreaExposure | null {
+  let damagePerSecond = 0;
+  let burnDurationMs = 0;
+  let burnDamagePerSecond = 0;
+
+  for (const area of fireDamageAreas) {
+    const distance = Math.hypot(enemy.position.x - area.position.x, enemy.position.y - area.position.y);
+
+    if (distance > area.radius + enemyHitboxRadius) {
+      continue;
+    }
+
+    damagePerSecond += area.damagePerSecond;
+    burnDurationMs = Math.max(burnDurationMs, area.burnDurationMs);
+    burnDamagePerSecond = Math.max(burnDamagePerSecond, area.burnDamagePerSecond);
+  }
+
+  return damagePerSecond > 0 ? { damagePerSecond, burnDurationMs, burnDamagePerSecond } : null;
+}
+
+function calculateEnemyBurnDamage(statusEffects: readonly EnemyStatusEffectState[], deltaScale: number): number {
+  const burning = statusEffects.find((effect) => effect.id === "burning" && effect.remainingMs > 0);
+
+  return burning ? burning.damagePerSecond * deltaScale : 0;
+}
+
+function resolveEnemyStatusEffects(
+  statusEffects: readonly EnemyStatusEffectState[],
+  fireAreaExposure: FireAreaExposure | null,
+  deltaMs: number,
+): readonly EnemyStatusEffectState[] {
+  const nextEffects = statusEffects
+    .map((effect) => ({ ...effect, remainingMs: effect.remainingMs - deltaMs }))
+    .filter((effect) => effect.remainingMs > 0);
+
+  if (!fireAreaExposure) {
+    return nextEffects;
+  }
+
+  const withoutBurning = nextEffects.filter((effect) => effect.id !== "burning");
+
+  return [
+    ...withoutBurning,
+    {
+      id: "burning",
+      remainingMs: fireAreaExposure.burnDurationMs,
+      damagePerSecond: fireAreaExposure.burnDamagePerSecond,
+    },
+  ];
 }
 
 function resolvePlayerDebuffs(

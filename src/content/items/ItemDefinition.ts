@@ -25,6 +25,21 @@ export interface WeaponTargetingBlock {
   readonly detectionRange?: number;
 }
 
+export interface FireballWeaponAttackBlock {
+  readonly kind: "fireball";
+  readonly cooldownMs: number;
+  readonly projectileSpeedPerSecond: number;
+  readonly projectileCollisionRadius: number;
+  readonly maxAgeMs: number;
+  readonly explosionRadius: number;
+  readonly fireAreaDurationMs: number;
+  readonly fireAreaDamagePerSecond: number;
+  readonly burnDurationMs: number;
+  readonly burnDamagePerSecond: number;
+}
+
+export type WeaponAttackBlock = FireballWeaponAttackBlock;
+
 export interface ItemDefinition {
   readonly id: string;
   readonly name: string;
@@ -35,5 +50,6 @@ export interface ItemDefinition {
   readonly stats?: StatBlock;
   readonly fieldModifiers?: FieldModifierBlock;
   readonly weaponTargeting?: WeaponTargetingBlock;
+  readonly weaponAttack?: WeaponAttackBlock;
   readonly materialAffinity?: "fire" | "water" | "ice" | "spark" | "force";
 }

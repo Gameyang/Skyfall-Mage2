@@ -188,7 +188,7 @@ export class CombatSpriteRenderer {
   }
 
   private resolveHitFlash(sprite: RenderableSprite, timeMs: number): number {
-    if (sprite.hpPercent === null) {
+    if (sprite.kind !== "player" || sprite.hpPercent === null) {
       return 0;
     }
 
@@ -222,14 +222,20 @@ function sortSprites(sprites: readonly RenderableSprite[]): readonly RenderableS
 
 function spriteLayer(kind: RenderableSpriteKind): number {
   switch (kind) {
-    case "item":
+    case "effect":
       return 0;
-    case "enemy":
+    case "item":
       return 1;
-    case "boss":
+    case "enemy":
       return 2;
-    case "player":
+    case "boss":
       return 3;
+    case "projectile":
+      return 4;
+    case "player":
+      return 5;
+    default:
+      return assertNever(kind);
   }
 }
 
@@ -243,6 +249,12 @@ function encodeKind(kind: RenderableSpriteKind): number {
       return 3;
     case "item":
       return 4;
+    case "projectile":
+      return 5;
+    case "effect":
+      return 6;
+    default:
+      return assertNever(kind);
   }
 }
 
@@ -272,5 +284,9 @@ function encodeMotion(motion: RenderableSpriteMotionPreset): number {
     case "sway":
       return 4;
   }
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unhandled sprite value: ${String(value)}`);
 }
 

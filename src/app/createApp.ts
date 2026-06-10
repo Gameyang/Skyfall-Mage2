@@ -4,6 +4,8 @@
 import { createInitialGameState } from "../core/state/GameState";
 import { KeyboardInput } from "../input/KeyboardInput";
 import { TouchInput } from "../input/TouchInput";
+import { assetUrls, getPreloadAssetUrls } from "../platform/assets";
+import { preloadImageResources } from "../platform/ResourcePreloader";
 import { CombatFieldGpu } from "../render/webgpu/combatField/CombatFieldGpu";
 import { CommandBus } from "../runtime/CommandBus";
 import { EventBus } from "../runtime/EventBus";
@@ -22,10 +24,16 @@ export async function createApp(root: HTMLElement): Promise<AppInstance> {
   const eventBus = new EventBus();
   const saveRuntime = new SaveRuntime(createLocalStorageAdapter());
   const initialState = saveRuntime.load() ?? createInitialGameState();
+  let startGame = (): void => undefined;
   const shell = new AppShell({
     dispatch: (command) => commandBus.enqueue(command),
+    titleLogoUrl: assetUrls.title.logo,
+    onTitleStart: () => startGame(),
   });
   root.replaceChildren(shell.element);
+  const resourceLoadPromise = preloadImageResources(getPreloadAssetUrls(), (progress) => {
+    shell.setTitleLoadingProgress(progress);
+  });
 
   const runtime = new GameRuntime({
     commandBus,
@@ -61,10 +69,24 @@ export async function createApp(root: HTMLElement): Promise<AppInstance> {
   }
 
   shell.update(runtime.getState());
+  await resourceLoadPromise;
+  shell.setTitleReady();
 
-  if (!defaultAppConfig.initialRuntimePaused) {
-    runtime.start();
-  }
+  let startedFromTitle = false;
+  startGame = () => {
+    shell.requestMobileFullscreen();
+
+    if (startedFromTitle) {
+      return;
+    }
+
+    startedFromTitle = true;
+    shell.hideTitleScreen();
+
+    if (!defaultAppConfig.initialRuntimePaused) {
+      runtime.start();
+    }
+  };
 
   return {
     runtime,

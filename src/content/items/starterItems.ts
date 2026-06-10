@@ -13,6 +13,18 @@ export const starterItems: readonly ItemDefinition[] = [
     iconUrl: assetUrls.items.fireStaff,
     equipmentSlot: "weapon",
     fieldModifiers: { emitterStrength: 1.1, emitterRadius: 1.04, heatScale: 1.15 },
+    weaponAttack: {
+      kind: "fireball",
+      cooldownMs: 700,
+      projectileSpeedPerSecond: 0.72,
+      projectileCollisionRadius: 0.035,
+      maxAgeMs: 1_200,
+      explosionRadius: 0.075,
+      fireAreaDurationMs: 2_000,
+      fireAreaDamagePerSecond: 8,
+      burnDurationMs: 2_000,
+      burnDamagePerSecond: 6,
+    },
     materialAffinity: "fire",
   },
   {

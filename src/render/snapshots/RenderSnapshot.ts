@@ -5,7 +5,7 @@ import type { Vec2 } from "../../core/math/vector";
 import type { EnvironmentKind } from "../../core/state/EnvironmentState";
 import type { MaterialEmitter } from "../../features/combatField/CombatFieldTypes";
 
-export type RenderableSpriteKind = "player" | "enemy" | "boss" | "item";
+export type RenderableSpriteKind = "player" | "enemy" | "boss" | "item" | "projectile" | "effect";
 export type RenderableSpriteRarity = "common" | "uncommon" | "rare" | "epic";
 export type RenderableSpriteStatusEffect =
   | "hit"

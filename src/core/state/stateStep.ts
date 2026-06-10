@@ -3,6 +3,7 @@
 
 import { addVec2, clamp, normalizeVec2, scaleVec2, subtractVec2 } from "../math/vector";
 import {
+  resolveEquippedWeaponAttack,
   resolveEquippedAttackMaterial,
   resolveEquippedWeaponTargeting,
   selectNearestAttackTarget,
@@ -10,6 +11,9 @@ import {
 import { createEnemyPatternEmitters } from "../../features/combat/EnemyPatternSystem";
 import { createSkillEmitters } from "../../features/combat/SkillEmitterSystem";
 import { resolveEquipmentModifiers } from "../../features/equipment/EquipmentModifierResolver";
+import type { FireballWeaponAttackBlock } from "../../content/items/ItemDefinition";
+import type { ActiveEmitterState } from "./BattleFieldState";
+import type { EnemyState, FireDamageAreaState, ProjectileState } from "./EntityState";
 import type { GameState } from "./GameState";
 import {
   basePlayerHpMax,
@@ -19,6 +23,15 @@ import {
 } from "./PlayerState";
 
 const enemyDespawnMargin = 0.12;
+const enemyHitboxRadius = 0.045;
+const playerEdgePadding = 0.054;
+
+export const playerMovementBounds = {
+  minX: playerEdgePadding,
+  maxX: 1 - playerEdgePadding,
+  minY: playerEdgePadding,
+  maxY: 1 - playerEdgePadding,
+} as const;
 
 export function stepGameState(state: GameState, deltaMs: number): GameState {
   const deltaSeconds = Math.min(deltaMs, 100) / 1000;
@@ -34,26 +47,27 @@ export function stepGameState(state: GameState, deltaMs: number): GameState {
     scaleVec2(state.player.movement, moveSpeedPerSecond * deltaSeconds),
   );
   const nextPlayerPosition = {
-    x: clamp(nextPosition.x, 0.08, 0.92),
-    y: clamp(nextPosition.y, 0.16, 0.86),
+    x: clamp(nextPosition.x, playerMovementBounds.minX, playerMovementBounds.maxX),
+    y: clamp(nextPosition.y, playerMovementBounds.minY, playerMovementBounds.maxY),
   };
   const enemies = advanceEnemies(state.entities.enemies, deltaSeconds);
-  const projectiles = state.entities.projectiles
-    .map((projectile) => ({
-      ...projectile,
-      position: addVec2(projectile.position, scaleVec2(projectile.direction, projectile.speedPerSecond * deltaSeconds)),
-      ageMs: projectile.ageMs + deltaMs,
-    }))
-    .filter(
-      (projectile) =>
-        projectile.ageMs <= projectile.maxAgeMs &&
-        projectile.position.x >= 0 &&
-        projectile.position.x <= 1 &&
-        projectile.position.y >= 0 &&
-        projectile.position.y <= 1,
-    );
+  const projectileAdvance = advanceProjectiles(
+    state.entities.projectiles,
+    enemies,
+    deltaSeconds,
+    deltaMs,
+    state.battleField.queryFrame,
+  );
+  const projectiles = [...projectileAdvance.projectiles];
+  const fireDamageAreas = [
+    ...state.entities.fireDamageAreas
+      .map((area) => ({ ...area, remainingMs: area.remainingMs - deltaMs }))
+      .filter((area) => area.remainingMs > 0),
+    ...projectileAdvance.fireDamageAreas,
+  ];
   let attackCooldownRemainingMs = Math.max(0, state.player.attackCooldownRemainingMs - deltaMs);
   const weaponTargeting = resolveEquippedWeaponTargeting(state.inventory);
+  const weaponAttack = resolveEquippedWeaponAttack(state.inventory);
   const attackTarget = selectNearestAttackTarget(
     nextPlayerPosition,
     enemies,
@@ -61,25 +75,22 @@ export function stepGameState(state: GameState, deltaMs: number): GameState {
   );
   const autoAttacking = attackTarget !== null && state.player.mana.current > 1;
   const nextAim = attackTarget?.position ?? nextPlayerPosition;
-  const sustainedAttack =
-    autoAttacking && attackCooldownRemainingMs <= 0
-      ? createSustainedAttack(state, projectiles.length, nextPlayerPosition, nextAim)
-      : null;
+  let sustainedAttack: ReturnType<typeof createSustainedAttack> | null = null;
 
-  if (sustainedAttack) {
-    projectiles.push(sustainedAttack.projectile);
-    attackCooldownRemainingMs = 180;
+  if (autoAttacking && attackCooldownRemainingMs <= 0) {
+    if (weaponAttack?.kind === "fireball") {
+      projectiles.push(createFireballAttack(state, weaponAttack, projectiles.length, nextPlayerPosition, nextAim));
+      attackCooldownRemainingMs = weaponAttack.cooldownMs;
+    } else {
+      sustainedAttack = createSustainedAttack(state, projectiles.length, nextPlayerPosition, nextAim);
+      projectiles.push(sustainedAttack.projectile);
+      attackCooldownRemainingMs = 180;
+    }
   }
 
-  const projectileEmitters = projectiles.map((projectile) => ({
-    id: `${projectile.materialEmitterId}-trace-${state.battleField.queryFrame}`,
-    material: projectile.material,
-    x: projectile.position.x,
-    y: projectile.position.y,
-    radius: 0.034,
-    strength: 0.7,
-    ttlMs: 120,
-  }));
+  const projectileEmitters = projectiles.flatMap((projectile) =>
+    createProjectileTraceEmitters(projectile, state.battleField.queryFrame),
+  );
   const nextElapsedMs = state.session.elapsedMs + deltaMs;
   const enemyPatternEmitters = createEnemyPatternEmitters(
     {
@@ -129,6 +140,7 @@ export function stepGameState(state: GameState, deltaMs: number): GameState {
       ...state.entities,
       enemies,
       projectiles,
+      fireDamageAreas,
     },
     battleField: {
       ...state.battleField,
@@ -143,6 +155,126 @@ export function stepGameState(state: GameState, deltaMs: number): GameState {
         .filter((emitter) => emitter.ttlMs > 0),
     },
   };
+}
+
+function advanceProjectiles(
+  projectiles: readonly ProjectileState[],
+  enemies: readonly EnemyState[],
+  deltaSeconds: number,
+  deltaMs: number,
+  queryFrame: number,
+): { readonly projectiles: readonly ProjectileState[]; readonly fireDamageAreas: readonly FireDamageAreaState[] } {
+  const nextProjectiles: ProjectileState[] = [];
+  const fireDamageAreas: FireDamageAreaState[] = [];
+
+  for (const projectile of projectiles) {
+    const nextPosition = addVec2(projectile.position, scaleVec2(projectile.direction, projectile.speedPerSecond * deltaSeconds));
+    const nextAgeMs = projectile.ageMs + deltaMs;
+
+    if (projectile.kind === "fireball" && projectile.impact) {
+      const impact = findFirstProjectileImpact(projectile.position, nextPosition, projectile.collisionRadius, enemies);
+
+      if (impact) {
+        fireDamageAreas.push(createFireDamageArea(projectile, impact.position, queryFrame));
+        continue;
+      }
+    }
+
+    if (
+      nextAgeMs > projectile.maxAgeMs ||
+      nextPosition.x < 0 ||
+      nextPosition.x > 1 ||
+      nextPosition.y < 0 ||
+      nextPosition.y > 1
+    ) {
+      continue;
+    }
+
+    nextProjectiles.push({
+      ...projectile,
+      position: nextPosition,
+      ageMs: nextAgeMs,
+    });
+  }
+
+  return { projectiles: nextProjectiles, fireDamageAreas };
+}
+
+function findFirstProjectileImpact(
+  start: GameState["player"]["position"],
+  end: GameState["player"]["position"],
+  projectileRadius: number,
+  enemies: readonly EnemyState[],
+): { readonly position: GameState["player"]["position"] } | null {
+  let firstImpact: { readonly position: GameState["player"]["position"]; readonly travelT: number } | null = null;
+  const segment = subtractVec2(end, start);
+  const segmentLengthSquared = segment.x * segment.x + segment.y * segment.y;
+
+  for (const enemy of enemies) {
+    if (enemy.hp <= 0) {
+      continue;
+    }
+
+    const offset = subtractVec2(enemy.position, start);
+    const travelT =
+      segmentLengthSquared <= Number.EPSILON
+        ? 0
+        : clamp((offset.x * segment.x + offset.y * segment.y) / segmentLengthSquared, 0, 1);
+    const closestPoint = addVec2(start, scaleVec2(segment, travelT));
+    const distance = Math.hypot(enemy.position.x - closestPoint.x, enemy.position.y - closestPoint.y);
+
+    if (distance > projectileRadius + enemyHitboxRadius) {
+      continue;
+    }
+
+    if (!firstImpact || travelT < firstImpact.travelT) {
+      firstImpact = { position: enemy.position, travelT };
+    }
+  }
+
+  return firstImpact ? { position: firstImpact.position } : null;
+}
+
+function createFireDamageArea(
+  projectile: ProjectileState,
+  position: GameState["player"]["position"],
+  queryFrame: number,
+): FireDamageAreaState {
+  const impact = projectile.impact;
+
+  if (!impact) {
+    throw new Error(`Projectile ${projectile.id} has no fireball impact config`);
+  }
+
+  return {
+    id: `${projectile.id}-fire-area-${queryFrame}`,
+    ownerId: projectile.ownerId,
+    materialEmitterId: `${projectile.materialEmitterId}-impact-${queryFrame}`,
+    position,
+    radius: impact.explosionRadius,
+    remainingMs: impact.fireAreaDurationMs,
+    damagePerSecond: impact.fireAreaDamagePerSecond,
+    burnDurationMs: impact.burnDurationMs,
+    burnDamagePerSecond: impact.burnDamagePerSecond,
+  };
+}
+
+function createProjectileTraceEmitters(projectile: ProjectileState, queryFrame: number): readonly ActiveEmitterState[] {
+  if (projectile.kind === "fireball" && projectile.ownerId === "player") {
+    return [];
+  }
+
+  return [
+    {
+      id: `${projectile.materialEmitterId}-trace-${queryFrame}`,
+      material: projectile.material,
+      x: projectile.position.x,
+      y: projectile.position.y,
+      radius: 0.034,
+      strength: 0.7,
+      ttlMs: 120,
+    },
+  ];
 }
 
 function advanceEnemies(enemies: GameState["entities"]["enemies"], deltaSeconds: number): GameState["entities"]["enemies"] {
@@ -169,6 +301,46 @@ function isEnemyOffscreen(position: GameState["player"]["position"]): boolean {
   );
 }
 
+function createFireballAttack(
+  state: GameState,
+  weaponAttack: FireballWeaponAttackBlock,
+  projectileCount: number,
+  playerPosition: GameState["player"]["position"],
+  targetPosition: GameState["player"]["aim"],
+): ProjectileState {
+  const equipmentModifiers = resolveEquipmentModifiers(state.inventory);
+  const direction = normalizeVec2(subtractVec2(targetPosition, playerPosition));
+  const attackMaterial = resolveEquippedAttackMaterial(state.inventory);
+  const emitterId = `emitter-${state.battleField.queryFrame}-${projectileCount}-fireball`;
+
+  return {
+    id: `projectile-${state.battleField.queryFrame}-${projectileCount}-fireball`,
+    kind: "fireball",
+    ownerId: state.player.id,
+    materialEmitterId: emitterId,
+    material: attackMaterial,
+    position: playerPosition,
+    direction,
+    speedPerSecond: weaponAttack.projectileSpeedPerSecond,
+    collisionRadius: weaponAttack.projectileCollisionRadius,
+    ageMs: 0,
+    maxAgeMs: weaponAttack.maxAgeMs,
+    impact: {
+      explosionRadius: weaponAttack.explosionRadius * equipmentModifiers.simulation.emitterRadiusScale,
+      fireAreaDurationMs: weaponAttack.fireAreaDurationMs,
+      fireAreaDamagePerSecond:
+        weaponAttack.fireAreaDamagePerSecond *
+        equipmentModifiers.simulation.emitterStrengthScale *
+        equipmentModifiers.simulation.heatScale,
+      burnDurationMs: weaponAttack.burnDurationMs,
+      burnDamagePerSecond:
+        weaponAttack.burnDamagePerSecond *
+        equipmentModifiers.simulation.emitterStrengthScale *
+        equipmentModifiers.simulation.heatScale,
+    },
+  };
+}
+
 function createSustainedAttack(
   state: GameState,
   projectileCount: number,
@@ -181,11 +353,14 @@ function createSustainedAttack(
   const emitterId = `emitter-${state.battleField.queryFrame}-${projectileCount}-sustain`;
   const projectile = {
     id: `projectile-${state.battleField.queryFrame}-${projectileCount}-sustain`,
+    kind: "legacy" as const,
+    ownerId: state.player.id,
     materialEmitterId: emitterId,
     material: attackMaterial,
     position: playerPosition,
     direction,
     speedPerSecond: 0.72,
+    collisionRadius: 0,
     ageMs: 0,
     maxAgeMs: 700,
   };

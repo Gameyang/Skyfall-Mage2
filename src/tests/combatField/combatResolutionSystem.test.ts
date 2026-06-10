@@ -91,6 +91,142 @@ describe("resolveCombatFieldResults", () => {
     expect(result.state.progression.activeDebuffIds).toContain("burning-field");
   });
 
+  it("applies player-owned fire area damage and burn status to enemies", () => {
+    const initial = createInitialGameState();
+    const enemy = {
+      ...initial.entities.enemies[0]!,
+      position: { x: 0.5, y: 0.5 },
+      hp: 36,
+      maxHp: 36,
+    };
+    const result = resolveCombatFieldResults(
+      {
+        ...initial,
+        entities: {
+          ...initial.entities,
+          enemies: [enemy],
+          fireDamageAreas: [
+            {
+              id: "fire-area",
+              ownerId: initial.player.id,
+              materialEmitterId: "fire-area-emitter",
+              position: enemy.position,
+              radius: 0.075,
+              remainingMs: 2_000,
+              damagePerSecond: 8,
+              burnDurationMs: 2_000,
+              burnDamagePerSecond: 6,
+            },
+          ],
+        },
+      },
+      [],
+      100,
+    );
+
+    expect(result.state.entities.enemies[0]?.hp).toBe(35.2);
+    expect(result.state.entities.enemies[0]?.statusEffects).toEqual([
+      { id: "burning", remainingMs: 2_000, damagePerSecond: 6 },
+    ]);
+  });
+
+  it("continues burn damage after an enemy leaves the fire area", () => {
+    const initial = createInitialGameState();
+    const enemy = {
+      ...initial.entities.enemies[0]!,
+      hp: 28,
+      maxHp: 36,
+      statusEffects: [{ id: "burning" as const, remainingMs: 2_000, damagePerSecond: 6 }],
+    };
+    const result = resolveCombatFieldResults(
+      {
+        ...initial,
+        entities: {
+          ...initial.entities,
+          enemies: [enemy],
+          fireDamageAreas: [],
+        },
+      },
+      [],
+      100,
+    );
+
+    expect(result.state.entities.enemies[0]?.hp).toBe(27.4);
+    expect(result.state.entities.enemies[0]?.statusEffects).toEqual([
+      { id: "burning", remainingMs: 1_900, damagePerSecond: 6 },
+    ]);
+  });
+
+  it("refreshes burn duration instead of stacking duplicate burn effects", () => {
+    const initial = createInitialGameState();
+    const enemy = {
+      ...initial.entities.enemies[0]!,
+      position: { x: 0.5, y: 0.5 },
+      statusEffects: [{ id: "burning" as const, remainingMs: 400, damagePerSecond: 6 }],
+    };
+    const result = resolveCombatFieldResults(
+      {
+        ...initial,
+        entities: {
+          ...initial.entities,
+          enemies: [enemy],
+          fireDamageAreas: [
+            {
+              id: "fire-area",
+              ownerId: initial.player.id,
+              materialEmitterId: "fire-area-emitter",
+              position: enemy.position,
+              radius: 0.075,
+              remainingMs: 2_000,
+              damagePerSecond: 8,
+              burnDurationMs: 2_000,
+              burnDamagePerSecond: 6,
+            },
+          ],
+        },
+      },
+      [],
+      100,
+    );
+    const statusEffects = result.state.entities.enemies[0]?.statusEffects ?? [];
+
+    expect(statusEffects).toHaveLength(1);
+    expect(statusEffects[0]).toEqual({ id: "burning", remainingMs: 2_000, damagePerSecond: 6 });
+  });
+
+  it("does not damage the player from player-owned fire areas", () => {
+    const initial = createInitialGameState();
+    const result = resolveCombatFieldResults(
+      {
+        ...initial,
+        player: {
+          ...initial.player,
+          hp: { ...initial.player.hp, current: 50 },
+        },
+        entities: {
+          ...initial.entities,
+          fireDamageAreas: [
+            {
+              id: "fire-area",
+              ownerId: initial.player.id,
+              materialEmitterId: "fire-area-emitter",
+              position: initial.player.position,
+              radius: 0.075,
+              remainingMs: 2_000,
+              damagePerSecond: 8,
+              burnDurationMs: 2_000,
+              burnDamagePerSecond: 6,
+            },
+          ],
+        },
+      },
+      [],
+      1_000,
+    );
+
+    expect(result.state.player.hp.current).toBe(50);
+  });
+
   it("starts a revive quiz instead of ending the game on first lethal player damage", () => {
     const result = resolveCombatFieldResults(
       createInitialGameState(),

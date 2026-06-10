@@ -38,4 +38,53 @@ describe("createRenderSnapshot", () => {
     expect(snapshot.environment.waterStart).toBeCloseTo(0.68);
     expect(snapshot.environment.waveActivity).toBeGreaterThan(0.65);
   });
+
+  it("includes fireball projectiles and fire areas as renderable sprites", () => {
+    const initial = createInitialGameState();
+    const snapshot = createRenderSnapshot({
+      ...initial,
+      entities: {
+        ...initial.entities,
+        projectiles: [
+          {
+            id: "fireball",
+            kind: "fireball",
+            ownerId: initial.player.id,
+            materialEmitterId: "fireball-emitter",
+            material: "fire",
+            position: { x: 0.56, y: 0.58 },
+            direction: { x: 1, y: 0 },
+            speedPerSecond: 0.72,
+            collisionRadius: 0.035,
+            ageMs: 0,
+            maxAgeMs: 1_200,
+            impact: {
+              explosionRadius: 0.075,
+              fireAreaDurationMs: 2_000,
+              fireAreaDamagePerSecond: 8,
+              burnDurationMs: 2_000,
+              burnDamagePerSecond: 6,
+            },
+          },
+        ],
+        fireDamageAreas: [
+          {
+            id: "fire-area",
+            ownerId: initial.player.id,
+            materialEmitterId: "fire-area-emitter",
+            position: { x: 0.62, y: 0.58 },
+            radius: 0.075,
+            remainingMs: 1_800,
+            damagePerSecond: 8,
+            burnDurationMs: 2_000,
+            burnDamagePerSecond: 6,
+          },
+        ],
+      },
+    });
+
+    expect(snapshot.sprites.map((sprite) => sprite.kind)).toContain("projectile");
+    expect(snapshot.sprites.map((sprite) => sprite.kind)).toContain("effect");
+    expect(snapshot.sprites.find((sprite) => sprite.id === "fire-area")?.statusEffects).toContain("burning-field");
+  });
 });

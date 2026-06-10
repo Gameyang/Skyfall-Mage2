@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createInitialGameState } from "../core/state/GameState";
-import { stepGameState } from "../core/state/stateStep";
+import { playerMovementBounds, stepGameState } from "../core/state/stateStep";
 import { createEnemyPatternEmitters } from "../features/combat/EnemyPatternSystem";
 import { advanceItemDropPhysics } from "../features/inventory/ItemDropPhysicsSystem";
 import { resolveItemPickups } from "../features/inventory/PickupSystem";
@@ -14,6 +14,43 @@ describe("runtime systems", () => {
     expect(stepped.player.hp.max).toBe(128);
     expect(stepped.player.mana.max).toBe(126);
     expect(stepped.player.moveSpeedPerSecond).toBeCloseTo(0.36);
+  });
+
+  it("keeps the player inside the battlefield while allowing movement to the visual edges", () => {
+    const baseState = createInitialGameState();
+    const initial = {
+      ...baseState,
+      entities: {
+        ...baseState.entities,
+        enemies: [],
+        projectiles: [],
+      },
+    };
+    const upperLeft = stepGameState(
+      {
+        ...initial,
+        player: {
+          ...initial.player,
+          position: { x: -1, y: -1 },
+        },
+      },
+      16,
+    );
+    const lowerRight = stepGameState(
+      {
+        ...initial,
+        player: {
+          ...initial.player,
+          position: { x: 2, y: 2 },
+        },
+      },
+      16,
+    );
+
+    expect(playerMovementBounds.minX).toBeLessThan(0.08);
+    expect(playerMovementBounds.minY).toBeLessThan(0.16);
+    expect(upperLeft.player.position).toEqual({ x: playerMovementBounds.minX, y: playerMovementBounds.minY });
+    expect(lowerRight.player.position).toEqual({ x: playerMovementBounds.maxX, y: playerMovementBounds.maxY });
   });
 
   it("auto-targets the nearest enemy in weapon range and starts attacking", () => {
@@ -47,8 +84,39 @@ describe("runtime systems", () => {
     expect(stepped.player.attacking).toBe(true);
     expect(stepped.player.aim).toEqual(nearEnemy.position);
     expect(stepped.entities.projectiles).toHaveLength(1);
+    expect(stepped.entities.projectiles[0]?.kind).toBe("fireball");
     expect(stepped.entities.projectiles[0]?.material).toBe("fire");
-    expect(stepped.battleField.activeEmitters.map((emitter) => emitter.material)).toEqual(["fire", "force", "fire"]);
+    expect(stepped.player.attackCooldownRemainingMs).toBe(700);
+    expect(stepped.battleField.activeEmitters).toHaveLength(0);
+  });
+
+  it("explodes fireballs on first enemy collision and creates a timed fire area", () => {
+    const initial = createInitialGameState();
+    const target = {
+      ...initial.entities.enemies[0]!,
+      id: "target",
+      position: { x: 0.58, y: initial.player.position.y },
+      velocity: undefined,
+      despawnWhenOffscreen: undefined,
+    };
+    const launched = stepGameState(
+      {
+        ...initial,
+        entities: {
+          ...initial.entities,
+          enemies: [target],
+          projectiles: [],
+        },
+      },
+      16,
+    );
+    const impacted = stepGameState(launched, 100);
+
+    expect(impacted.entities.projectiles).toHaveLength(0);
+    expect(impacted.entities.fireDamageAreas).toHaveLength(1);
+    expect(impacted.entities.fireDamageAreas[0]?.ownerId).toBe(initial.player.id);
+    expect(impacted.entities.fireDamageAreas[0]?.position).toEqual(target.position);
+    expect(impacted.entities.fireDamageAreas[0]?.remainingMs).toBe(2_000);
   });
 
   it("stops auto-attacking and regenerates mana when enemies are out of weapon range", () => {

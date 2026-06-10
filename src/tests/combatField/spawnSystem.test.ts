@@ -30,6 +30,7 @@ describe("SpawnSystem", () => {
       entities: {
         enemies: [],
         projectiles: [],
+        fireDamageAreas: [],
         itemDrops: [],
       },
     };

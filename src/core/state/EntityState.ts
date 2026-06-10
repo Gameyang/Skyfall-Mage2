@@ -3,6 +3,12 @@
 
 import type { Vec2 } from "../math/vector";
 
+export interface EnemyStatusEffectState {
+  readonly id: "burning";
+  readonly remainingMs: number;
+  readonly damagePerSecond: number;
+}
+
 export interface EnemyState {
   readonly id: string;
   readonly definitionId: string;
@@ -13,17 +19,42 @@ export interface EnemyState {
   readonly despawnWhenOffscreen?: boolean;
   readonly hp: number;
   readonly maxHp: number;
+  readonly statusEffects?: readonly EnemyStatusEffectState[];
+}
+
+export interface FireballImpactState {
+  readonly explosionRadius: number;
+  readonly fireAreaDurationMs: number;
+  readonly fireAreaDamagePerSecond: number;
+  readonly burnDurationMs: number;
+  readonly burnDamagePerSecond: number;
 }
 
 export interface ProjectileState {
   readonly id: string;
+  readonly kind: "fireball" | "legacy";
+  readonly ownerId: string;
   readonly materialEmitterId: string;
   readonly material: import("../../features/combatField/CombatFieldTypes").CombatMaterialName;
   readonly position: Vec2;
   readonly direction: Vec2;
   readonly speedPerSecond: number;
+  readonly collisionRadius: number;
   readonly ageMs: number;
   readonly maxAgeMs: number;
+  readonly impact?: FireballImpactState;
+}
+
+export interface FireDamageAreaState {
+  readonly id: string;
+  readonly ownerId: string;
+  readonly materialEmitterId: string;
+  readonly position: Vec2;
+  readonly radius: number;
+  readonly remainingMs: number;
+  readonly damagePerSecond: number;
+  readonly burnDurationMs: number;
+  readonly burnDamagePerSecond: number;
 }
 
 export interface ItemDropState {
@@ -38,6 +69,7 @@ export interface ItemDropState {
 export interface EntityState {
   readonly enemies: readonly EnemyState[];
   readonly projectiles: readonly ProjectileState[];
+  readonly fireDamageAreas: readonly FireDamageAreaState[];
   readonly itemDrops: readonly ItemDropState[];
 }
 
@@ -57,6 +89,7 @@ export function createInitialEntityState(): EntityState {
       },
     ],
     projectiles: [],
+    fireDamageAreas: [],
     itemDrops: [
       {
         id: "drop-coin",
