@@ -126,7 +126,7 @@ fn fragmentMain(@builtin(position) position: vec4f) -> @location(0) vec4f {
 }
 
 fn waterWavePx(x: f32, time: f32) -> f32 {
-  return proceduralWave(x, time) + detailWave(x, time) + springWave(x) * 1.85 + springDetailWave(x) * 0.42;
+  return proceduralWave(x, time) + detailWave(x, time) + springWave(x) * 1.78 + springDetailWave(x) * 0.62;
 }
 
 fn waterSlope(x: f32, time: f32, canvasSize: vec2f) -> f32 {
@@ -244,11 +244,17 @@ fn springWave(x: f32) -> f32 {
 }
 
 fn springDetailWave(x: f32) -> f32 {
-  let dx = 0.004;
+  let springCount = max(2u, u32(params.canvasAndTime.w));
+  let dx = clamp(0.72 / f32(springCount), 0.0012, 0.004);
+  let wideDx = dx * 2.0;
+  let farLeft = springWave(clamp(x - wideDx, 0.0, 0.999));
   let left = springWave(clamp(x - dx, 0.0, 0.999));
   let center = springWave(x);
   let right = springWave(clamp(x + dx, 0.0, 0.999));
-  return (center * 2.0 - left - right) * 0.55;
+  let farRight = springWave(clamp(x + wideDx, 0.0, 0.999));
+  let fineCurve = center * 2.0 - left - right;
+  let wideCurve = center * 2.0 - farLeft - farRight;
+  return fineCurve * 0.74 + wideCurve * 0.24;
 }
 
 fn proceduralWave(x: f32, time: f32) -> f32 {
@@ -269,10 +275,12 @@ fn detailWave(x: f32, time: f32) -> f32 {
   let wind = params.environment.x;
   let direction = select(-1.0, 1.0, wind >= 0.0);
   let noiseA = noise(vec2f(x * 28.0 + time * 0.2, time * 0.07));
-  let capillaryA = sin(x * 168.0 + time * 3.8 * direction + noiseA * 2.8);
-  let capillaryB = sin(x * 241.0 - time * 4.6 + noise(vec2f(x * 16.0, time * 0.13)) * 2.0);
-  let capillaryC = sin(x * 317.0 + time * (2.5 + abs(wind) * 1.4));
-  return (capillaryA * 0.46 + capillaryB * 0.28 + capillaryC * 0.16) * activity * (0.55 + interactionEnergy * 0.85);
+  let noiseB = noise(vec2f(x * 74.0 - time * 0.34, time * 0.19 + wind * 0.13));
+  let capillaryA = sin(x * 188.0 + time * 3.8 * direction + noiseA * 2.8);
+  let capillaryB = sin(x * 276.0 - time * 4.9 + noise(vec2f(x * 18.0, time * 0.13)) * 2.0);
+  let capillaryC = sin(x * 352.0 + time * (2.7 + abs(wind) * 1.4));
+  let capillaryD = sin(x * 468.0 - time * (5.9 + abs(wind) * 1.9) + noiseB * 2.4);
+  return (capillaryA * 0.40 + capillaryB * 0.29 + capillaryC * 0.19 + capillaryD * 0.12) * activity * (0.58 + interactionEnergy * 0.92);
 }
 
 fn sideLightShafts(uv: vec2f, depth: f32, time: f32) -> f32 {

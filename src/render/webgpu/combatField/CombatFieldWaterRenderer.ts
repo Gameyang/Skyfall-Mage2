@@ -5,7 +5,7 @@ import type { BattleEnvironmentVisuals, RenderSnapshot, RenderableSprite } from 
 import waterShaderSource from "./combatFieldWater.wgsl?raw";
 import { WaterSurfaceSimulation, type WaterImpulseKind } from "./WaterSurfaceSimulation";
 
-const springColumns = 160;
+const springColumns = 320;
 const maxInteractions = 24;
 const interactionStride = 4;
 const maxParticles = 160;
