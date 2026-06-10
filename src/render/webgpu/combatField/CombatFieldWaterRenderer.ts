@@ -3,7 +3,9 @@
 
 import type { BattleEnvironmentVisuals, RenderSnapshot, RenderableSprite } from "../../snapshots/RenderSnapshot";
 import particleShaderSource from "./combatFieldWaterParticles.wgsl?raw";
+import spriteEffectShaderSource from "./combatFieldWaterSpriteEffect.wgsl?raw";
 import waterShaderSource from "./combatFieldWater.wgsl?raw";
+import { SpriteTextureCache } from "./SpriteTextureCache";
 import { WaterSurfaceSimulation, type WaterImpulseKind } from "./WaterSurfaceSimulation";
 
 const springColumns = 320;
@@ -15,8 +17,18 @@ const particleStride = 12;
 const particleEmitterStride = 8;
 const particleWorkgroupSize = 64;
 const enableWaterParticleSprites = false;
+const enableWaterSpriteSheetEffects = true;
+const waterEffectFrameCount = 8;
+const maxWaterSpriteEffects = 48;
+
+const waterEffectTextureUrls = {
+  entrySurface: new URL("../../../assets/effects/water-entry-surface-sheet.webp", import.meta.url).href,
+  entryUnderwater: new URL("../../../assets/effects/water-entry-underwater-sheet.webp", import.meta.url).href,
+  underwaterLoop: new URL("../../../assets/effects/water-underwater-loop-sheet.webp", import.meta.url).href,
+} as const;
 
 type WaterInteractionPhase = "surface-impact" | "submerged-body";
+type WaterSpriteEffectKind = "entry-surface" | "entry-underwater" | "underwater-loop";
 
 interface WaterInteraction {
   readonly x: number;
@@ -48,8 +60,29 @@ interface WaterParticleEmitter {
   readonly windX: number;
 }
 
+interface WaterSpriteEffect {
+  readonly id: number;
+  readonly kind: WaterSpriteEffectKind;
+  readonly textureUrl: string;
+  readonly position: { readonly x: number; readonly y: number };
+  readonly size: { readonly x: number; readonly y: number };
+  readonly startMs: number;
+  readonly durationMs: number;
+  readonly opacity: number;
+  readonly rotationRadians: number;
+  readonly facing: -1 | 1;
+}
+
+interface WaterSpriteEffectDraw {
+  readonly bindGroup: GPUBindGroup;
+}
+
 export class CombatFieldWaterRenderer {
   private readonly simulation = new WaterSurfaceSimulation({ columns: springColumns });
+  private readonly spriteEffectTextureCache: SpriteTextureCache;
+  private readonly spriteEffectSampler: GPUSampler;
+  private readonly spriteEffectBindGroupLayout: GPUBindGroupLayout;
+  private readonly spriteEffectPipeline: GPURenderPipeline;
   private readonly paramsBuffer: GPUBuffer;
   private readonly springBuffer: GPUBuffer;
   private readonly interactionBuffer: GPUBuffer;
@@ -61,6 +94,8 @@ export class CombatFieldWaterRenderer {
   private readonly particleUpdatePipeline: GPUComputePipeline;
   private readonly particleSpawnPipeline: GPUComputePipeline;
   private readonly paramsData = new Float32Array(20);
+  private readonly spriteEffectParamsData = new Float32Array(12);
+  private readonly spriteEffectParamsBuffers: GPUBuffer[] = [];
   private readonly interactionData = new Float32Array(maxInteractions * interactionStride);
   private readonly spawnData = new Float32Array(maxParticleEmitters * particleEmitterStride);
   private readonly spriteSamples = new Map<string, SpriteSample>();
@@ -72,6 +107,9 @@ export class CombatFieldWaterRenderer {
   private pendingSpawnParticleCount = 0;
   private particleCursor = 0;
   private particleRenderCount = 0;
+  private nextSpriteEffectId = 1;
+  private activeSpriteEffects: readonly WaterSpriteEffect[] = [];
+  private spriteEffectDraws: readonly WaterSpriteEffectDraw[] = [];
   private shouldRender = false;
 
   constructor(
@@ -103,6 +141,18 @@ export class CombatFieldWaterRenderer {
       size: this.spawnData.byteLength,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
+    this.spriteEffectTextureCache = new SpriteTextureCache(device);
+    this.spriteEffectSampler = device.createSampler({
+      label: "Combat field water sprite effect sampler",
+      addressModeU: "clamp-to-edge",
+      addressModeV: "clamp-to-edge",
+      magFilter: "linear",
+      minFilter: "linear",
+    });
+
+    for (const url of Object.values(waterEffectTextureUrls)) {
+      this.spriteEffectTextureCache.get(url);
+    }
 
     const shaderModule = device.createShaderModule({
       label: "Combat field water shader",
@@ -111,6 +161,10 @@ export class CombatFieldWaterRenderer {
     const particleShaderModule = device.createShaderModule({
       label: "Combat field water particle compute shader",
       code: particleShaderSource,
+    });
+    const spriteEffectShaderModule = device.createShaderModule({
+      label: "Combat field water sprite effect shader",
+      code: spriteEffectShaderSource,
     });
     const bindGroupLayout = device.createBindGroupLayout({
       label: "Combat field water bind group layout",
@@ -127,6 +181,14 @@ export class CombatFieldWaterRenderer {
         { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: "uniform" } },
         { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
         { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: "read-only-storage" } },
+      ],
+    });
+    this.spriteEffectBindGroupLayout = device.createBindGroupLayout({
+      label: "Combat field water sprite effect bind group layout",
+      entries: [
+        { binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
+        { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
+        { binding: 2, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } },
       ],
     });
 
@@ -187,6 +249,41 @@ export class CombatFieldWaterRenderer {
         entryPoint: "spawnParticles",
       },
     });
+    this.spriteEffectPipeline = device.createRenderPipeline({
+      label: "Combat field water sprite effect pipeline",
+      layout: device.createPipelineLayout({
+        label: "Combat field water sprite effect pipeline layout",
+        bindGroupLayouts: [this.spriteEffectBindGroupLayout],
+      }),
+      vertex: {
+        module: spriteEffectShaderModule,
+        entryPoint: "vertexMain",
+      },
+      fragment: {
+        module: spriteEffectShaderModule,
+        entryPoint: "fragmentMain",
+        targets: [
+          {
+            format,
+            blend: {
+              color: {
+                srcFactor: "src-alpha",
+                dstFactor: "one-minus-src-alpha",
+                operation: "add",
+              },
+              alpha: {
+                srcFactor: "one",
+                dstFactor: "one-minus-src-alpha",
+                operation: "add",
+              },
+            },
+          },
+        ],
+      },
+      primitive: {
+        topology: "triangle-list",
+      },
+    });
 
     this.bindGroup = device.createBindGroup({
       label: "Combat field water bind group",
@@ -214,6 +311,8 @@ export class CombatFieldWaterRenderer {
 
     if (visuals.waterCoverage <= 0) {
       this.shouldRender = false;
+      this.activeSpriteEffects = [];
+      this.spriteEffectDraws = [];
       return;
     }
 
@@ -224,6 +323,9 @@ export class CombatFieldWaterRenderer {
     this.pendingSpawnParticleCount = 0;
     this.spawnData.fill(0);
     const interactions = this.collectInteractions(snapshot, timeMs);
+    if (enableWaterSpriteSheetEffects) {
+      this.spawnInteractionSpriteEffects(interactions, timeMs);
+    }
     if (enableWaterParticleSprites) {
       this.spawnInteractionParticles(interactions, visuals, deltaMs);
     } else {
@@ -250,6 +352,7 @@ export class CombatFieldWaterRenderer {
     }
 
     this.particleRenderCount = nextParticleRenderCount;
+    this.prepareSpriteEffectDraws(width, height, timeMs);
   }
 
   render(pass: GPURenderPassEncoder): void {
@@ -260,9 +363,14 @@ export class CombatFieldWaterRenderer {
     pass.setPipeline(this.pipeline);
     pass.setBindGroup(0, this.bindGroup);
     pass.draw(3);
+    this.renderSpriteEffects(pass);
   }
 
   dispose(): void {
+    this.spriteEffectTextureCache.dispose();
+    for (const buffer of this.spriteEffectParamsBuffers) {
+      buffer.destroy();
+    }
     this.paramsBuffer.destroy();
     this.springBuffer.destroy();
     this.interactionBuffer.destroy();
@@ -368,6 +476,167 @@ export class CombatFieldWaterRenderer {
         kind: interaction.kind,
       });
     }
+  }
+
+  private spawnInteractionSpriteEffects(interactions: readonly WaterInteraction[], timeMs: number): void {
+    for (const interaction of interactions) {
+      const strength = clamp(Math.abs(interaction.strength), 0.05, 1.6);
+
+      if (interaction.phase === "surface-impact") {
+        const surfaceHeight = clamp(0.11 + interaction.radius * 1.95 + strength * 0.028, 0.12, 0.27);
+        this.queueSpriteEffect({
+          id: this.nextSpriteEffectId++,
+          kind: "entry-surface",
+          textureUrl: waterEffectTextureUrls.entrySurface,
+          position: {
+            x: interaction.x,
+            y: clamp(interaction.y - surfaceHeight * 0.08, 0, 1),
+          },
+          size: {
+            x: clamp(interaction.radius * 5.1 + strength * 0.02, 0.13, 0.34),
+            y: surfaceHeight,
+          },
+          startMs: timeMs,
+          durationMs: 560,
+          opacity: clamp(0.74 + strength * 0.14, 0, 0.96),
+          rotationRadians: 0,
+          facing: this.nextRandom() < 0.5 ? -1 : 1,
+        });
+
+        const underwaterHeight = clamp(0.15 + interaction.radius * 3.1 + strength * 0.032, 0.17, 0.34);
+        this.queueSpriteEffect({
+          id: this.nextSpriteEffectId++,
+          kind: "entry-underwater",
+          textureUrl: waterEffectTextureUrls.entryUnderwater,
+          position: {
+            x: interaction.x,
+            y: clamp(interaction.y + underwaterHeight * 0.36, 0, 1),
+          },
+          size: {
+            x: clamp(interaction.radius * 4.0 + strength * 0.012, 0.10, 0.24),
+            y: underwaterHeight,
+          },
+          startMs: timeMs,
+          durationMs: 640,
+          opacity: clamp(0.56 + strength * 0.18, 0, 0.86),
+          rotationRadians: 0,
+          facing: this.nextRandom() < 0.5 ? -1 : 1,
+        });
+      } else {
+        const loopHeight = clamp(0.09 + interaction.radius * 2.15 + strength * 0.024, 0.10, 0.22);
+        this.queueSpriteEffect({
+          id: this.nextSpriteEffectId++,
+          kind: "underwater-loop",
+          textureUrl: waterEffectTextureUrls.underwaterLoop,
+          position: {
+            x: interaction.x,
+            y: clamp(interaction.y, 0, 1),
+          },
+          size: {
+            x: clamp(interaction.radius * 2.6 + strength * 0.012, 0.075, 0.18),
+            y: loopHeight,
+          },
+          startMs: timeMs,
+          durationMs: 720,
+          opacity: clamp(0.36 + strength * 0.22, 0, 0.72),
+          rotationRadians: (this.nextRandom() - 0.5) * 0.12,
+          facing: this.nextRandom() < 0.5 ? -1 : 1,
+        });
+      }
+    }
+  }
+
+  private queueSpriteEffect(effect: WaterSpriteEffect): void {
+    const active = this.activeSpriteEffects.length >= maxWaterSpriteEffects
+      ? this.activeSpriteEffects.slice(1)
+      : this.activeSpriteEffects;
+    this.activeSpriteEffects = [...active, effect];
+  }
+
+  private prepareSpriteEffectDraws(width: number, height: number, timeMs: number): void {
+    const aspectScale = height / Math.max(1, width);
+    const activeEffects = this.activeSpriteEffects.filter((effect) => timeMs - effect.startMs < effect.durationMs);
+    const draws: WaterSpriteEffectDraw[] = [];
+
+    for (const effect of sortSpriteEffects(activeEffects)) {
+      const texture = this.spriteEffectTextureCache.get(effect.textureUrl);
+
+      if (!texture) {
+        continue;
+      }
+
+      const paramsBuffer = this.ensureSpriteEffectParamsBuffer(draws.length);
+      this.writeSpriteEffectParams(paramsBuffer, effect, timeMs, aspectScale);
+      draws.push({
+        bindGroup: this.device.createBindGroup({
+          label: `Combat field water sprite effect bind group ${effect.id}`,
+          layout: this.spriteEffectBindGroupLayout,
+          entries: [
+            { binding: 0, resource: { buffer: paramsBuffer } },
+            { binding: 1, resource: texture.view },
+            { binding: 2, resource: this.spriteEffectSampler },
+          ],
+        }),
+      });
+    }
+
+    this.activeSpriteEffects = activeEffects;
+    this.spriteEffectDraws = draws;
+  }
+
+  private renderSpriteEffects(pass: GPURenderPassEncoder): void {
+    if (this.spriteEffectDraws.length === 0) {
+      return;
+    }
+
+    pass.setPipeline(this.spriteEffectPipeline);
+
+    for (const draw of this.spriteEffectDraws) {
+      pass.setBindGroup(0, draw.bindGroup);
+      pass.draw(6);
+    }
+  }
+
+  private ensureSpriteEffectParamsBuffer(index: number): GPUBuffer {
+    const existing = this.spriteEffectParamsBuffers[index];
+
+    if (existing) {
+      return existing;
+    }
+
+    const buffer = this.device.createBuffer({
+      label: `Combat field water sprite effect params ${index}`,
+      size: this.spriteEffectParamsData.byteLength,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    this.spriteEffectParamsBuffers[index] = buffer;
+    return buffer;
+  }
+
+  private writeSpriteEffectParams(
+    buffer: GPUBuffer,
+    effect: WaterSpriteEffect,
+    timeMs: number,
+    aspectScale: number,
+  ): void {
+    const ageRatio = clamp((timeMs - effect.startMs) / Math.max(1, effect.durationMs), 0, 0.999);
+    const frameIndex = Math.min(waterEffectFrameCount - 1, Math.floor(ageRatio * waterEffectFrameCount));
+    const opacity = effect.opacity * effectOpacity(effect.kind, ageRatio);
+
+    this.spriteEffectParamsData.fill(0);
+    this.spriteEffectParamsData[0] = effect.position.x;
+    this.spriteEffectParamsData[1] = effect.position.y;
+    this.spriteEffectParamsData[2] = effect.size.x * aspectScale;
+    this.spriteEffectParamsData[3] = effect.size.y;
+    this.spriteEffectParamsData[4] = frameIndex;
+    this.spriteEffectParamsData[5] = waterEffectFrameCount;
+    this.spriteEffectParamsData[6] = opacity;
+    this.spriteEffectParamsData[7] = 0;
+    this.spriteEffectParamsData[8] = effect.rotationRadians;
+    this.spriteEffectParamsData[9] = effect.facing;
+    this.spriteEffectParamsData[10] = 0;
+    this.spriteEffectParamsData[11] = 0;
+    this.device.queue.writeBuffer(buffer, 0, this.spriteEffectParamsData);
   }
 
   private spawnInteractionParticles(
@@ -560,6 +829,35 @@ function calculateNextParticleRenderCount(currentCount: number, spawnStart: numb
   return Math.min(maxParticles, Math.max(currentCount, spawnStart + spawnCount));
 }
 
+function sortSpriteEffects(effects: readonly WaterSpriteEffect[]): readonly WaterSpriteEffect[] {
+  return [...effects].sort((a, b) => {
+    const layerDelta = spriteEffectLayer(a.kind) - spriteEffectLayer(b.kind);
+    return layerDelta !== 0 ? layerDelta : a.position.y - b.position.y;
+  });
+}
+
+function spriteEffectLayer(kind: WaterSpriteEffectKind): number {
+  switch (kind) {
+    case "entry-underwater":
+      return 0;
+    case "underwater-loop":
+      return 1;
+    case "entry-surface":
+      return 2;
+  }
+}
+
+function effectOpacity(kind: WaterSpriteEffectKind, ageRatio: number): number {
+  switch (kind) {
+    case "entry-surface":
+      return 1 - smoothstep(0.72, 1, ageRatio) * 0.5;
+    case "entry-underwater":
+      return (1 - smoothstep(0.78, 1, ageRatio)) * smoothstep(0, 0.12, ageRatio);
+    case "underwater-loop":
+      return smoothstep(0, 0.18, ageRatio) * (1 - smoothstep(0.72, 1, ageRatio));
+  }
+}
+
 function isWaterInteractiveSprite(sprite: RenderableSprite): boolean {
   return sprite.kind === "player" || sprite.kind === "item";
 }
@@ -577,4 +875,9 @@ function encodeEnvironmentKind(kind: BattleEnvironmentVisuals["kind"]): number {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+function smoothstep(edge0: number, edge1: number, value: number): number {
+  const t = clamp((value - edge0) / Math.max(0.0001, edge1 - edge0), 0, 1);
+  return t * t * (3 - 2 * t);
 }
