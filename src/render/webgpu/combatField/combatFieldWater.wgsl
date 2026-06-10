@@ -3,11 +3,18 @@ struct WaterParams {
   surface: vec4f,
   environment: vec4f,
   effects: vec4f,
+  particles: vec4f,
+};
+
+struct WaterParticleGpu {
+  data0: vec4f,
+  data1: vec4f,
 };
 
 @group(0) @binding(0) var<uniform> params: WaterParams;
 @group(0) @binding(1) var<storage, read> springs: array<f32>;
 @group(0) @binding(2) var<storage, read> interactions: array<vec4f>;
+@group(0) @binding(3) var<storage, read> particles: array<WaterParticleGpu>;
 
 struct VertexOut {
   @builtin(position) position: vec4f,
@@ -34,9 +41,14 @@ fn fragmentMain(@builtin(position) position: vec4f) -> @location(0) vec4f {
   let wavePx = waterWavePx(uv.x, time);
   let waterStart = clamp(params.surface.x, 0.0, 0.98);
   let surfaceY = clamp(waterStart - wavePx / canvasSize.y, 0.0, 1.0);
+  let particle = particleLayer(uv, canvasSize, surfaceY);
 
   if (uv.y < surfaceY) {
-    discard;
+    if (particle.a <= 0.01) {
+      discard;
+    }
+
+    return particle;
   }
 
   let depth = clamp((uv.y - surfaceY) / max(0.001, 1.0 - surfaceY), 0.0, 1.0);
@@ -99,6 +111,7 @@ fn fragmentMain(@builtin(position) position: vec4f) -> @location(0) vec4f {
   color += vec3f(0.46, 0.82, 0.96) * ringRipple * smoothstep(0.82, 0.0, depth) * 0.26;
   color += vec3f(0.68, 0.92, 1.0) * bubbles * smoothstep(0.95, 0.02, depth) * 0.42;
   color += vec3f(0.72, 0.26, 0.10) * heatGlow * smoothstep(0.42, 0.0, depth);
+  color = mix(color, particle.rgb, particle.a);
 
   let frost = clamp(params.effects.x, 0.0, 1.0);
   if (frost > 0.001) {
@@ -108,12 +121,12 @@ fn fragmentMain(@builtin(position) position: vec4f) -> @location(0) vec4f {
 
   let sideVolumeAlpha = params.surface.y * mix(0.50, 0.82, smoothstep(0.0, 0.9, depth));
   let surfaceAlpha = surfaceSkin * 0.16 + disturbance * edge * 0.08 + ringRipple * 0.04;
-  let alpha = clamp(sideVolumeAlpha + surfaceAlpha, 0.0, 0.84);
+  let alpha = clamp(sideVolumeAlpha + surfaceAlpha + particle.a * 0.5, 0.0, 0.88);
   return vec4f(max(color, vec3f(0.0)), alpha);
 }
 
 fn waterWavePx(x: f32, time: f32) -> f32 {
-  return proceduralWave(x, time) + springWave(x) * 1.65;
+  return proceduralWave(x, time) + detailWave(x, time) + springWave(x) * 1.85 + springDetailWave(x) * 0.42;
 }
 
 fn waterSlope(x: f32, time: f32, canvasSize: vec2f) -> f32 {
@@ -121,6 +134,63 @@ fn waterSlope(x: f32, time: f32, canvasSize: vec2f) -> f32 {
   let left = waterWavePx(clamp(x - dx, 0.0, 0.999), time);
   let right = waterWavePx(clamp(x + dx, 0.0, 0.999), time);
   return (right - left) / (dx * 2.0);
+}
+
+fn particleLayer(uv: vec2f, canvasSize: vec2f, surfaceY: f32) -> vec4f {
+  let count = min(u32(params.particles.x), 160u);
+  let aspect = canvasSize.x / max(1.0, canvasSize.y);
+  var color = vec3f(0.0);
+  var alpha = 0.0;
+
+  for (var i = 0u; i < 160u; i = i + 1u) {
+    if (i >= count) {
+      break;
+    }
+
+    let particle = particles[i];
+    let particleColor = shadeParticle(uv, aspect, surfaceY, particle);
+    color = mix(color, particleColor.rgb, particleColor.a * (1.0 - alpha));
+    alpha = clamp(alpha + particleColor.a * (1.0 - alpha), 0.0, 1.0);
+  }
+
+  return vec4f(color, alpha);
+}
+
+fn shadeParticle(uv: vec2f, aspect: f32, surfaceY: f32, particle: WaterParticleGpu) -> vec4f {
+  let center = particle.data0.xy;
+  let radius = max(0.001, particle.data0.z);
+  let kind = particle.data0.w;
+  let age = clamp(particle.data1.x, 0.0, 1.0);
+  let seed = particle.data1.y;
+  let strength = clamp(particle.data1.z, 0.0, 1.8);
+  let velocityY = particle.data1.w;
+  let delta = vec2f((uv.x - center.x) * aspect, uv.y - center.y);
+  let distanceToParticle = length(delta);
+  let lifeFade = pow(1.0 - age, 1.35);
+
+  if (kind < 0.5) {
+    let core = 1.0 - smoothstep(radius * 0.34, radius, distanceToParticle);
+    let ring = (1.0 - smoothstep(radius, radius * 1.65, distanceToParticle)) * smoothstep(radius * 0.22, radius, distanceToParticle);
+    let surfaceFade = 1.0 - smoothstep(0.0, 0.07, abs(center.y - surfaceY));
+    let broken = 0.55 + 0.45 * random(floor((uv + seed) * vec2f(180.0, 90.0)));
+    let alpha = (core * 0.62 + ring * 0.46) * lifeFade * surfaceFade * broken * clamp(0.45 + strength * 0.38, 0.0, 1.0);
+    return vec4f(vec3f(0.84, 0.95, 1.0), clamp(alpha, 0.0, 0.82));
+  }
+
+  if (kind < 1.5) {
+    let core = 1.0 - smoothstep(radius * 0.2, radius, distanceToParticle);
+    let trailOffset = vec2f(0.0, clamp(velocityY * 0.035, -0.035, 0.035));
+    let trailDistance = length(vec2f(delta.x * 1.8, delta.y - trailOffset.y));
+    let trail = (1.0 - smoothstep(radius * 0.8, radius * 2.8, trailDistance)) * smoothstep(radius * 0.2, radius * 1.1, abs(delta.y));
+    let alpha = (core * 0.9 + trail * 0.22) * lifeFade * clamp(0.55 + strength * 0.35, 0.0, 1.0);
+    let tint = mix(vec3f(0.62, 0.86, 1.0), vec3f(0.94, 0.99, 1.0), core);
+    return vec4f(tint, clamp(alpha, 0.0, 0.9));
+  }
+
+  let soft = 1.0 - smoothstep(radius * 0.25, radius * 2.3, distanceToParticle);
+  let wisps = 0.7 + 0.3 * sin((uv.x + uv.y + seed) * 80.0 + age * 7.0);
+  let alpha = soft * lifeFade * wisps * clamp(0.18 + strength * 0.16, 0.0, 0.42);
+  return vec4f(vec3f(0.78, 0.90, 0.95), clamp(alpha, 0.0, 0.38));
 }
 
 fn interactionSummary(uv: vec2f, canvasSize: vec2f, surfaceY: f32) -> vec4f {
@@ -173,6 +243,14 @@ fn springWave(x: f32) -> f32 {
   return mix(springs[left], springs[right], fract(scaled));
 }
 
+fn springDetailWave(x: f32) -> f32 {
+  let dx = 0.004;
+  let left = springWave(clamp(x - dx, 0.0, 0.999));
+  let center = springWave(x);
+  let right = springWave(clamp(x + dx, 0.0, 0.999));
+  return (center * 2.0 - left - right) * 0.55;
+}
+
 fn proceduralWave(x: f32, time: f32) -> f32 {
   let activity = clamp(params.surface.z, 0.0, 1.0);
   let wind = params.environment.x;
@@ -181,7 +259,20 @@ fn proceduralWave(x: f32, time: f32) -> f32 {
   let waveA = sin(x * 19.0 + time * windSpeed * direction);
   let waveB = sin(x * 43.0 - time * 1.35 + 1.7);
   let waveC = sin(x * 91.0 + time * 2.1 + 0.6);
-  return (waveA * 4.8 + waveB * 2.3 + waveC * 0.9) * activity;
+  let waveD = sin(x * 137.0 - time * (2.8 + abs(wind) * 0.7) + 2.4);
+  return (waveA * 4.4 + waveB * 2.2 + waveC * 0.95 + waveD * 0.38) * activity;
+}
+
+fn detailWave(x: f32, time: f32) -> f32 {
+  let activity = clamp(params.surface.z, 0.0, 1.0);
+  let interactionEnergy = clamp(params.particles.y, 0.0, 1.0);
+  let wind = params.environment.x;
+  let direction = select(-1.0, 1.0, wind >= 0.0);
+  let noiseA = noise(vec2f(x * 28.0 + time * 0.2, time * 0.07));
+  let capillaryA = sin(x * 168.0 + time * 3.8 * direction + noiseA * 2.8);
+  let capillaryB = sin(x * 241.0 - time * 4.6 + noise(vec2f(x * 16.0, time * 0.13)) * 2.0);
+  let capillaryC = sin(x * 317.0 + time * (2.5 + abs(wind) * 1.4));
+  return (capillaryA * 0.46 + capillaryB * 0.28 + capillaryC * 0.16) * activity * (0.55 + interactionEnergy * 0.85);
 }
 
 fn sideLightShafts(uv: vec2f, depth: f32, time: f32) -> f32 {

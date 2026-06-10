@@ -6,9 +6,11 @@ import type { CombatMaterialName, MaterialEmitter } from "../../../features/comb
 import waterShaderSource from "./combatFieldWater.wgsl?raw";
 import { WaterSurfaceSimulation, type WaterImpulseKind } from "./WaterSurfaceSimulation";
 
-const springColumns = 96;
+const springColumns = 160;
 const maxInteractions = 24;
 const interactionStride = 4;
+const maxParticles = 160;
+const particleStride = 8;
 
 interface WaterInteraction {
   readonly x: number;
@@ -25,18 +27,38 @@ interface SpriteSample {
   readonly timeMs: number;
 }
 
+type WaterParticleKind = "foam" | "droplet" | "steam";
+
+interface WaterParticle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  ageMs: number;
+  lifeMs: number;
+  radius: number;
+  strength: number;
+  kind: WaterParticleKind;
+  seed: number;
+}
+
 export class CombatFieldWaterRenderer {
   private readonly simulation = new WaterSurfaceSimulation({ columns: springColumns });
   private readonly paramsBuffer: GPUBuffer;
   private readonly springBuffer: GPUBuffer;
   private readonly interactionBuffer: GPUBuffer;
+  private readonly particleBuffer: GPUBuffer;
   private readonly bindGroup: GPUBindGroup;
   private readonly pipeline: GPURenderPipeline;
-  private readonly paramsData = new Float32Array(16);
+  private readonly paramsData = new Float32Array(20);
   private readonly interactionData = new Float32Array(maxInteractions * interactionStride);
+  private readonly particleData = new Float32Array(maxParticles * particleStride);
+  private readonly particles: WaterParticle[] = [];
   private readonly spriteSamples = new Map<string, SpriteSample>();
   private readonly spriteWakeTimes = new Map<string, number>();
   private lastTimeMs: number | null = null;
+  private randomState = 0x9e37_79b9;
+  private particleCursor = 0;
 
   constructor(
     private readonly device: GPUDevice,
@@ -57,6 +79,11 @@ export class CombatFieldWaterRenderer {
       size: this.interactionData.byteLength,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
+    this.particleBuffer = device.createBuffer({
+      label: "Combat field water particles",
+      size: this.particleData.byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
 
     const shaderModule = device.createShaderModule({
       label: "Combat field water shader",
@@ -68,6 +95,7 @@ export class CombatFieldWaterRenderer {
         { binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
         { binding: 1, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "read-only-storage" } },
         { binding: 2, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "read-only-storage" } },
+        { binding: 3, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "read-only-storage" } },
       ],
     });
 
@@ -114,6 +142,7 @@ export class CombatFieldWaterRenderer {
         { binding: 0, resource: { buffer: this.paramsBuffer } },
         { binding: 1, resource: { buffer: this.springBuffer } },
         { binding: 2, resource: { buffer: this.interactionBuffer } },
+        { binding: 3, resource: { buffer: this.particleBuffer } },
       ],
     });
   }
@@ -128,11 +157,14 @@ export class CombatFieldWaterRenderer {
     const deltaMs = this.lastTimeMs === null ? 16.6667 : Math.min(50, Math.max(0, timeMs - this.lastTimeMs));
     this.lastTimeMs = timeMs;
     const interactions = this.collectInteractions(snapshot, deltaMs, timeMs);
+    this.spawnInteractionParticles(interactions, visuals, deltaMs);
+    this.updateParticles(deltaMs, visuals);
     this.simulation.addRainRipples(deltaMs, visuals.rainRate);
     this.applyInteractionImpulses(interactions);
     this.simulation.update(deltaMs);
     this.device.queue.writeBuffer(this.springBuffer, 0, this.simulation.readHeights());
     this.writeInteractionData(interactions);
+    this.writeParticleData();
     this.writeParams(width, height, visuals, timeMs, interactions);
 
     pass.setPipeline(this.pipeline);
@@ -144,6 +176,7 @@ export class CombatFieldWaterRenderer {
     this.paramsBuffer.destroy();
     this.springBuffer.destroy();
     this.interactionBuffer.destroy();
+    this.particleBuffer.destroy();
   }
 
   private collectInteractions(snapshot: RenderSnapshot, deltaMs: number, timeMs: number): readonly WaterInteraction[] {
@@ -238,6 +271,76 @@ export class CombatFieldWaterRenderer {
     }
   }
 
+  private spawnInteractionParticles(
+    interactions: readonly WaterInteraction[],
+    visuals: BattleEnvironmentVisuals,
+    deltaMs: number,
+  ): void {
+    const frameScale = clamp(deltaMs / 16.6667, 0.35, 1.35);
+
+    for (const interaction of interactions) {
+      const strength = clamp(Math.abs(interaction.strength), 0.05, 1.8);
+      const foamCount = Math.min(5, Math.max(1, Math.round(strength * frameScale * 2.4)));
+      const dropletCount = interaction.kind === "wake" ? 1 : Math.min(4, Math.round(strength * frameScale * 1.7));
+
+      for (let index = 0; index < foamCount; index += 1) {
+        this.spawnParticle(createFoamParticle(interaction, visuals.waterStart, visuals.windX, this.nextRandom()));
+      }
+
+      if (interaction.kind === "heat") {
+        const steamCount = Math.min(3, Math.max(1, Math.round(strength * frameScale * 1.35)));
+        for (let index = 0; index < steamCount; index += 1) {
+          this.spawnParticle(createSteamParticle(interaction, visuals.waterStart, visuals.windX, this.nextRandom()));
+        }
+      } else {
+        for (let index = 0; index < dropletCount; index += 1) {
+          this.spawnParticle(createDropletParticle(interaction, visuals.waterStart, visuals.windX, this.nextRandom()));
+        }
+      }
+    }
+  }
+
+  private spawnParticle(particle: WaterParticle): void {
+    if (this.particles.length < maxParticles) {
+      this.particles.push(particle);
+      return;
+    }
+
+    this.particles[this.particleCursor] = particle;
+    this.particleCursor = (this.particleCursor + 1) % maxParticles;
+  }
+
+  private updateParticles(deltaMs: number, visuals: BattleEnvironmentVisuals): void {
+    const deltaSeconds = Math.max(0, deltaMs) / 1_000;
+    const waterStart = visuals.waterStart;
+    const wind = visuals.windX;
+
+    for (let index = this.particles.length - 1; index >= 0; index -= 1) {
+      const particle = this.particles[index]!;
+      particle.ageMs += deltaMs;
+
+      if (particle.ageMs >= particle.lifeMs) {
+        this.particles.splice(index, 1);
+        continue;
+      }
+
+      if (particle.kind === "droplet") {
+        particle.vy += 0.78 * deltaSeconds;
+        particle.vx += wind * 0.028 * deltaSeconds;
+      } else if (particle.kind === "steam") {
+        particle.vy -= 0.03 * deltaSeconds;
+        particle.vx += wind * 0.035 * deltaSeconds;
+        particle.radius += 0.004 * deltaSeconds;
+      } else {
+        particle.vy += (waterStart - particle.y) * 0.16 * deltaSeconds;
+        particle.vx += wind * 0.018 * deltaSeconds;
+      }
+
+      particle.x = wrap01(particle.x + particle.vx * deltaSeconds);
+      particle.y = clamp(particle.y + particle.vy * deltaSeconds, 0, 1.08);
+    }
+  }
+
   private writeInteractionData(interactions: readonly WaterInteraction[]): void {
     this.interactionData.fill(0);
     interactions.slice(0, maxInteractions).forEach((interaction, index) => {
@@ -248,6 +351,23 @@ export class CombatFieldWaterRenderer {
       this.interactionData[offset + 3] = interaction.strength;
     });
     this.device.queue.writeBuffer(this.interactionBuffer, 0, this.interactionData);
+  }
+
+  private writeParticleData(): void {
+    this.particleData.fill(0);
+    this.particles.slice(0, maxParticles).forEach((particle, index) => {
+      const offset = index * particleStride;
+      const ageRatio = clamp(particle.ageMs / Math.max(1, particle.lifeMs), 0, 1);
+      this.particleData[offset] = particle.x;
+      this.particleData[offset + 1] = particle.y;
+      this.particleData[offset + 2] = particle.radius;
+      this.particleData[offset + 3] = encodeParticleKind(particle.kind);
+      this.particleData[offset + 4] = ageRatio;
+      this.particleData[offset + 5] = particle.seed;
+      this.particleData[offset + 6] = particle.strength;
+      this.particleData[offset + 7] = particle.vy;
+    });
+    this.device.queue.writeBuffer(this.particleBuffer, 0, this.particleData);
   }
 
   private writeParams(
@@ -278,7 +398,96 @@ export class CombatFieldWaterRenderer {
       0,
       1,
     );
+    this.paramsData[16] = Math.min(maxParticles, this.particles.length);
+    this.paramsData[17] = this.paramsData[15];
+    this.paramsData[18] = 0;
+    this.paramsData[19] = 0;
     this.device.queue.writeBuffer(this.paramsBuffer, 0, this.paramsData);
+  }
+
+  private nextRandom(): number {
+    this.randomState = (1664525 * this.randomState + 1013904223) >>> 0;
+    return this.randomState / 0x1_0000_0000;
+  }
+}
+
+function createFoamParticle(
+  interaction: WaterInteraction,
+  waterStart: number,
+  windX: number,
+  seed: number,
+): WaterParticle {
+  const offset = (seed - 0.5) * interaction.radius * 1.8;
+  const strength = clamp(Math.abs(interaction.strength), 0.08, 1.5);
+
+  return {
+    x: wrap01(interaction.x + offset),
+    y: clamp(waterStart + (seed - 0.52) * 0.012, 0, 1),
+    vx: (seed - 0.5) * 0.055 + windX * 0.018,
+    vy: 0.005 + seed * 0.012,
+    ageMs: 0,
+    lifeMs: 520 + seed * 760,
+    radius: clamp(0.004 + interaction.radius * 0.12 + strength * 0.0025, 0.004, 0.018),
+    strength,
+    kind: "foam",
+    seed,
+  };
+}
+
+function createDropletParticle(
+  interaction: WaterInteraction,
+  waterStart: number,
+  windX: number,
+  seed: number,
+): WaterParticle {
+  const side = seed < 0.5 ? -1 : 1;
+  const strength = clamp(Math.abs(interaction.strength), 0.08, 1.6);
+  const lift = 0.18 + strength * 0.16 + seed * 0.08;
+
+  return {
+    x: wrap01(interaction.x + side * interaction.radius * (0.15 + seed * 0.55)),
+    y: clamp(Math.min(interaction.y, waterStart) - 0.004 - seed * 0.012, 0, 1),
+    vx: side * (0.045 + seed * 0.09) + windX * 0.026,
+    vy: -lift,
+    ageMs: 0,
+    lifeMs: 360 + seed * 420,
+    radius: clamp(0.0028 + strength * 0.0035 + interaction.radius * 0.035, 0.0025, 0.012),
+    strength,
+    kind: "droplet",
+    seed,
+  };
+}
+
+function createSteamParticle(
+  interaction: WaterInteraction,
+  waterStart: number,
+  windX: number,
+  seed: number,
+): WaterParticle {
+  const strength = clamp(Math.abs(interaction.strength), 0.08, 1.4);
+
+  return {
+    x: wrap01(interaction.x + (seed - 0.5) * interaction.radius * 1.3),
+    y: clamp(waterStart - 0.006 - seed * 0.018, 0, 1),
+    vx: (seed - 0.5) * 0.05 + windX * 0.04,
+    vy: -(0.035 + seed * 0.04),
+    ageMs: 0,
+    lifeMs: 560 + seed * 500,
+    radius: clamp(0.008 + strength * 0.004 + seed * 0.006, 0.008, 0.024),
+    strength,
+    kind: "steam",
+    seed,
+  };
+}
+
+function encodeParticleKind(kind: WaterParticleKind): number {
+  switch (kind) {
+    case "foam":
+      return 0;
+    case "droplet":
+      return 1;
+    case "steam":
+      return 2;
   }
 }
 
@@ -362,4 +571,8 @@ function encodeEnvironmentKind(kind: BattleEnvironmentVisuals["kind"]): number {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+function wrap01(value: number): number {
+  return ((value % 1) + 1) % 1;
 }
