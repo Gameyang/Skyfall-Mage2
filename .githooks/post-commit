@@ -20,8 +20,26 @@ if [ -z "$upstream" ]; then
   exit 0
 fi
 
-if ! git diff --quiet || ! git diff --cached --quiet; then
-  echo "[post-commit] uncommitted changes remain; skipping auto push." >&2
+if [ -z "${SKYFALL_POST_COMMIT_AUTO_COMMIT:-}" ]; then
+  status="$(git status --porcelain)"
+
+  if [ -n "$status" ]; then
+    message="${SKYFALL_AUTO_COMMIT_MESSAGE:-chore: auto commit remaining changes}"
+    body="Created automatically by .githooks/post-commit before auto push."
+
+    echo "[post-commit] uncommitted changes remain; creating auto commit." >&2
+    git add -A
+
+    if ! git diff --cached --quiet; then
+      SKYFALL_POST_COMMIT_AUTO_COMMIT=1 SKYFALL_SKIP_AUTO_PUSH=1 git commit -m "$message" -m "$body"
+    else
+      echo "[post-commit] no staged changes after git add; skipping auto commit." >&2
+    fi
+  fi
+fi
+
+if [ -n "$(git status --porcelain)" ]; then
+  echo "[post-commit] uncommitted changes remain after auto commit; skipping auto push." >&2
   exit 0
 fi
 
