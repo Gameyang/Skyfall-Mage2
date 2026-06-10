@@ -2,6 +2,7 @@
 // Owner: render/webgpu/combatField
 
 import type { BattleEnvironmentVisuals, RenderSnapshot, RenderableSprite } from "../../snapshots/RenderSnapshot";
+import particleShaderSource from "./combatFieldWaterParticles.wgsl?raw";
 import waterShaderSource from "./combatFieldWater.wgsl?raw";
 import { WaterSurfaceSimulation, type WaterImpulseKind } from "./WaterSurfaceSimulation";
 
@@ -9,7 +10,8 @@ const springColumns = 320;
 const maxInteractions = 24;
 const interactionStride = 4;
 const maxParticles = 1024;
-const particleStride = 8;
+const particleStride = 12;
+const particleWorkgroupSize = 64;
 
 type WaterInteractionPhase = "surface-impact" | "submerged-body";
 
@@ -51,18 +53,24 @@ export class CombatFieldWaterRenderer {
   private readonly springBuffer: GPUBuffer;
   private readonly interactionBuffer: GPUBuffer;
   private readonly particleBuffer: GPUBuffer;
+  private readonly spawnBuffer: GPUBuffer;
   private readonly bindGroup: GPUBindGroup;
+  private readonly particleComputeBindGroup: GPUBindGroup;
   private readonly pipeline: GPURenderPipeline;
+  private readonly particleUpdatePipeline: GPUComputePipeline;
+  private readonly particleSpawnPipeline: GPUComputePipeline;
   private readonly paramsData = new Float32Array(20);
   private readonly interactionData = new Float32Array(maxInteractions * interactionStride);
-  private readonly particleData = new Float32Array(maxParticles * particleStride);
-  private readonly particles: WaterParticle[] = [];
+  private readonly spawnData = new Float32Array(maxParticles * particleStride);
   private readonly spriteSamples = new Map<string, SpriteSample>();
   private readonly spriteWakeTimes = new Map<string, number>();
   private readonly spriteFoamTimes = new Map<string, number>();
   private lastTimeMs: number | null = null;
   private randomState = 0x9e37_79b9;
+  private pendingSpawnCount = 0;
   private particleCursor = 0;
+  private particleRenderCount = 0;
+  private shouldRender = false;
 
   constructor(
     private readonly device: GPUDevice,
@@ -85,13 +93,22 @@ export class CombatFieldWaterRenderer {
     });
     this.particleBuffer = device.createBuffer({
       label: "Combat field water particles",
-      size: this.particleData.byteLength,
+      size: maxParticles * particleStride * Float32Array.BYTES_PER_ELEMENT,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    this.spawnBuffer = device.createBuffer({
+      label: "Combat field water particle spawns",
+      size: this.spawnData.byteLength,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
 
     const shaderModule = device.createShaderModule({
       label: "Combat field water shader",
       code: waterShaderSource,
+    });
+    const particleShaderModule = device.createShaderModule({
+      label: "Combat field water particle compute shader",
+      code: particleShaderSource,
     });
     const bindGroupLayout = device.createBindGroupLayout({
       label: "Combat field water bind group layout",
@@ -100,6 +117,14 @@ export class CombatFieldWaterRenderer {
         { binding: 1, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "read-only-storage" } },
         { binding: 2, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "read-only-storage" } },
         { binding: 3, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "read-only-storage" } },
+      ],
+    });
+    const particleComputeBindGroupLayout = device.createBindGroupLayout({
+      label: "Combat field water particle compute bind group layout",
+      entries: [
+        { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: "uniform" } },
+        { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
+        { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: "read-only-storage" } },
       ],
     });
 
@@ -138,6 +163,28 @@ export class CombatFieldWaterRenderer {
         topology: "triangle-list",
       },
     });
+    this.particleUpdatePipeline = device.createComputePipeline({
+      label: "Combat field water particle update pipeline",
+      layout: device.createPipelineLayout({
+        label: "Combat field water particle update pipeline layout",
+        bindGroupLayouts: [particleComputeBindGroupLayout],
+      }),
+      compute: {
+        module: particleShaderModule,
+        entryPoint: "updateParticles",
+      },
+    });
+    this.particleSpawnPipeline = device.createComputePipeline({
+      label: "Combat field water particle spawn pipeline",
+      layout: device.createPipelineLayout({
+        label: "Combat field water particle spawn pipeline layout",
+        bindGroupLayouts: [particleComputeBindGroupLayout],
+      }),
+      compute: {
+        module: particleShaderModule,
+        entryPoint: "spawnParticles",
+      },
+    });
 
     this.bindGroup = device.createBindGroup({
       label: "Combat field water bind group",
@@ -149,27 +196,54 @@ export class CombatFieldWaterRenderer {
         { binding: 3, resource: { buffer: this.particleBuffer } },
       ],
     });
+    this.particleComputeBindGroup = device.createBindGroup({
+      label: "Combat field water particle compute bind group",
+      layout: particleComputeBindGroupLayout,
+      entries: [
+        { binding: 0, resource: { buffer: this.paramsBuffer } },
+        { binding: 1, resource: { buffer: this.particleBuffer } },
+        { binding: 2, resource: { buffer: this.spawnBuffer } },
+      ],
+    });
   }
 
-  render(pass: GPURenderPassEncoder, width: number, height: number, snapshot: RenderSnapshot, timeMs: number): void {
+  prepare(encoder: GPUCommandEncoder, width: number, height: number, snapshot: RenderSnapshot, timeMs: number): void {
     const visuals = snapshot.environment;
 
     if (visuals.waterCoverage <= 0) {
+      this.shouldRender = false;
       return;
     }
 
+    this.shouldRender = true;
     const deltaMs = this.lastTimeMs === null ? 16.6667 : Math.min(50, Math.max(0, timeMs - this.lastTimeMs));
     this.lastTimeMs = timeMs;
+    this.pendingSpawnCount = 0;
     const interactions = this.collectInteractions(snapshot, timeMs);
     this.spawnInteractionParticles(interactions, visuals, deltaMs);
-    this.updateParticles(deltaMs, visuals);
     this.simulation.addRainRipples(deltaMs, visuals.rainRate);
     this.applyInteractionImpulses(interactions);
     this.simulation.update(deltaMs);
     this.device.queue.writeBuffer(this.springBuffer, 0, this.simulation.readHeights());
     this.writeInteractionData(interactions);
-    this.writeParticleData();
-    this.writeParams(width, height, visuals, timeMs, interactions);
+    this.writeSpawnData();
+    const spawnStart = this.particleCursor;
+    const previousParticleRenderCount = this.particleRenderCount;
+    const nextParticleRenderCount = calculateNextParticleRenderCount(
+      this.particleRenderCount,
+      spawnStart,
+      this.pendingSpawnCount,
+    );
+    this.writeParams(width, height, visuals, timeMs, interactions, deltaMs, spawnStart, this.pendingSpawnCount, nextParticleRenderCount);
+    this.dispatchParticleCompute(encoder, previousParticleRenderCount, this.pendingSpawnCount);
+    this.particleCursor = (spawnStart + this.pendingSpawnCount) % maxParticles;
+    this.particleRenderCount = nextParticleRenderCount;
+  }
+
+  render(pass: GPURenderPassEncoder): void {
+    if (!this.shouldRender) {
+      return;
+    }
 
     pass.setPipeline(this.pipeline);
     pass.setBindGroup(0, this.bindGroup);
@@ -181,6 +255,7 @@ export class CombatFieldWaterRenderer {
     this.springBuffer.destroy();
     this.interactionBuffer.destroy();
     this.particleBuffer.destroy();
+    this.spawnBuffer.destroy();
   }
 
   private collectInteractions(snapshot: RenderSnapshot, timeMs: number): readonly WaterInteraction[] {
@@ -315,56 +390,12 @@ export class CombatFieldWaterRenderer {
   }
 
   private spawnParticle(particle: WaterParticle): void {
-    if (this.particles.length < maxParticles) {
-      this.particles.push(particle);
+    if (this.pendingSpawnCount >= maxParticles) {
       return;
     }
 
-    this.particles[this.particleCursor] = particle;
-    this.particleCursor = (this.particleCursor + 1) % maxParticles;
-  }
-
-  private updateParticles(deltaMs: number, visuals: BattleEnvironmentVisuals): void {
-    const deltaSeconds = Math.max(0, deltaMs) / 1_000;
-    const waterStart = visuals.waterStart;
-    const wind = visuals.windX;
-
-    for (let index = this.particles.length - 1; index >= 0; index -= 1) {
-      const particle = this.particles[index]!;
-      particle.ageMs += deltaMs;
-
-      if (particle.ageMs >= particle.lifeMs) {
-        this.particles.splice(index, 1);
-        continue;
-      }
-
-      if (particle.kind === "spray") {
-        particle.vy += 0.92 * deltaSeconds;
-        particle.vx += wind * 0.028 * deltaSeconds;
-        if (particle.vy > 0 && particle.y >= waterStart + 0.003 && particle.ageMs > 80) {
-          this.particles.splice(index, 1);
-          continue;
-        }
-      } else if (particle.kind === "bubble") {
-        const wobble = Math.sin(particle.ageMs * 0.012 + particle.seed * 37.0);
-        particle.vx += (wobble * 0.026 + wind * 0.012) * deltaSeconds;
-        particle.vy = Math.max(-0.13, particle.vy - (0.072 + particle.strength * 0.028) * deltaSeconds);
-
-        if (particle.y <= waterStart + 0.004) {
-          particle.kind = "foam";
-          particle.y = waterStart + (particle.seed - 0.5) * 0.006;
-          particle.vy = 0;
-          particle.lifeMs = Math.max(particle.lifeMs, particle.ageMs + 620 + particle.seed * 380);
-        }
-      } else {
-        const drift = Math.sin(particle.ageMs * 0.009 + particle.seed * 53.0) * 0.014;
-        particle.vx += (drift + wind * 0.012) * deltaSeconds;
-        particle.vy += (waterStart - particle.y) * 0.10 * deltaSeconds;
-      }
-
-      particle.x = wrap01(particle.x + particle.vx * deltaSeconds);
-      particle.y = clamp(particle.y + particle.vy * deltaSeconds, 0, 1.08);
-    }
+    writeParticle(this.spawnData, this.pendingSpawnCount * particleStride, particle);
+    this.pendingSpawnCount += 1;
   }
 
   private writeInteractionData(interactions: readonly WaterInteraction[]): void {
@@ -379,21 +410,39 @@ export class CombatFieldWaterRenderer {
     this.device.queue.writeBuffer(this.interactionBuffer, 0, this.interactionData);
   }
 
-  private writeParticleData(): void {
-    this.particleData.fill(0);
-    this.particles.slice(0, maxParticles).forEach((particle, index) => {
-      const offset = index * particleStride;
-      const ageRatio = clamp(particle.ageMs / Math.max(1, particle.lifeMs), 0, 1);
-      this.particleData[offset] = particle.x;
-      this.particleData[offset + 1] = particle.y;
-      this.particleData[offset + 2] = particle.radius;
-      this.particleData[offset + 3] = encodeParticleKind(particle.kind);
-      this.particleData[offset + 4] = ageRatio;
-      this.particleData[offset + 5] = particle.seed;
-      this.particleData[offset + 6] = particle.strength;
-      this.particleData[offset + 7] = particle.vy;
+  private writeSpawnData(): void {
+    if (this.pendingSpawnCount <= 0) {
+      return;
+    }
+
+    this.device.queue.writeBuffer(this.spawnBuffer, 0, this.spawnData, 0, this.pendingSpawnCount * particleStride);
+  }
+
+  private dispatchParticleCompute(
+    encoder: GPUCommandEncoder,
+    previousParticleRenderCount: number,
+    spawnCount: number,
+  ): void {
+    if (previousParticleRenderCount <= 0 && spawnCount <= 0) {
+      return;
+    }
+
+    const pass = encoder.beginComputePass({
+      label: "Combat field water particle compute pass",
     });
-    this.device.queue.writeBuffer(this.particleBuffer, 0, this.particleData);
+    pass.setBindGroup(0, this.particleComputeBindGroup);
+
+    if (previousParticleRenderCount > 0) {
+      pass.setPipeline(this.particleUpdatePipeline);
+      pass.dispatchWorkgroups(Math.ceil(previousParticleRenderCount / particleWorkgroupSize));
+    }
+
+    if (spawnCount > 0) {
+      pass.setPipeline(this.particleSpawnPipeline);
+      pass.dispatchWorkgroups(Math.ceil(spawnCount / particleWorkgroupSize));
+    }
+
+    pass.end();
   }
 
   private writeParams(
@@ -402,6 +451,10 @@ export class CombatFieldWaterRenderer {
     visuals: BattleEnvironmentVisuals,
     timeMs: number,
     interactions: readonly WaterInteraction[],
+    deltaMs: number,
+    spawnStart: number,
+    spawnCount: number,
+    particleRenderCount: number,
   ): void {
     this.paramsData.fill(0);
     this.paramsData[0] = width;
@@ -419,15 +472,16 @@ export class CombatFieldWaterRenderer {
     this.paramsData[12] = visuals.frostFactor;
     this.paramsData[13] = visuals.lavaFactor;
     this.paramsData[14] = Math.min(maxInteractions, interactions.length);
-    this.paramsData[15] = clamp(
+    const interactionEnergy = clamp(
       interactions.reduce((sum, interaction) => sum + Math.abs(interaction.strength), 0) / 5,
       0,
       1,
     );
-    this.paramsData[16] = Math.min(maxParticles, this.particles.length);
-    this.paramsData[17] = this.paramsData[15];
-    this.paramsData[18] = 0;
-    this.paramsData[19] = 0;
+    this.paramsData[15] = Math.max(0, deltaMs) / 1_000;
+    this.paramsData[16] = particleRenderCount;
+    this.paramsData[17] = interactionEnergy;
+    this.paramsData[18] = spawnStart;
+    this.paramsData[19] = spawnCount;
     this.device.queue.writeBuffer(this.paramsBuffer, 0, this.paramsData);
   }
 
@@ -516,6 +570,33 @@ function encodeParticleKind(kind: WaterParticleKind): number {
     case "bubble":
       return 2;
   }
+}
+
+function writeParticle(data: Float32Array, offset: number, particle: WaterParticle): void {
+  data[offset] = particle.x;
+  data[offset + 1] = particle.y;
+  data[offset + 2] = particle.radius;
+  data[offset + 3] = encodeParticleKind(particle.kind);
+  data[offset + 4] = particle.vx;
+  data[offset + 5] = particle.vy;
+  data[offset + 6] = particle.ageMs;
+  data[offset + 7] = particle.lifeMs;
+  data[offset + 8] = particle.seed;
+  data[offset + 9] = particle.strength;
+  data[offset + 10] = 0;
+  data[offset + 11] = 0;
+}
+
+function calculateNextParticleRenderCount(currentCount: number, spawnStart: number, spawnCount: number): number {
+  if (spawnCount <= 0) {
+    return currentCount;
+  }
+
+  if (spawnCount >= maxParticles || spawnStart + spawnCount >= maxParticles) {
+    return maxParticles;
+  }
+
+  return Math.min(maxParticles, Math.max(currentCount, spawnStart + spawnCount));
 }
 
 function isWaterInteractiveSprite(sprite: RenderableSprite): boolean {

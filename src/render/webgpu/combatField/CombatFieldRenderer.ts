@@ -9,6 +9,7 @@ import { CombatSpriteRenderer } from "./CombatSpriteRenderer";
 import { CombatFieldBackgroundRenderer } from "./CombatFieldBackgroundRenderer";
 import { CombatFieldBloom } from "./CombatFieldBloom";
 import { CombatFieldWaterRenderer } from "./CombatFieldWaterRenderer";
+import { CombatWeaponParticleRenderer } from "./CombatWeaponParticleRenderer";
 import entityQueryShaderSource from "./combatFieldEntityQuery.wgsl?raw";
 import movementShaderSource from "./combatFieldMovement.wgsl?raw";
 import reactionShaderSource from "./combatFieldReaction.wgsl?raw";
@@ -29,6 +30,7 @@ export class CombatFieldRenderer {
   private readonly backgroundRenderer: CombatFieldBackgroundRenderer;
   private readonly waterRenderer: CombatFieldWaterRenderer;
   private readonly spriteRenderer: CombatSpriteRenderer;
+  private readonly weaponParticleRenderer: CombatWeaponParticleRenderer;
   private readonly paramsData = new Float32Array(12);
   private readonly emitterData = new Float32Array(CombatFieldRenderer.maxEmitters * materialEmitterStride);
 
@@ -130,6 +132,7 @@ export class CombatFieldRenderer {
     this.backgroundRenderer = new CombatFieldBackgroundRenderer(device, this.bloom.sceneFormat);
     this.waterRenderer = new CombatFieldWaterRenderer(device, this.bloom.sceneFormat);
     this.spriteRenderer = new CombatSpriteRenderer(device, this.bloom.sceneFormat);
+    this.weaponParticleRenderer = new CombatWeaponParticleRenderer(device, this.bloom.sceneFormat);
 
     const starterField = createStarterFieldCells(CombatFieldRenderer.gridWidth, CombatFieldRenderer.gridHeight);
     this.device.queue.writeBuffer(this.cellReadBuffer, 0, starterField);
@@ -147,9 +150,11 @@ export class CombatFieldRenderer {
   ): GPUCommandBuffer {
     this.writeFrameData(width, height, snapshot, timeMs, bloomIntensityScale);
     this.spriteRenderer.prepare(width, height, snapshot.sprites, timeMs);
+    this.weaponParticleRenderer.prepare(snapshot.weaponParticles);
     this.bloom.resize(width, height);
 
     const encoder = this.device.createCommandEncoder();
+    this.waterRenderer.prepare(encoder, width, height, snapshot, timeMs);
     const pass = encoder.beginRenderPass({
       colorAttachments: [
         {
@@ -165,7 +170,8 @@ export class CombatFieldRenderer {
     pass.setBindGroup(0, this.bindGroup);
     pass.draw(3);
     this.spriteRenderer.render(pass);
-    this.waterRenderer.render(pass, width, height, snapshot, timeMs);
+    this.weaponParticleRenderer.render(pass, width, height, timeMs);
+    this.waterRenderer.render(pass);
     pass.end();
     this.bloom.render(encoder, textureView, bloomIntensityScale);
     return encoder.finish();
@@ -176,6 +182,7 @@ export class CombatFieldRenderer {
     this.backgroundRenderer.dispose();
     this.waterRenderer.dispose();
     this.spriteRenderer.dispose();
+    this.weaponParticleRenderer.dispose();
   }
 
   private writeFrameData(

@@ -9,6 +9,7 @@ struct WaterParams {
 struct WaterParticleGpu {
   data0: vec4f,
   data1: vec4f,
+  data2: vec4f,
 };
 
 @group(0) @binding(0) var<uniform> params: WaterParams;
@@ -148,6 +149,10 @@ fn particleLayer(uv: vec2f, canvasSize: vec2f, surfaceY: f32) -> vec4f {
     }
 
     let particle = particles[i];
+    if (particle.data0.z <= 0.0 || particle.data0.w < -0.5) {
+      continue;
+    }
+
     let particleColor = shadeParticle(uv, aspect, surfaceY, particle);
     color = mix(color, particleColor.rgb, particleColor.a * (1.0 - alpha));
     alpha = clamp(alpha + particleColor.a * (1.0 - alpha), 0.0, 1.0);
@@ -160,10 +165,10 @@ fn shadeParticle(uv: vec2f, aspect: f32, surfaceY: f32, particle: WaterParticleG
   let center = particle.data0.xy;
   let radius = max(0.001, particle.data0.z);
   let kind = particle.data0.w;
-  let age = clamp(particle.data1.x, 0.0, 1.0);
-  let seed = particle.data1.y;
-  let strength = clamp(particle.data1.z, 0.0, 1.8);
-  let velocityY = particle.data1.w;
+  let age = clamp(particle.data1.z / max(1.0, particle.data1.w), 0.0, 1.0);
+  let seed = particle.data2.x;
+  let strength = clamp(particle.data2.y, 0.0, 1.8);
+  let velocityY = particle.data1.y;
   let delta = vec2f((uv.x - center.x) * aspect, uv.y - center.y);
   let distanceToParticle = length(delta);
   let lifeFade = pow(1.0 - age, 1.35);
