@@ -1,4 +1,4 @@
-// Responsibility: Load WebP sprite URLs into reusable WebGPU textures.
+// Responsibility: Load sprite texture URLs into reusable WebGPU textures.
 // Owner: render/webgpu/combatField
 
 export interface SpriteTextureResource {
@@ -17,6 +17,12 @@ export class SpriteTextureCache {
   private readonly records = new Map<string, SpriteTextureRecord>();
 
   constructor(private readonly device: GPUDevice) {}
+
+  preload(urls: Iterable<string>): void {
+    for (const url of urls) {
+      this.get(url);
+    }
+  }
 
   get(url: string): SpriteTextureResource | null {
     const record = this.records.get(url);

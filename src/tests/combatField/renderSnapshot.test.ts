@@ -10,7 +10,7 @@ describe("createRenderSnapshot", () => {
     expect(snapshot.enemyPositions).toHaveLength(1);
     expect(snapshot.itemDropPositions).toHaveLength(1);
     expect(snapshot.sprites.map((sprite) => sprite.kind)).toEqual(["player", "enemy", "item"]);
-    expect(snapshot.weaponParticles).toHaveLength(0);
+    expect(snapshot.weaponEffects).toHaveLength(0);
     expect(snapshot.sprites.every((sprite) => sprite.textureUrl.includes(".webp"))).toBe(true);
     expect(snapshot.activeEmitterCount).toBe(0);
     expect(snapshot.environment.waterStart).toBeCloseTo(0.8);
@@ -40,12 +40,16 @@ describe("createRenderSnapshot", () => {
     expect(snapshot.environment.waveActivity).toBeGreaterThan(0.65);
   });
 
-  it("converts fireball projectiles and fire areas into weapon visual particles", () => {
+  it("converts fireball projectiles, fire areas, and burns into weapon sprite-sheet effects", () => {
     const initial = createInitialGameState();
     const snapshot = createRenderSnapshot({
       ...initial,
       entities: {
         ...initial.entities,
+        enemies: initial.entities.enemies.map((enemy) => ({
+          ...enemy,
+          statusEffects: [{ id: "burning" as const, remainingMs: 1_200, damagePerSecond: 6 }],
+        })),
         projectiles: [
           {
             id: "fireball",
@@ -85,9 +89,18 @@ describe("createRenderSnapshot", () => {
     });
 
     expect(snapshot.sprites.map((sprite) => sprite.kind)).toEqual(["player", "enemy", "item"]);
-    expect(snapshot.weaponParticles.some((particle) => particle.kind === "fireball-core")).toBe(true);
-    expect(snapshot.weaponParticles.some((particle) => particle.kind === "fireball-ember")).toBe(true);
-    expect(snapshot.weaponParticles.some((particle) => particle.kind === "fire-area-flame")).toBe(true);
-    expect(snapshot.weaponParticles.every((particle) => particle.opacity >= 0)).toBe(true);
+    expect(snapshot.sprites.every((sprite) => !sprite.textureUrl.includes("/effects/"))).toBe(true);
+    expect(snapshot.weaponEffects.some((effect) => effect.kind === "fireball-projectile")).toBe(true);
+    expect(snapshot.weaponEffects.some((effect) => effect.kind === "fireball-impact")).toBe(true);
+    expect(snapshot.weaponEffects.some((effect) => effect.kind === "fire-area-burn")).toBe(true);
+    expect(snapshot.weaponEffects.some((effect) => effect.kind === "burn-overlay")).toBe(true);
+    expect(snapshot.weaponEffects.filter((effect) => effect.kind === "burn-overlay")).toHaveLength(3);
+    expect(snapshot.weaponEffects.filter((effect) => effect.kind === "fire-area-burn")).toHaveLength(4);
+    expect(snapshot.weaponEffects.every((effect) => effect.textureUrl.includes(".png"))).toBe(true);
+    expect(snapshot.weaponEffects.every((effect) => effect.frameCount === 8)).toBe(true);
+    expect(snapshot.weaponEffects.every((effect) => effect.frameIndex >= 0 && effect.frameIndex < effect.frameCount)).toBe(
+      true,
+    );
+    expect(snapshot.weaponEffects.every((effect) => effect.opacity >= 0 && effect.opacity <= 1)).toBe(true);
   });
 });

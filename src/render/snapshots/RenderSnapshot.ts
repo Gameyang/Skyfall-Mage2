@@ -30,19 +30,19 @@ export interface RenderableSprite {
   readonly hpPercent: number | null;
 }
 
-export type WeaponVisualParticleKind = "fireball-core" | "fireball-ember" | "fire-area-flame" | "burn-ember";
+export type WeaponEffectSpriteKind = "fireball-projectile" | "fireball-impact" | "fire-area-burn" | "burn-overlay";
 
-export interface WeaponVisualParticle {
+export interface WeaponEffectSprite {
   readonly id: string;
-  readonly kind: WeaponVisualParticleKind;
+  readonly kind: WeaponEffectSpriteKind;
   readonly position: Vec2;
-  readonly direction: Vec2;
-  readonly radius: number;
-  readonly seed: number;
-  readonly ageRatio: number;
-  readonly intensity: number;
+  readonly size: Vec2;
+  readonly textureUrl: string;
+  readonly frameIndex: number;
+  readonly frameCount: number;
   readonly opacity: number;
-  readonly stretch: number;
+  readonly rotationRadians: number;
+  readonly facing: -1 | 1;
 }
 
 export interface BattleEnvironmentVisuals {
@@ -64,7 +64,7 @@ export interface RenderSnapshot {
   readonly enemyPositions: readonly Vec2[];
   readonly itemDropPositions: readonly Vec2[];
   readonly sprites: readonly RenderableSprite[];
-  readonly weaponParticles: readonly WeaponVisualParticle[];
+  readonly weaponEffects: readonly WeaponEffectSprite[];
   readonly environment: BattleEnvironmentVisuals;
   readonly materialEmitters: readonly MaterialEmitter[];
   readonly activeEmitterCount: number;

@@ -39,6 +39,11 @@ export const assetUrls = {
   projectiles: {
     meteorRock: new URL("../assets/projectiles/meteor-rock.webp", import.meta.url).href,
   },
+  effects: {
+    firestaffProjectile: new URL("../assets/effects/firestaff-projectile-round-v2-sheet.png", import.meta.url).href,
+    firestaffImpact: new URL("../assets/effects/firestaff-impact-burst-v1-sheet.png", import.meta.url).href,
+    firestaffBurn: new URL("../assets/effects/firestaff-burn-small-v2-sheet.png", import.meta.url).href,
+  },
 } as const;
 
 export function getPreloadAssetUrls(): readonly string[] {
@@ -47,6 +52,7 @@ export function getPreloadAssetUrls(): readonly string[] {
     ...Object.values(assetUrls.items),
     ...Object.values(assetUrls.enemies),
     ...Object.values(assetUrls.projectiles),
+    ...Object.values(assetUrls.effects),
     ...Object.values(skinAssetUrls),
   ];
 }
