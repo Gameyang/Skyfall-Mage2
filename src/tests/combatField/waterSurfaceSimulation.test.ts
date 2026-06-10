@@ -61,27 +61,31 @@ describe("WaterSurfaceSimulation", () => {
     expect(maxAbs(wake.readHeights())).toBeCloseTo(maxAbs(drop.readHeights()));
   });
 
-  it("uses higher tension to return surface motion faster", () => {
+  it("uses natural tension to move faster than original without stiff rebound", () => {
     const original = new WaterSurfaceSimulation({ columns: 12, damping: 0.05, tension: 0.025, spread: 0 });
-    const faster = new WaterSurfaceSimulation({ columns: 12, damping: 0.05, tension: 0.042, spread: 0 });
+    const natural = new WaterSurfaceSimulation({ columns: 12, damping: 0.058, tension: 0.031, spread: 0 });
+    const stiff = new WaterSurfaceSimulation({ columns: 12, damping: 0.05, tension: 0.042, spread: 0 });
 
     original.splash(0.5, 3);
-    faster.splash(0.5, 3);
+    natural.splash(0.5, 3);
+    stiff.splash(0.5, 3);
 
     for (let frame = 0; frame < 8; frame += 1) {
       original.update(16.6667);
-      faster.update(16.6667);
+      natural.update(16.6667);
+      stiff.update(16.6667);
     }
 
-    expect(maxAbs(faster.readHeights())).toBeLessThan(maxAbs(original.readHeights()));
+    expect(maxAbs(natural.readHeights())).toBeLessThan(maxAbs(original.readHeights()));
+    expect(maxAbs(natural.readHeights())).toBeGreaterThan(maxAbs(stiff.readHeights()));
   });
 
-  it("keeps faster battlefield water tuning bounded under repeated impacts", () => {
+  it("keeps natural battlefield water tuning bounded under repeated impacts", () => {
     const simulation = new WaterSurfaceSimulation({
       columns: 100,
-      damping: 0.05,
-      tension: 0.042,
-      spread: 0.15,
+      damping: 0.058,
+      tension: 0.031,
+      spread: 0.18,
     });
 
     for (let frame = 0; frame < 48; frame += 1) {

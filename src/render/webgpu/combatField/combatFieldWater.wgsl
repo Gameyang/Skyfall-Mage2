@@ -79,8 +79,8 @@ fn fragmentMain(@builtin(position) position: vec4f) -> @location(0) vec4f {
   let surfaceSkin = smoothstep(0.026, 0.0, depth);
   let meniscus = smoothstep(0.014, 0.0, depth) * (0.62 + 0.38 * sin(uv.x * 28.0 + time * 0.85 + wavePx * 0.05));
   let slopeFoam = smoothstep(16.0, 62.0, abs(slope)) * edge;
-  let foam = max(smoothstep(3.8, 11.0, waveIntensity) * edge, max(slopeFoam, localFoam * edge));
-  color = mix(color, vec3f(0.84, 0.95, 1.0), foam * 0.5);
+  let foam = max(smoothstep(2.6, 8.8, waveIntensity) * edge, max(slopeFoam * 0.85, localFoam * edge * 1.15));
+  color = mix(color, vec3f(0.84, 0.95, 1.0), foam * 0.56);
   color += vec3f(0.34, 0.68, 0.82) * surfaceSkin * (0.2 + surfaceNormalLight * 0.16);
   color += vec3f(0.75, 0.95, 1.0) * meniscus * 0.18;
 
@@ -88,7 +88,7 @@ fn fragmentMain(@builtin(position) position: vec4f) -> @location(0) vec4f {
   let horizonReflection = smoothstep(0.18, 0.0, depth) * (0.55 + surfaceNormalLight * 0.45);
   color += vec3f(0.48, 0.62, 0.76) * highlight * (0.18 + rain * 0.06);
   color += vec3f(0.30, 0.34, 0.43) * horizonReflection * 0.13;
-  color += vec3f(0.46, 0.82, 0.96) * ringRipple * smoothstep(0.82, 0.0, depth) * 0.26;
+  color += vec3f(0.46, 0.82, 0.96) * ringRipple * smoothstep(0.82, 0.0, depth) * 0.42;
   color += vec3f(0.72, 0.26, 0.10) * heatGlow * smoothstep(0.42, 0.0, depth);
   color = mix(color, particle.rgb, particle.a);
 
@@ -99,17 +99,17 @@ fn fragmentMain(@builtin(position) position: vec4f) -> @location(0) vec4f {
   }
 
   let sideVolumeAlpha = params.surface.y * mix(0.50, 0.82, smoothstep(0.0, 0.9, depth));
-  let surfaceAlpha = surfaceSkin * 0.16 + disturbance * edge * 0.08 + ringRipple * 0.04;
+  let surfaceAlpha = surfaceSkin * 0.16 + disturbance * edge * 0.07 + ringRipple * 0.075;
   let alpha = clamp(sideVolumeAlpha + surfaceAlpha + particle.a * 0.5, 0.0, 0.88);
   return vec4f(max(color, vec3f(0.0)), alpha);
 }
 
 fn waterWavePx(x: f32, time: f32, canvasSize: vec2f) -> f32 {
-  let physicsDisplacement = springWave(x);
+  let physicsDisplacement = smoothSpringWave(x);
   let gerstnerHeight = gerstnerWaves(vec2f(x * canvasSize.x, 0.0), time) * 0.015;
   let ice = clamp(params.effects.x, 0.0, 1.0);
   let waveScale = 1.0 - ice * 0.92;
-  return (physicsDisplacement * 3.0 + gerstnerHeight * 8.0) * waveScale;
+  return (physicsDisplacement * 1.65 + gerstnerHeight * 8.0) * waveScale;
 }
 
 fn waterSlope(x: f32, time: f32, canvasSize: vec2f) -> f32 {
@@ -251,6 +251,18 @@ fn springWave(x: f32) -> f32 {
   let left = min(u32(floor(scaled)), maxIndex);
   let right = min(left + 1u, maxIndex);
   return mix(springs[left], springs[right], fract(scaled));
+}
+
+fn smoothSpringWave(x: f32) -> f32 {
+  let springCount = max(2u, u32(params.canvasAndTime.w));
+  let dx = clamp(1.0 / f32(springCount), 0.002, 0.012);
+  let farDx = dx * 2.0;
+  let farLeft = springWave(clamp(x - farDx, 0.0, 0.999));
+  let left = springWave(clamp(x - dx, 0.0, 0.999));
+  let center = springWave(x);
+  let right = springWave(clamp(x + dx, 0.0, 0.999));
+  let farRight = springWave(clamp(x + farDx, 0.0, 0.999));
+  return center * 0.46 + (left + right) * 0.22 + (farLeft + farRight) * 0.05;
 }
 
 fn random(st: vec2f) -> f32 {

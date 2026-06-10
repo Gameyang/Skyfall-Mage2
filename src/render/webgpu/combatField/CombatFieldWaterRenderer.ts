@@ -14,9 +14,9 @@ import { SpriteTextureCache } from "./SpriteTextureCache";
 import { WaterSurfaceSimulation, type WaterImpulseKind } from "./WaterSurfaceSimulation";
 
 const springColumns = 100;
-const waterSurfaceWaveDamping = 0.05;
-const waterSurfaceWaveSpread = 0.15;
-const waterSurfaceWaveTension = 0.042;
+const waterSurfaceWaveDamping = 0.058;
+const waterSurfaceWaveSpread = 0.18;
+const waterSurfaceWaveTension = 0.031;
 const waterSurfaceContactReach = 0.035;
 const waterSurfaceContactDepth = 0.22;
 const maxInteractions = 24;

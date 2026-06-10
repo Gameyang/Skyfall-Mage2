@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { analyzeSpriteSheetPixels, createGridFrameDefinitions } from "../tools/sheets/spriteAutoMapper";
+import {
+  analyzeSpriteSheetPixels,
+  analyzeSpriteSheetSpritesPixels,
+  createGridFrameDefinitions,
+} from "../tools/sheets/spriteAutoMapper";
 
 describe("sprite auto mapper", () => {
   it("detects a horizontal sprite strip", () => {
@@ -63,6 +67,36 @@ describe("sprite auto mapper", () => {
     expect(frames.map((frame) => frame.id)).toEqual(["frame-001", "frame-002", "frame-003"]);
     expect(frames[2].cellRect).toEqual({ x: 0.1, y: 0.4, width: 0.4, height: 0.2 });
     expect(frames[2].placement).toEqual({ x: 0, y: 0, width: 1, height: 1 });
+  });
+
+  it("detects partial effect sprites as alpha components in row-major order", () => {
+    const image = createAlphaImage(20, 12);
+
+    fillAlpha(image, 1, 1, 3, 3);
+    fillAlpha(image, 9, 1, 4, 2);
+    fillAlpha(image, 2, 8, 5, 3);
+
+    const result = analyzeSpriteSheetSpritesPixels(image, { spriteMergeRadius: 0 });
+
+    expect(result.frameCount).toBe(3);
+    expect(result.columns).toBe(2);
+    expect(result.rows).toBe(2);
+    expect(result.frames.map((frame) => frame.id)).toEqual(["frame-001", "frame-002", "frame-003"]);
+    expect(result.frames[0].rect).toEqual({ x: 1 / 20, y: 1 / 12, width: 3 / 20, height: 3 / 12 });
+    expect(result.frames[1].rect).toEqual({ x: 9 / 20, y: 1 / 12, width: 4 / 20, height: 2 / 12 });
+    expect(result.frames[2].rect).toEqual({ x: 2 / 20, y: 8 / 12, width: 5 / 20, height: 3 / 12 });
+  });
+
+  it("merges nearby effect particles into one sprite component", () => {
+    const image = createAlphaImage(12, 6);
+
+    fillAlpha(image, 1, 1, 2, 2);
+    fillAlpha(image, 5, 1, 2, 2);
+
+    const result = analyzeSpriteSheetSpritesPixels(image, { spriteMergeRadius: 1 });
+
+    expect(result.frameCount).toBe(1);
+    expect(result.frames[0].rect).toEqual({ x: 1 / 12, y: 1 / 6, width: 6 / 12, height: 2 / 6 });
   });
 });
 

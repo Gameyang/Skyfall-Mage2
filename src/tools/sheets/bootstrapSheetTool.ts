@@ -12,7 +12,7 @@ import type {
 } from "../../content/sheets/sheetTypes";
 import { assetUrls, skinAssetUrls } from "../../platform/assets";
 import { createSheetMultiRectEditor, normalizeEditableSheetRect } from "./SheetRectEditor";
-import { analyzeSpriteSheetUrl, createGridFrameDefinitions } from "./spriteAutoMapper";
+import { analyzeSpriteSheetSpritesUrl, analyzeSpriteSheetUrl, createGridFrameDefinitions } from "./spriteAutoMapper";
 import "./sheetsTool.css";
 
 type Mutable<T> = T extends readonly (infer U)[]
@@ -270,8 +270,9 @@ class SheetToolApp {
       createSection("Clips", this.createClipControls(definition, selectedClip)),
       createSection("Auto Map", [
         createButton("Detect Grid", () => void this.autoMapSelectedDefinition()),
-        createTextValue("Frames", "Auto cut transparent bounds per frame and store placement inside each cell"),
-        createTextValue("Source", "Projection + autocorrelation grid detection for local sprite sheets"),
+        createButton("Detect Sprites", () => void this.autoMapSelectedSpriteBounds()),
+        createTextValue("Grid", "Projection + autocorrelation grid detection, then trim each cell"),
+        createTextValue("Sprites", "Alpha connected-components detection for partial effect sprite bounds"),
       ]),
       createSection("Tags", [
         createTextControl("Tags", definition.tags.join(", "), (value) => {
@@ -518,14 +519,7 @@ class SheetToolApp {
 
     try {
       const result = await analyzeSpriteSheetUrl(resolveSheetAssetUrl(definition.asset));
-      definition.rect = result.rect;
-      definition.frameCount = result.frameCount;
-      definition.columns = result.columns;
-      definition.rows = result.rows;
-      definition.frames = cloneFrameDefinitions(result.frames);
-      definition.clips = cloneAnimationClips(result.clips);
-      this.selectedClipId = definition.clips[0]?.id ?? "";
-      this.previewStartMs = performance.now();
+      this.applyAutoMapResult(definition, result);
       this.status.textContent = `Detected ${result.columns} x ${result.rows}, ${result.frameCount} frames, confidence ${Math.round(
         result.confidence * 100,
       )}%`;
@@ -533,6 +527,38 @@ class SheetToolApp {
     } catch (error) {
       this.status.textContent = error instanceof Error ? error.message : "Auto map failed";
     }
+  }
+
+  private async autoMapSelectedSpriteBounds(): Promise<void> {
+    const definition = this.getSelectedDefinition();
+
+    if (!definition) {
+      return;
+    }
+
+    this.status.textContent = "Detecting sprite bounds";
+
+    try {
+      const result = await analyzeSpriteSheetSpritesUrl(resolveSheetAssetUrl(definition.asset));
+      this.applyAutoMapResult(definition, result);
+      this.status.textContent = `Detected ${result.frameCount} sprite rects across ${result.rows} rows, confidence ${Math.round(
+        result.confidence * 100,
+      )}%`;
+      this.renderAll();
+    } catch (error) {
+      this.status.textContent = error instanceof Error ? error.message : "Sprite detection failed";
+    }
+  }
+
+  private applyAutoMapResult(definition: SheetDefinitionDraft, result: Awaited<ReturnType<typeof analyzeSpriteSheetUrl>>): void {
+    definition.rect = result.rect;
+    definition.frameCount = result.frameCount;
+    definition.columns = result.columns;
+    definition.rows = result.rows;
+    definition.frames = cloneFrameDefinitions(result.frames);
+    definition.clips = cloneAnimationClips(result.clips);
+    this.selectedClipId = definition.clips[0]?.id ?? "";
+    this.previewStartMs = performance.now();
   }
 
   private tickPreview(time: number): void {

@@ -34,5 +34,6 @@ Sprite-sheet metadata is shared by effects, units, projectiles, items, UI, skins
   - `placement`: where the trimmed frame belongs inside its cell.
   - `pivot`: the normalized pivot used by preview and future renderers.
 - A `SheetAnimationClip` stores an ordered list of frame IDs plus optional timing overrides.
-- Auto mapping should detect the grid, trim transparent bounds per frame, and create an initial `All Frames` clip.
+- `Detect Grid` should be used for regular frame grids: detect the grid, trim transparent bounds per cell, and create an initial `All Frames` clip.
+- `Detect Sprites` should be used for effect sheets with irregular partial sprites: detect alpha connected-components, merge nearby particles with a small dilation radius, sort row-major, and create per-sprite frame rects.
 - Preview tools should draw from `frames` and `clips` rather than inventing separate local playback metadata.

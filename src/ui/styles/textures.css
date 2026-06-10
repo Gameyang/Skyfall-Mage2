@@ -66,7 +66,7 @@
 .panel-host.side-panel {
   --side-panel-accent-top: rgba(240, 189, 85, 0.1);
   --side-panel-edge: rgba(240, 189, 85, 0.12);
-  --side-panel-body-tint: rgba(95, 72, 34, 0.16);
+  --side-panel-body-tint: rgba(95, 72, 34, 0.1);
   --side-panel-header-sheen: rgba(240, 189, 85, 0.08);
   --side-panel-tab-sheen: rgba(240, 189, 85, 0.07);
   --side-panel-active-bg: #332719;
@@ -83,7 +83,7 @@
       var(--side-panel-edge) 100%
     ),
     linear-gradient(180deg, var(--side-panel-accent-top), transparent 24%, rgba(0, 0, 0, 0.2)),
-    linear-gradient(135deg, transparent 0 34%, var(--side-panel-body-tint) 34% 52%, transparent 52%),
+    linear-gradient(180deg, transparent 0 55%, var(--side-panel-body-tint) 100%),
     var(--ui-panel-bg),
     var(--panel);
   background-position: center;
@@ -97,7 +97,7 @@
 .panel-host.side-panel[data-panel-theme="skills"] {
   --side-panel-accent-top: rgba(173, 136, 223, 0.14);
   --side-panel-edge: rgba(67, 196, 184, 0.1);
-  --side-panel-body-tint: rgba(58, 46, 105, 0.2);
+  --side-panel-body-tint: rgba(58, 46, 105, 0.12);
   --side-panel-header-sheen: rgba(67, 196, 184, 0.08);
   --side-panel-tab-sheen: rgba(173, 136, 223, 0.09);
   --side-panel-active-bg: #292541;
@@ -108,7 +108,7 @@
 .panel-host.side-panel[data-panel-theme="shop"] {
   --side-panel-accent-top: rgba(240, 189, 85, 0.16);
   --side-panel-edge: rgba(116, 174, 98, 0.1);
-  --side-panel-body-tint: rgba(116, 86, 31, 0.2);
+  --side-panel-body-tint: rgba(116, 86, 31, 0.12);
   --side-panel-header-sheen: rgba(240, 189, 85, 0.1);
   --side-panel-tab-sheen: rgba(116, 174, 98, 0.07);
   --side-panel-active-bg: #362913;
@@ -119,7 +119,7 @@
 .panel-host.side-panel[data-panel-theme="locked"] {
   --side-panel-accent-top: rgba(206, 78, 78, 0.11);
   --side-panel-edge: rgba(173, 136, 223, 0.07);
-  --side-panel-body-tint: rgba(82, 40, 54, 0.16);
+  --side-panel-body-tint: rgba(82, 40, 54, 0.11);
   --side-panel-header-sheen: rgba(206, 78, 78, 0.06);
   --side-panel-tab-sheen: rgba(173, 136, 223, 0.05);
   --side-panel-active-bg: #2e2029;

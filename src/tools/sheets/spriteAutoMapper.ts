@@ -28,6 +28,8 @@ export interface SpriteAutoMapOptions {
   readonly maxColumns?: number;
   readonly maxRows?: number;
   readonly maxFrames?: number;
+  readonly minSpritePixels?: number;
+  readonly spriteMergeRadius?: number;
 }
 
 interface AlphaBounds {
@@ -46,11 +48,24 @@ interface GridCandidate {
   readonly score: number;
 }
 
+interface SpriteComponent {
+  readonly bounds: AlphaBounds;
+  readonly pixels: number;
+}
+
+interface SpriteComponentRow {
+  readonly centerY: number;
+  readonly height: number;
+  readonly components: readonly SpriteComponent[];
+}
+
 const defaultOptions = {
   alphaThreshold: 8,
   maxColumns: 64,
   maxRows: 16,
   maxFrames: 256,
+  minSpritePixels: 4,
+  spriteMergeRadius: 2,
 } as const;
 
 export async function analyzeSpriteSheetUrl(
@@ -69,6 +84,24 @@ export async function analyzeSpriteSheetUrl(
 
   context.drawImage(image, 0, 0);
   return analyzeSpriteSheetPixels(context.getImageData(0, 0, canvas.width, canvas.height), options);
+}
+
+export async function analyzeSpriteSheetSpritesUrl(
+  imageUrl: string,
+  options: SpriteAutoMapOptions = {},
+): Promise<SpriteAutoMapResult> {
+  const image = await loadImage(imageUrl);
+  const canvas = document.createElement("canvas");
+  canvas.width = image.naturalWidth;
+  canvas.height = image.naturalHeight;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+
+  if (!context) {
+    throw new Error("Canvas 2D context is unavailable.");
+  }
+
+  context.drawImage(image, 0, 0);
+  return analyzeSpriteSheetSpritesPixels(context.getImageData(0, 0, canvas.width, canvas.height), options);
 }
 
 export function analyzeSpriteSheetPixels(
@@ -140,6 +173,65 @@ export function analyzeSpriteSheetPixels(
   };
 }
 
+export function analyzeSpriteSheetSpritesPixels(
+  image: SpriteAutoMapImageData,
+  options: SpriteAutoMapOptions = {},
+): SpriteAutoMapResult {
+  const settings = { ...defaultOptions, ...options };
+  const bounds = findAlphaBounds(image, settings.alphaThreshold);
+
+  if (!bounds) {
+    return createEmptyAutoMapResult(image);
+  }
+
+  const components = findSpriteComponents(image, bounds, settings);
+  const rows = groupSpriteComponentRows(components);
+  const frames = rows
+    .flatMap((row) => row.components)
+    .slice(0, settings.maxFrames)
+    .map((component, index) => {
+      const rect = normalizePixelRect(component.bounds, image.width, image.height);
+      return {
+        id: formatFrameId(index),
+        label: `Sprite ${index + 1}`,
+        rect,
+        cellRect: rect,
+        placement: { x: 0, y: 0, width: 1, height: 1 },
+        pivot: { x: 0.5, y: 0.5 },
+      };
+    });
+  const fallbackFrames =
+    frames.length > 0
+      ? frames
+      : createGridFrameDefinitions(normalizePixelRect(bounds, image.width, image.height), 1, 1, 1);
+  const columns = Math.max(1, rows.reduce((max, row) => Math.max(max, row.components.length), 0));
+  const activeRows = Math.max(1, rows.length);
+  const averageWidth =
+    components.length > 0 ? components.reduce((sum, component) => sum + component.bounds.width, 0) / components.length : bounds.width;
+  const averageHeight =
+    components.length > 0 ? components.reduce((sum, component) => sum + component.bounds.height, 0) / components.length : bounds.height;
+
+  return {
+    rect: normalizePixelRect(bounds, image.width, image.height),
+    columns,
+    rows: activeRows,
+    frameCount: fallbackFrames.length,
+    frameWidth: averageWidth,
+    frameHeight: averageHeight,
+    imageWidth: image.width,
+    imageHeight: image.height,
+    confidence: calculateSpriteComponentConfidence(components, bounds),
+    frames: fallbackFrames,
+    clips: [
+      {
+        id: "all",
+        label: "All Frames",
+        frameIds: fallbackFrames.map((frame) => frame.id),
+      },
+    ],
+  };
+}
+
 export function createGridFrameDefinitions(
   rect: SheetRect,
   columns: number,
@@ -172,6 +264,37 @@ export function createGridFrameDefinitions(
   }
 
   return frames;
+}
+
+function createEmptyAutoMapResult(image: SpriteAutoMapImageData): SpriteAutoMapResult {
+  return {
+    rect: { x: 0, y: 0, width: 1, height: 1 },
+    columns: 1,
+    rows: 1,
+    frameCount: 1,
+    frameWidth: image.width,
+    frameHeight: image.height,
+    imageWidth: image.width,
+    imageHeight: image.height,
+    confidence: 0,
+    frames: [
+      {
+        id: "frame-001",
+        label: "Frame 1",
+        rect: { x: 0, y: 0, width: 1, height: 1 },
+        cellRect: { x: 0, y: 0, width: 1, height: 1 },
+        placement: { x: 0, y: 0, width: 1, height: 1 },
+        pivot: { x: 0.5, y: 0.5 },
+      },
+    ],
+    clips: [
+      {
+        id: "all",
+        label: "All Frames",
+        frameIds: ["frame-001"],
+      },
+    ],
+  };
 }
 
 function findBestGridCandidate(
@@ -506,6 +629,200 @@ function calculateBalancePenalty(values: readonly number[]): number {
 
   const variance = values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / values.length;
   return clamp(Math.sqrt(variance) / mean, 0, 1);
+}
+
+function findSpriteComponents(
+  image: SpriteAutoMapImageData,
+  bounds: AlphaBounds,
+  settings: Required<SpriteAutoMapOptions>,
+): readonly SpriteComponent[] {
+  const width = bounds.width;
+  const height = bounds.height;
+  const active = new Uint8Array(width * height);
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const sourceX = bounds.x + x;
+      const sourceY = bounds.y + y;
+      const alpha = image.data[(sourceY * image.width + sourceX) * 4 + 3] ?? 0;
+
+      if (alpha > settings.alphaThreshold) {
+        active[y * width + x] = 1;
+      }
+    }
+  }
+
+  const mask = dilateMask(active, width, height, Math.max(0, Math.floor(settings.spriteMergeRadius)));
+  const visited = new Uint8Array(mask.length);
+  const components: SpriteComponent[] = [];
+  const minPixels = Math.max(
+    settings.minSpritePixels,
+    Math.floor(bounds.width * bounds.height * 0.00002),
+  );
+
+  for (let start = 0; start < mask.length; start += 1) {
+    if (mask[start] === 0 || visited[start] === 1) {
+      continue;
+    }
+
+    const component = floodFillSpriteComponent(start, active, mask, visited, width, bounds);
+
+    if (component && component.pixels >= minPixels) {
+      components.push(component);
+    }
+  }
+
+  return components
+    .sort((a, b) => a.bounds.y - b.bounds.y || a.bounds.x - b.bounds.x)
+    .slice(0, settings.maxFrames);
+}
+
+function dilateMask(source: Uint8Array, width: number, height: number, radius: number): Uint8Array {
+  if (radius <= 0) {
+    return source.slice();
+  }
+
+  const target = new Uint8Array(source.length);
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (source[y * width + x] === 0) {
+        continue;
+      }
+
+      for (let dy = -radius; dy <= radius; dy += 1) {
+        const nextY = y + dy;
+
+        if (nextY < 0 || nextY >= height) {
+          continue;
+        }
+
+        for (let dx = -radius; dx <= radius; dx += 1) {
+          const nextX = x + dx;
+
+          if (nextX < 0 || nextX >= width) {
+            continue;
+          }
+
+          target[nextY * width + nextX] = 1;
+        }
+      }
+    }
+  }
+
+  return target;
+}
+
+function floodFillSpriteComponent(
+  start: number,
+  active: Uint8Array,
+  mask: Uint8Array,
+  visited: Uint8Array,
+  width: number,
+  sourceBounds: AlphaBounds,
+): SpriteComponent | null {
+  const stack = [start];
+  visited[start] = 1;
+  let minX = sourceBounds.width;
+  let minY = sourceBounds.height;
+  let maxX = -1;
+  let maxY = -1;
+  let pixels = 0;
+
+  while (stack.length > 0) {
+    const index = stack.pop() ?? 0;
+    const localX = index % width;
+    const localY = Math.floor(index / width);
+
+    if (active[index] === 1) {
+      minX = Math.min(minX, localX);
+      minY = Math.min(minY, localY);
+      maxX = Math.max(maxX, localX);
+      maxY = Math.max(maxY, localY);
+      pixels += 1;
+    }
+
+    for (const neighbor of [index - 1, index + 1, index - width, index + width]) {
+      if (
+        neighbor < 0 ||
+        neighbor >= mask.length ||
+        visited[neighbor] === 1 ||
+        mask[neighbor] === 0 ||
+        (neighbor === index - 1 && localX === 0) ||
+        (neighbor === index + 1 && localX === width - 1)
+      ) {
+        continue;
+      }
+
+      visited[neighbor] = 1;
+      stack.push(neighbor);
+    }
+  }
+
+  if (maxX < minX || maxY < minY || pixels <= 0) {
+    return null;
+  }
+
+  return {
+    bounds: {
+      x: sourceBounds.x + minX,
+      y: sourceBounds.y + minY,
+      width: maxX - minX + 1,
+      height: maxY - minY + 1,
+    },
+    pixels,
+  };
+}
+
+function groupSpriteComponentRows(components: readonly SpriteComponent[]): readonly SpriteComponentRow[] {
+  const rows: { centerY: number; height: number; components: SpriteComponent[] }[] = [];
+
+  for (const component of components) {
+    const centerY = component.bounds.y + component.bounds.height / 2;
+    const row = rows.find(
+      (candidate) => Math.abs(candidate.centerY - centerY) <= Math.max(4, candidate.height, component.bounds.height) * 0.6,
+    );
+
+    if (row) {
+      row.components.push(component);
+      const total = row.components.length;
+      row.centerY = (row.centerY * (total - 1) + centerY) / total;
+      row.height = Math.max(row.height, component.bounds.height);
+      continue;
+    }
+
+    rows.push({
+      centerY,
+      height: component.bounds.height,
+      components: [component],
+    });
+  }
+
+  return rows
+    .sort((a, b) => a.centerY - b.centerY)
+    .map((row) => ({
+      centerY: row.centerY,
+      height: row.height,
+      components: row.components.sort((a, b) => a.bounds.x - b.bounds.x),
+    }));
+}
+
+function calculateSpriteComponentConfidence(
+  components: readonly SpriteComponent[],
+  bounds: AlphaBounds,
+): number {
+  if (components.length === 0) {
+    return 0;
+  }
+
+  const componentArea = components.reduce(
+    (sum, component) => sum + component.bounds.width * component.bounds.height,
+    0,
+  );
+  const boundsArea = Math.max(1, bounds.width * bounds.height);
+  const packing = clamp(componentArea / boundsArea, 0, 1);
+  const countScore = components.length > 1 ? 0.9 : 0.62;
+  return clamp(countScore * 0.75 + packing * 0.25, 0, 1);
 }
 
 function loadImage(imageUrl: string): Promise<HTMLImageElement> {
