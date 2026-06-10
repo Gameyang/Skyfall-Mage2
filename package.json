@@ -8,6 +8,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run",
+    "posttest": "node scripts/auto-commit-after-test.mjs",
+    "auto:commit-after-test": "node scripts/auto-commit-after-test.mjs",
     "typecheck": "tsc --noEmit",
     "verify:webgpu": "node scripts/verify-webgpu-small-grid.mjs",
     "verify:browser": "node scripts/verify-browser-combat.mjs"
