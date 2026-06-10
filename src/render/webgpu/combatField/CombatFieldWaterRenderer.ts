@@ -14,6 +14,7 @@ const maxParticleEmitters = maxInteractions * 2;
 const particleStride = 12;
 const particleEmitterStride = 8;
 const particleWorkgroupSize = 64;
+const enableWaterParticleSprites = false;
 
 type WaterInteractionPhase = "surface-impact" | "submerged-body";
 
@@ -223,23 +224,31 @@ export class CombatFieldWaterRenderer {
     this.pendingSpawnParticleCount = 0;
     this.spawnData.fill(0);
     const interactions = this.collectInteractions(snapshot, timeMs);
-    this.spawnInteractionParticles(interactions, visuals, deltaMs);
+    if (enableWaterParticleSprites) {
+      this.spawnInteractionParticles(interactions, visuals, deltaMs);
+    } else {
+      this.particleCursor = 0;
+      this.particleRenderCount = 0;
+    }
     this.simulation.addRainRipples(deltaMs, visuals.rainRate);
     this.applyInteractionImpulses(interactions);
     this.simulation.update(deltaMs);
     this.device.queue.writeBuffer(this.springBuffer, 0, this.simulation.readHeights());
     this.writeInteractionData(interactions);
     this.writeSpawnData();
-    const spawnStart = this.particleCursor;
-    const previousParticleRenderCount = this.particleRenderCount;
-    const nextParticleRenderCount = calculateNextParticleRenderCount(
-      this.particleRenderCount,
-      spawnStart,
-      this.pendingSpawnParticleCount,
-    );
-    this.writeParams(width, height, visuals, timeMs, interactions, deltaMs, spawnStart, this.pendingSpawnParticleCount, nextParticleRenderCount);
-    this.dispatchParticleCompute(encoder, previousParticleRenderCount, this.pendingSpawnParticleCount);
-    this.particleCursor = (spawnStart + this.pendingSpawnParticleCount) % maxParticles;
+    const spawnStart = enableWaterParticleSprites ? this.particleCursor : 0;
+    const previousParticleRenderCount = enableWaterParticleSprites ? this.particleRenderCount : 0;
+    const spawnCount = enableWaterParticleSprites ? this.pendingSpawnParticleCount : 0;
+    const nextParticleRenderCount = enableWaterParticleSprites
+      ? calculateNextParticleRenderCount(this.particleRenderCount, spawnStart, spawnCount)
+      : 0;
+    this.writeParams(width, height, visuals, timeMs, interactions, deltaMs, spawnStart, spawnCount, nextParticleRenderCount);
+
+    if (enableWaterParticleSprites) {
+      this.dispatchParticleCompute(encoder, previousParticleRenderCount, spawnCount);
+      this.particleCursor = (spawnStart + spawnCount) % maxParticles;
+    }
+
     this.particleRenderCount = nextParticleRenderCount;
   }
 
