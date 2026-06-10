@@ -137,12 +137,12 @@ fn waterSlope(x: f32, time: f32, canvasSize: vec2f) -> f32 {
 }
 
 fn particleLayer(uv: vec2f, canvasSize: vec2f, surfaceY: f32) -> vec4f {
-  let count = min(u32(params.particles.x), 160u);
+  let count = min(u32(params.particles.x), 240u);
   let aspect = canvasSize.x / max(1.0, canvasSize.y);
   var color = vec3f(0.0);
   var alpha = 0.0;
 
-  for (var i = 0u; i < 160u; i = i + 1u) {
+  for (var i = 0u; i < 240u; i = i + 1u) {
     if (i >= count) {
       break;
     }
@@ -172,7 +172,8 @@ fn shadeParticle(uv: vec2f, aspect: f32, surfaceY: f32, particle: WaterParticleG
     let core = 1.0 - smoothstep(radius * 0.34, radius, distanceToParticle);
     let ring = (1.0 - smoothstep(radius, radius * 1.65, distanceToParticle)) * smoothstep(radius * 0.22, radius, distanceToParticle);
     let surfaceFade = 1.0 - smoothstep(0.0, 0.07, abs(center.y - surfaceY));
-    let broken = 0.55 + 0.45 * random(floor((uv + seed) * vec2f(180.0, 90.0)));
+    let brokenNoise = noise(vec2f(uv.x * 120.0 + seed * 9.0 + params.canvasAndTime.z * 0.16, uv.y * 86.0 - params.canvasAndTime.z * 0.11));
+    let broken = 0.42 + 0.58 * brokenNoise;
     let alpha = (core * 0.62 + ring * 0.46) * lifeFade * surfaceFade * broken * clamp(0.45 + strength * 0.38, 0.0, 1.0);
     return vec4f(vec3f(0.84, 0.95, 1.0), clamp(alpha, 0.0, 0.82));
   }
@@ -187,10 +188,14 @@ fn shadeParticle(uv: vec2f, aspect: f32, surfaceY: f32, particle: WaterParticleG
     return vec4f(tint, clamp(alpha, 0.0, 0.9));
   }
 
-  let soft = 1.0 - smoothstep(radius * 0.25, radius * 2.3, distanceToParticle);
-  let wisps = 0.7 + 0.3 * sin((uv.x + uv.y + seed) * 80.0 + age * 7.0);
-  let alpha = soft * lifeFade * wisps * clamp(0.18 + strength * 0.16, 0.0, 0.42);
-  return vec4f(vec3f(0.78, 0.90, 0.95), clamp(alpha, 0.0, 0.38));
+  let waterFade = smoothstep(surfaceY + 0.002, surfaceY + 0.035, center.y);
+  let noiseBreak = noise(vec2f(uv.x * 155.0 + seed * 17.0, uv.y * 118.0 - params.canvasAndTime.z * 0.28));
+  let core = 1.0 - smoothstep(radius * 0.18, radius * 0.78, distanceToParticle);
+  let ring = (1.0 - smoothstep(radius * 0.66, radius * 1.42, distanceToParticle)) * smoothstep(radius * 0.22, radius * 0.76, distanceToParticle);
+  let plume = (1.0 - smoothstep(radius * 0.9, radius * 2.9, length(vec2f(delta.x * 1.45, delta.y + age * radius * 1.8)))) * 0.28;
+  let alpha = (core * 0.18 + ring * 0.58 + plume) * lifeFade * waterFade * (0.52 + noiseBreak * 0.48) * clamp(0.38 + strength * 0.34, 0.0, 1.0);
+  let tint = mix(vec3f(0.58, 0.86, 0.95), vec3f(0.90, 0.98, 1.0), clamp(core + ring * 0.35, 0.0, 1.0));
+  return vec4f(tint, clamp(alpha, 0.0, 0.72));
 }
 
 fn interactionSummary(uv: vec2f, canvasSize: vec2f, surfaceY: f32) -> vec4f {
