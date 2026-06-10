@@ -4,17 +4,20 @@
 import type { WeaponEffectSprite, WeaponEffectSpriteKind } from "../../snapshots/RenderSnapshot";
 import { assetUrls } from "../../../platform/assets";
 import effectShaderSource from "./combatWeaponEffect.wgsl?raw";
-import { SpriteTextureCache } from "./SpriteTextureCache";
+import { SpriteTextureCache, type SpriteTextureResource } from "./SpriteTextureCache";
 
 interface WeaponEffectDraw {
   readonly bindGroup: GPUBindGroup;
 }
 
+const proceduralTextureUrl = "";
+
 export class CombatWeaponEffectRenderer {
   private readonly textureCache: SpriteTextureCache;
+  private readonly proceduralTexture: SpriteTextureResource;
   private readonly sampler: GPUSampler;
   private readonly paramsBuffers: GPUBuffer[] = [];
-  private readonly paramsData = new Float32Array(12);
+  private readonly paramsData = new Float32Array(20);
   private readonly bindGroupLayout: GPUBindGroupLayout;
   private readonly pipeline: GPURenderPipeline;
   private draws: readonly WeaponEffectDraw[] = [];
@@ -25,6 +28,7 @@ export class CombatWeaponEffectRenderer {
   ) {
     this.textureCache = new SpriteTextureCache(device);
     this.textureCache.preload(Object.values(assetUrls.effects));
+    this.proceduralTexture = createProceduralTexture(device);
     this.sampler = device.createSampler({
       label: "Combat weapon effect sampler",
       addressModeU: "clamp-to-edge",
@@ -87,7 +91,7 @@ export class CombatWeaponEffectRenderer {
     const draws: WeaponEffectDraw[] = [];
 
     sortWeaponEffects(effects).forEach((effect) => {
-      const texture = this.textureCache.get(effect.textureUrl);
+      const texture = this.getEffectTexture(effect);
 
       if (!texture) {
         return;
@@ -126,6 +130,7 @@ export class CombatWeaponEffectRenderer {
 
   dispose(): void {
     this.textureCache.dispose();
+    this.proceduralTexture.texture.destroy();
 
     for (const buffer of this.paramsBuffers) {
       buffer.destroy();
@@ -157,23 +162,45 @@ export class CombatWeaponEffectRenderer {
     this.paramsData[4] = effect.frameIndex;
     this.paramsData[5] = Math.max(1, effect.frameCount);
     this.paramsData[6] = effect.opacity;
-    this.paramsData[7] = 0;
+    this.paramsData[7] = drawModeValue(effect.drawMode ?? "texture");
     this.paramsData[8] = effect.rotationRadians;
     this.paramsData[9] = effect.facing;
-    this.paramsData[10] = 0;
-    this.paramsData[11] = 0;
+    this.paramsData[10] = effect.softness ?? 0.55;
+    this.paramsData[11] = blendModeValue(effect.blendMode ?? "alpha");
+    this.paramsData[12] = effect.color?.[0] ?? 1;
+    this.paramsData[13] = effect.color?.[1] ?? 1;
+    this.paramsData[14] = effect.color?.[2] ?? 1;
+    this.paramsData[15] = effect.glowStrength ?? 0.55;
+    this.paramsData[16] = effect.sheetRect?.x ?? 0;
+    this.paramsData[17] = effect.sheetRect?.y ?? 0;
+    this.paramsData[18] = effect.sheetRect?.width ?? 1;
+    this.paramsData[19] = effect.sheetRect?.height ?? 1;
     this.device.queue.writeBuffer(buffer, 0, this.paramsData);
+  }
+
+  private getEffectTexture(effect: WeaponEffectSprite): SpriteTextureResource | null {
+    if (effect.textureUrl === proceduralTextureUrl || (effect.drawMode && effect.drawMode !== "texture")) {
+      return this.proceduralTexture;
+    }
+
+    return this.textureCache.get(effect.textureUrl);
   }
 }
 
 function sortWeaponEffects(effects: readonly WeaponEffectSprite[]): readonly WeaponEffectSprite[] {
   return [...effects].sort((a, b) => {
-    const layerDelta = effectLayer(a.kind) - effectLayer(b.kind);
+    const layerDelta = effectLayer(a) - effectLayer(b);
     return layerDelta !== 0 ? layerDelta : a.position.y - b.position.y;
   });
 }
 
-function effectLayer(kind: WeaponEffectSpriteKind): number {
+function effectLayer(effect: WeaponEffectSprite): number {
+  if (typeof effect.layer === "number") {
+    return effect.layer;
+  }
+
+  const kind: WeaponEffectSpriteKind = effect.kind;
+
   switch (kind) {
     case "fire-area-burn":
       return 0;
@@ -183,11 +210,59 @@ function effectLayer(kind: WeaponEffectSpriteKind): number {
       return 2;
     case "burn-overlay":
       return 3;
+    case "effect-glow":
+      return -1;
+    case "effect-trail":
+      return 1;
+    case "effect-sprite":
+    case "effect-particle":
+      return 2;
     default:
-      return assertNever(kind);
+      return 2;
   }
 }
 
-function assertNever(value: never): never {
-  throw new Error(`Unhandled weapon effect value: ${String(value)}`);
+function drawModeValue(mode: NonNullable<WeaponEffectSprite["drawMode"]>): number {
+  switch (mode) {
+    case "radial":
+      return 1;
+    case "streak":
+      return 2;
+    case "texture":
+    default:
+      return 0;
+  }
+}
+
+function blendModeValue(mode: NonNullable<WeaponEffectSprite["blendMode"]>): number {
+  switch (mode) {
+    case "screen":
+      return 1;
+    case "additive":
+      return 2;
+    case "alpha":
+    default:
+      return 0;
+  }
+}
+
+function createProceduralTexture(device: GPUDevice): SpriteTextureResource {
+  const texture = device.createTexture({
+    label: "Procedural effect white texture",
+    size: { width: 1, height: 1 },
+    format: "rgba8unorm",
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+  });
+  device.queue.writeTexture(
+    { texture },
+    new Uint8Array([255, 255, 255, 255]),
+    { bytesPerRow: 4, rowsPerImage: 1 },
+    { width: 1, height: 1 },
+  );
+  return {
+    texture,
+    view: texture.createView(),
+    width: 1,
+    height: 1,
+  };
 }

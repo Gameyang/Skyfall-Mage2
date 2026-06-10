@@ -1,0 +1,133 @@
+:root {
+  --ui-panel-frame: none;
+  --ui-button-frame: none;
+  --ui-slot-frame: none;
+  --ui-panel-frame-width: 18px;
+  --ui-button-frame-width: 8px;
+  --ui-slot-frame-width: 7px;
+  --ui-panel-frame-slice: 94;
+  --ui-button-frame-slice: 96 152;
+  --ui-slot-frame-slice: 72;
+}
+
+.skyfall-app[data-layout-mode="mobile-landscape"] {
+  --ui-panel-frame-width: 14px;
+  --ui-button-frame-width: 7px;
+  --ui-slot-frame-width: 6px;
+}
+
+.panel-host,
+.progress-panel,
+.modal-card,
+.modal-prompt,
+.locked-badge,
+.tab-button,
+.shop-offer,
+.modal-action,
+.modal-close,
+.status-cell,
+.item-slot {
+  position: relative;
+}
+
+.panel-host,
+.progress-panel,
+.modal-card,
+.modal-prompt,
+.locked-badge {
+  border-color: rgba(7, 7, 7, 0.88);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0)),
+    var(--panel);
+}
+
+.tab-button,
+.shop-offer,
+.modal-action,
+.modal-close {
+  border-color: rgba(7, 7, 7, 0.9);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(0, 0, 0, 0.12)),
+    var(--panel-2);
+}
+
+.status-cell,
+.item-slot,
+.locked-badge {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.035), rgba(0, 0, 0, 0.16)),
+    rgba(0, 0, 0, 0.22);
+}
+
+.panel-host::after,
+.progress-panel::after,
+.modal-card::after,
+.modal-prompt::after,
+.locked-badge::after,
+.tab-button::after,
+.shop-offer::after,
+.modal-action::after,
+.modal-close::after,
+.status-cell::after,
+.item-slot::after {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  content: "";
+  border-style: solid;
+  border-color: transparent;
+  border-image-repeat: stretch;
+  border-image-outset: 0;
+}
+
+.panel-host::after,
+.progress-panel::after,
+.modal-card::after,
+.modal-prompt::after,
+.locked-badge::after {
+  border-width: var(--ui-panel-frame-width);
+  border-image-source: var(--ui-panel-frame);
+  border-image-slice: var(--ui-panel-frame-slice);
+  border-image-width: var(--ui-panel-frame-width);
+}
+
+.tab-button::after,
+.shop-offer::after,
+.modal-action::after,
+.modal-close::after {
+  border-width: var(--ui-button-frame-width);
+  border-image-source: var(--ui-button-frame);
+  border-image-slice: var(--ui-button-frame-slice);
+  border-image-width: var(--ui-button-frame-width);
+}
+
+.status-cell::after,
+.item-slot::after {
+  border-width: var(--ui-slot-frame-width);
+  border-image-source: var(--ui-slot-frame);
+  border-image-slice: var(--ui-slot-frame-slice);
+  border-image-width: var(--ui-slot-frame-width);
+}
+
+.tab-button[data-active="true"],
+.item-slot[data-selected="true"] {
+  filter: brightness(1.08);
+}
+
+.tab-button:disabled,
+.item-slot:disabled,
+.skill-node:disabled,
+.shop-offer:disabled,
+.modal-action:disabled,
+.modal-close:disabled {
+  filter: saturate(0.7);
+}
+
+@media (orientation: landscape) and (max-height: 560px), (orientation: landscape) and (max-width: 980px) {
+  .skyfall-app {
+    --ui-panel-frame-width: 14px;
+    --ui-button-frame-width: 7px;
+    --ui-slot-frame-width: 6px;
+  }
+}

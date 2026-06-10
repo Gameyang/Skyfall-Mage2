@@ -22,6 +22,7 @@ function createPlayerSprite(state: GameState): RenderableSprite {
     position: state.player.position,
     size: { x: 0.108, y: 0.108 },
     textureUrl: resolveSkinUrl(state.player.skinId),
+    animation: null,
     rarity: "rare",
     statusEffects: [],
     motionPreset: "idle",
@@ -34,13 +35,15 @@ function createEnemySprite(enemy: GameState["entities"]["enemies"][number]): Ren
   const definition = starterEnemyById.get(enemy.definitionId);
   const isBoss = enemy.kind === "boss" || enemy.kind === "miniboss";
   const hpPercent = enemy.maxHp <= 0 ? 0 : enemy.hp / enemy.maxHp;
+  const animation = definition?.spriteAnimation ?? null;
 
   return {
     id: enemy.id,
     kind: isBoss ? "boss" : "enemy",
     position: enemy.position,
     size: isBoss ? { x: 0.122, y: 0.122 } : { x: 0.082, y: 0.082 },
-    textureUrl: definition?.iconUrl ?? "",
+    textureUrl: animation?.textureUrl ?? definition?.iconUrl ?? "",
+    animation,
     rarity: enemy.kind === "boss" ? "epic" : enemy.kind === "miniboss" ? "rare" : "common",
     statusEffects: enemy.statusEffects?.some((effect) => effect.id === "burning" && effect.remainingMs > 0)
       ? ["burning-field"]
@@ -60,6 +63,7 @@ function createItemDropSprite(drop: GameState["entities"]["itemDrops"][number]):
     position: drop.position,
     size: { x: 0.058, y: 0.058 },
     textureUrl: definition?.iconUrl ?? "",
+    animation: null,
     rarity: definition?.rarity ?? "common",
     statusEffects: [],
     motionPreset: "idle",

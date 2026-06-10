@@ -50,8 +50,11 @@ fn fragmentMain(in: VertexOut) -> @location(0) vec4f {
 }
 
 fn sampleSprite(uv: vec2f) -> vec4f {
+  let frameCount = max(1.0, floor(params.effects.z + 0.5));
+  let frameIndex = clamp(floor(params.effects.y + 0.5), 0.0, frameCount - 1.0);
+  let frameUv = vec2f((frameIndex + uv.x) / frameCount, uv.y);
   let inside = select(0.0, 1.0, uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0);
-  return textureSampleLevel(spriteTexture, spriteSampler, clamp(uv, vec2f(0.0), vec2f(1.0)), 0.0) * inside;
+  return textureSampleLevel(spriteTexture, spriteSampler, clamp(frameUv, vec2f(0.0), vec2f(1.0)), 0.0) * inside;
 }
 
 fn applyHitTint(baseColor: vec3f, time: f32, hit: f32) -> vec3f {

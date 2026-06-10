@@ -3,6 +3,12 @@
 
 import type { Vec2 } from "../../core/math/vector";
 import type { EnvironmentKind } from "../../core/state/EnvironmentState";
+import type {
+  EffectBlendMode,
+  EffectDrawMode,
+  EffectOutputKind,
+  EffectSheetRect,
+} from "../../content/effects/effectPresetTypes";
 import type { MaterialEmitter } from "../../features/combatField/CombatFieldTypes";
 
 export type RenderableSpriteKind = "player" | "enemy" | "boss" | "item";
@@ -17,12 +23,21 @@ export type RenderableSpriteStatusEffect =
   | "frozen";
 export type RenderableSpriteMotionPreset = "idle" | "bounce" | "shake" | "pulse" | "sway";
 
+export interface RenderableSpriteAnimation {
+  readonly frameCount: number;
+  readonly movementFrameCount: number;
+  readonly hitFrameCount: number;
+  readonly movementFrameMs: number;
+  readonly hitFrameMs: number;
+}
+
 export interface RenderableSprite {
   readonly id: string;
   readonly kind: RenderableSpriteKind;
   readonly position: Vec2;
   readonly size: Vec2;
   readonly textureUrl: string;
+  readonly animation: RenderableSpriteAnimation | null;
   readonly rarity: RenderableSpriteRarity;
   readonly statusEffects: readonly RenderableSpriteStatusEffect[];
   readonly motionPreset: RenderableSpriteMotionPreset;
@@ -30,7 +45,7 @@ export interface RenderableSprite {
   readonly hpPercent: number | null;
 }
 
-export type WeaponEffectSpriteKind = "fireball-projectile" | "fireball-impact" | "fire-area-burn" | "burn-overlay";
+export type WeaponEffectSpriteKind = EffectOutputKind;
 
 export interface WeaponEffectSprite {
   readonly id: string;
@@ -43,6 +58,13 @@ export interface WeaponEffectSprite {
   readonly opacity: number;
   readonly rotationRadians: number;
   readonly facing: -1 | 1;
+  readonly drawMode?: EffectDrawMode;
+  readonly color?: readonly [number, number, number];
+  readonly blendMode?: EffectBlendMode;
+  readonly glowStrength?: number;
+  readonly softness?: number;
+  readonly layer?: number;
+  readonly sheetRect?: EffectSheetRect;
 }
 
 export interface BattleEnvironmentVisuals {

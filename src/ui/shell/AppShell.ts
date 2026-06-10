@@ -24,7 +24,14 @@ import { createViewportLayoutController, type ViewportLayoutController } from ".
 export interface AppShellOptions {
   readonly dispatch: (command: GameCommand) => void;
   readonly titleLogoUrl: string;
+  readonly uiTextureUrls: UiTextureUrls;
   readonly onTitleStart: (event: TitleScreenStartEvent) => void;
+}
+
+export interface UiTextureUrls {
+  readonly panelFrame: string;
+  readonly buttonFrame: string;
+  readonly slotFrame: string;
 }
 
 export class AppShell {
@@ -64,6 +71,7 @@ export class AppShell {
       sidePanelElement: sidePanel,
       modalLayerElement: this.modalLayer.element,
     });
+    applyUiTextureUrls(this.element, options.uiTextureUrls);
     this.element.append(this.titleScreen.element);
     this.canvas = this.battlePanel.canvas;
     this.playfieldElement = this.battlePanel.playfieldElement;
@@ -108,6 +116,12 @@ export class AppShell {
     this.titleScreen.dispose();
     this.element.replaceChildren();
   }
+}
+
+function applyUiTextureUrls(element: HTMLElement, urls: UiTextureUrls): void {
+  element.style.setProperty("--ui-panel-frame", `url("${urls.panelFrame}")`);
+  element.style.setProperty("--ui-button-frame", `url("${urls.buttonFrame}")`);
+  element.style.setProperty("--ui-slot-frame", `url("${urls.slotFrame}")`);
 }
 
 function createLockedPanel(): HTMLElement {

@@ -17,7 +17,7 @@ const particleStride = 12;
 const particleEmitterStride = 8;
 const particleWorkgroupSize = 64;
 const enableWaterParticleSprites = false;
-const enableWaterSpriteSheetEffects = true;
+const enableWaterSpriteSheetEffects = false;
 const waterEffectFrameCount = 8;
 const maxWaterSpriteEffects = 48;
 

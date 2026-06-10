@@ -10,6 +10,16 @@ describe("createRenderSnapshot", () => {
     expect(snapshot.enemyPositions).toHaveLength(1);
     expect(snapshot.itemDropPositions).toHaveLength(1);
     expect(snapshot.sprites.map((sprite) => sprite.kind)).toEqual(["player", "enemy", "item"]);
+    expect(snapshot.sprites.find((sprite) => sprite.kind === "enemy")).toMatchObject({
+      textureUrl: expect.stringContaining("bat-animation-sheet.webp"),
+      animation: {
+        frameCount: 12,
+        movementFrameCount: 8,
+        hitFrameCount: 4,
+        movementFrameMs: 90,
+        hitFrameMs: 75,
+      },
+    });
     expect(snapshot.weaponEffects).toHaveLength(0);
     expect(snapshot.sprites.every((sprite) => sprite.textureUrl.includes(".webp"))).toBe(true);
     expect(snapshot.activeEmitterCount).toBe(0);

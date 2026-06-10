@@ -63,9 +63,7 @@ fn fragmentMain(@builtin(position) position: vec4f) -> @location(0) vec4f {
   let ringRipple = interaction.w;
   let slope = waterSlope(uv.x, time, canvasSize);
   let normalLight = clamp(0.54 + slope * 0.026, 0.0, 1.0);
-  let sideLight = sideLightShafts(uv, depth, time) * (1.0 - rain * 0.35);
-  let strata = waterStrata(uv, depth, time, wavePx);
-  let bubbles = bubbleField(uv, depth, time);
+  let surfaceNormalLight = normalLight * smoothstep(0.24, 0.0, depth);
 
   var shallowColor = mix(vec3f(0.12, 0.36, 0.46), vec3f(0.10, 0.43, 0.50), rain * 0.45);
   shallowColor = mix(shallowColor, vec3f(0.18, 0.24, 0.35), heat * 0.16);
@@ -75,9 +73,7 @@ fn fragmentMain(@builtin(position) position: vec4f) -> @location(0) vec4f {
   let deepColor = mix(vec3f(0.02, 0.055, 0.11), vec3f(0.06, 0.035, 0.095), heat * 0.26 + heatGlow * 0.16);
   var color = mix(shallowColor, midColor, smoothstep(0.06, 0.72, depth));
   color = mix(color, deepColor, smoothstep(0.38, 1.0, depth));
-  color *= 0.80 + normalLight * 0.14;
-  color += vec3f(0.05, 0.13, 0.15) * sideLight;
-  color += vec3f(0.035, 0.10, 0.13) * strata * (1.0 - depth * 0.45);
+  color *= 0.88 + surfaceNormalLight * 0.06;
 
   let waveIntensity = abs(wavePx);
   let surfaceSkin = smoothstep(0.026, 0.0, depth);
@@ -85,32 +81,14 @@ fn fragmentMain(@builtin(position) position: vec4f) -> @location(0) vec4f {
   let slopeFoam = smoothstep(16.0, 62.0, abs(slope)) * edge;
   let foam = max(smoothstep(3.8, 11.0, waveIntensity) * edge, max(slopeFoam, localFoam * edge));
   color = mix(color, vec3f(0.84, 0.95, 1.0), foam * 0.5);
-  color += vec3f(0.34, 0.68, 0.82) * surfaceSkin * (0.2 + normalLight * 0.16);
+  color += vec3f(0.34, 0.68, 0.82) * surfaceSkin * (0.2 + surfaceNormalLight * 0.16);
   color += vec3f(0.75, 0.95, 1.0) * meniscus * 0.18;
 
   let highlight = edge * (sin(uv.x * 24.0 + time * 0.7 + wavePx * 0.08) * 0.5 + 0.5);
-  let horizonReflection = smoothstep(0.38, 0.0, depth) * (0.55 + normalLight * 0.45);
+  let horizonReflection = smoothstep(0.18, 0.0, depth) * (0.55 + surfaceNormalLight * 0.45);
   color += vec3f(0.48, 0.62, 0.76) * highlight * (0.18 + rain * 0.06);
   color += vec3f(0.30, 0.34, 0.43) * horizonReflection * 0.13;
-
-  let causticA = sin((uv.x * 54.0 + uv.y * 18.0) + time * 0.45 + noise(uv * vec2f(18.0, 6.0)) * 3.0);
-  let causticB = sin((uv.x * 27.0 - uv.y * 32.0) - time * 0.32 + noise(uv * vec2f(10.0, 12.0) + 4.7) * 2.0);
-  let caustic = max(causticA * 0.7 + causticB * 0.35, 0.0);
-  color += vec3f(0.08, 0.17, 0.19) * caustic * (1.0 - depth) * (0.10 + disturbance * 0.08);
-
-  let sparkleCell = floor(vec2f(uv.x * 34.0 + time * 0.18, depth * 12.0));
-  let sparkleSeed = random(sparkleCell);
-  let sparkleTime = fract(time * 0.9 + sparkleSeed);
-  let sparkle = smoothstep(0.0, 0.1, sparkleTime) * (1.0 - smoothstep(0.15, 0.25, sparkleTime));
-
-  if (sparkleSeed > 0.984 && depth < 0.18) {
-    color = mix(color, vec3f(0.70, 0.85, 1.0), sparkle * edge * 0.7);
-  }
-
-  let shimmer = disturbance * (0.5 + 0.5 * sin((uv.x + uv.y) * 90.0 - time * 4.5));
-  color += vec3f(0.16, 0.42, 0.56) * shimmer * smoothstep(0.55, 0.0, depth);
   color += vec3f(0.46, 0.82, 0.96) * ringRipple * smoothstep(0.82, 0.0, depth) * 0.26;
-  color += vec3f(0.68, 0.92, 1.0) * bubbles * smoothstep(0.95, 0.02, depth) * 0.42;
   color += vec3f(0.72, 0.26, 0.10) * heatGlow * smoothstep(0.42, 0.0, depth);
   color = mix(color, particle.rgb, particle.a);
 
@@ -291,38 +269,6 @@ fn detailWave(x: f32, time: f32) -> f32 {
   let capillaryC = sin(x * 352.0 + time * (2.7 + abs(wind) * 1.4));
   let capillaryD = sin(x * 468.0 - time * (5.9 + abs(wind) * 1.9) + noiseB * 2.4);
   return (capillaryA * 0.40 + capillaryB * 0.29 + capillaryC * 0.19 + capillaryD * 0.12) * activity * (0.58 + interactionEnergy * 0.92);
-}
-
-fn sideLightShafts(uv: vec2f, depth: f32, time: f32) -> f32 {
-  let drift = noise(vec2f(uv.x * 2.2 + time * 0.05, depth * 1.7));
-  let shaftA = pow(max(0.0, sin(uv.x * 15.0 + drift * 3.0 + time * 0.14)), 6.0);
-  let shaftB = pow(max(0.0, sin(uv.x * 9.0 - drift * 2.2 - time * 0.09 + 1.7)), 8.0);
-  return (shaftA * 0.55 + shaftB * 0.45) * smoothstep(0.92, 0.02, depth);
-}
-
-fn waterStrata(uv: vec2f, depth: f32, time: f32, wavePx: f32) -> f32 {
-  let bend = noise(vec2f(uv.x * 7.0 + time * 0.06, depth * 5.0)) * 1.7;
-  let bands = sin(depth * 62.0 + uv.x * 11.0 + bend + wavePx * 0.035);
-  let fineBands = sin(depth * 128.0 - time * 0.22 + uv.x * 8.0);
-  return max(0.0, bands * 0.65 + fineBands * 0.18) * smoothstep(0.02, 0.82, depth);
-}
-
-fn bubbleField(uv: vec2f, depth: f32, time: f32) -> f32 {
-  let layerA = bubbleLayer(uv + vec2f(0.0, -time * 0.026), vec2f(30.0, 16.0), 0.91);
-  let layerB = bubbleLayer(uv + vec2f(0.13, -time * 0.018), vec2f(18.0, 10.0), 0.86);
-  return (layerA * 0.68 + layerB * 0.42) * smoothstep(0.04, 0.42, depth);
-}
-
-fn bubbleLayer(uv: vec2f, scale: vec2f, threshold: f32) -> f32 {
-  let p = uv * scale;
-  let cell = floor(p);
-  let local = fract(p);
-  let seed = random(cell);
-  let center = vec2f(random(cell + vec2f(2.1, 7.3)), random(cell + vec2f(5.4, 1.9)));
-  let bubbleSize = mix(0.025, 0.055, random(cell + vec2f(8.8, 4.2)));
-  let d = distance(local, center);
-  let ring = (1.0 - smoothstep(bubbleSize, bubbleSize * 1.8, d)) * smoothstep(bubbleSize * 0.38, bubbleSize, d);
-  return ring * step(threshold, seed);
 }
 
 fn random(st: vec2f) -> f32 {

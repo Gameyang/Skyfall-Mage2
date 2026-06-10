@@ -19,7 +19,7 @@ export const starterItems: readonly ItemDefinition[] = [
       projectileSpeedPerSecond: 0.72,
       projectileCollisionRadius: 0.035,
       maxAgeMs: 1_200,
-      explosionRadius: 0.075,
+      explosionRadius: 0.15,
       fireAreaDurationMs: 2_000,
       fireAreaDamagePerSecond: 8,
       burnDurationMs: 2_000,

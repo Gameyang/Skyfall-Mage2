@@ -21,6 +21,11 @@ export const assetUrls = {
   title: {
     logo: new URL("../assets/title/skyfall-mage2-title.webp", import.meta.url).href,
   },
+  ui: {
+    panelFrame: new URL("../assets/ui/ui-panel-frame.png", import.meta.url).href,
+    buttonFrame: new URL("../assets/ui/ui-button-frame.png", import.meta.url).href,
+    slotFrame: new URL("../assets/ui/ui-slot-frame.png", import.meta.url).href,
+  },
   items: {
     fireStaff: new URL("../assets/items/fire_staff.webp", import.meta.url).href,
     blizzardStaff: new URL("../assets/items/blizzard_staff.webp", import.meta.url).href,
@@ -35,6 +40,7 @@ export const assetUrls = {
   },
   enemies: {
     bat: new URL("../assets/enemies/bat.webp", import.meta.url).href,
+    batAnimationSheet: new URL("../assets/enemies/bat-animation-sheet.webp", import.meta.url).href,
   },
   projectiles: {
     meteorRock: new URL("../assets/projectiles/meteor-rock.webp", import.meta.url).href,
@@ -43,12 +49,16 @@ export const assetUrls = {
     firestaffProjectile: new URL("../assets/effects/firestaff-projectile-round-v2-sheet.png", import.meta.url).href,
     firestaffImpact: new URL("../assets/effects/firestaff-impact-burst-v1-sheet.png", import.meta.url).href,
     firestaffBurn: new URL("../assets/effects/firestaff-burn-small-v2-sheet.png", import.meta.url).href,
+    waterEntrySurface: new URL("../assets/effects/water-entry-surface-sheet.webp", import.meta.url).href,
+    waterEntryUnderwater: new URL("../assets/effects/water-entry-underwater-sheet.webp", import.meta.url).href,
+    waterUnderwaterLoop: new URL("../assets/effects/water-underwater-loop-sheet.webp", import.meta.url).href,
   },
 } as const;
 
 export function getPreloadAssetUrls(): readonly string[] {
   return [
     assetUrls.title.logo,
+    ...Object.values(assetUrls.ui),
     ...Object.values(assetUrls.items),
     ...Object.values(assetUrls.enemies),
     ...Object.values(assetUrls.projectiles),

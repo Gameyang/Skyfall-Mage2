@@ -2,6 +2,8 @@ struct EffectParams {
   positionAndSize: vec4f,
   atlas: vec4f,
   transform: vec4f,
+  colorAndGlow: vec4f,
+  sheetRect: vec4f,
 };
 
 @group(0) @binding(0) var<uniform> params: EffectParams;
@@ -47,14 +49,47 @@ fn fragmentMain(in: VertexOut) -> @location(0) vec4f {
     localUv.x = 1.0 - localUv.x;
   }
 
-  let frameCount = max(1.0, floor(params.atlas.y + 0.5));
-  let frameIndex = clamp(floor(params.atlas.x + 0.5), 0.0, frameCount - 1.0);
-  let frameUv = vec2f((frameIndex + localUv.x) / frameCount, localUv.y);
-  let color = sampleEffect(frameUv);
+  let drawMode = floor(params.atlas.w + 0.5);
+  let color = sampleLayer(localUv, drawMode);
   let alpha = color.a * clamp(params.atlas.z, 0.0, 1.0);
-  let glow = 1.08 + smoothstep(0.16, 1.0, color.a) * 0.55;
+  let blendBoost = 1.0 + clamp(params.transform.w, 0.0, 2.0) * 0.18;
+  let glow = 1.0 + smoothstep(0.12, 1.0, color.a) * params.colorAndGlow.w * blendBoost;
 
   return vec4f(color.rgb * glow, alpha);
+}
+
+fn sampleLayer(localUv: vec2f, drawMode: f32) -> vec4f {
+  if (drawMode > 1.5) {
+    return sampleStreak(localUv);
+  }
+
+  if (drawMode > 0.5) {
+    return sampleRadial(localUv);
+  }
+
+  let frameCount = max(1.0, floor(params.atlas.y + 0.5));
+  let frameIndex = clamp(floor(params.atlas.x + 0.5), 0.0, frameCount - 1.0);
+  let frameUv = vec2f(
+    params.sheetRect.x + ((frameIndex + localUv.x) / frameCount) * params.sheetRect.z,
+    params.sheetRect.y + localUv.y * params.sheetRect.w
+  );
+  let color = sampleEffect(frameUv);
+  return vec4f(color.rgb * params.colorAndGlow.rgb, color.a);
+}
+
+fn sampleRadial(uv: vec2f) -> vec4f {
+  let distanceFromCenter = distance(uv, vec2f(0.5));
+  let softness = clamp(params.transform.z, 0.08, 0.95);
+  let alpha = 1.0 - smoothstep(0.5 - softness * 0.42, 0.5, distanceFromCenter);
+  return vec4f(params.colorAndGlow.rgb, alpha);
+}
+
+fn sampleStreak(uv: vec2f) -> vec4f {
+  let edge = 0.5 - clamp(params.transform.z, 0.08, 0.95) * 0.42;
+  let yFade = 1.0 - smoothstep(edge, 0.5, abs(uv.y - 0.5));
+  let xFade = 1.0 - smoothstep(0.42, 1.0, abs(uv.x - 0.5) * 2.0);
+  let core = 1.0 - smoothstep(0.0, 0.18, abs(uv.y - 0.5));
+  return vec4f(params.colorAndGlow.rgb * (1.0 + core * 0.35), yFade * xFade);
 }
 
 fn sampleEffect(uv: vec2f) -> vec4f {

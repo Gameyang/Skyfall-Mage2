@@ -2,7 +2,8 @@
 
 Runtime enemy and boss sprite assets live here.
 
-- Store 64x64 WebP files only.
+- Store single-frame enemy sprites as 64x64 WebP files.
+- Store animation sprite sheets as WebP files with 64x64 cells, a `-sheet` suffix, and frame metadata in content definitions.
 - Keep filenames traceable to content enemy ids.
 - Placeholder assets should use explicit temporary ids.
 

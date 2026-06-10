@@ -10,11 +10,16 @@ import type {
 import spriteShaderSource from "./combatSpriteRender.wgsl?raw";
 import { SpriteTextureCache } from "./SpriteTextureCache";
 
-const hitFlashDurationMs = 1_000;
+const playerHitFlashDurationMs = 1_000;
 const hpDecreaseEpsilon = 0.0001;
 
 interface SpriteDraw {
   readonly bindGroup: GPUBindGroup;
+}
+
+interface SpriteHitState {
+  readonly active: boolean;
+  readonly elapsedMs: number;
 }
 
 export class CombatSpriteRenderer {
@@ -25,7 +30,8 @@ export class CombatSpriteRenderer {
   private readonly bindGroupLayout: GPUBindGroupLayout;
   private readonly pipeline: GPURenderPipeline;
   private readonly previousHpPercentBySpriteId = new Map<string, number>();
-  private readonly hitFlashUntilMsBySpriteId = new Map<string, number>();
+  private readonly hitStartMsBySpriteId = new Map<string, number>();
+  private readonly hitUntilMsBySpriteId = new Map<string, number>();
   private draws: readonly SpriteDraw[] = [];
 
   constructor(
@@ -97,7 +103,9 @@ export class CombatSpriteRenderer {
 
     sortSprites(sprites).forEach((sprite) => {
       activeSpriteIds.add(sprite.id);
-      const hitFlash = this.resolveHitFlash(sprite, timeMs);
+      const hitState = this.resolveHitState(sprite, timeMs);
+      const hitFlash = sprite.kind === "player" && hitState.active ? 1 : 0;
+      const frameIndex = resolveAnimationFrameIndex(sprite, timeMs, hitState);
       const texture = this.textureCache.get(sprite.textureUrl);
 
       if (!texture) {
@@ -105,7 +113,7 @@ export class CombatSpriteRenderer {
       }
 
       const paramsBuffer = this.ensureParamsBuffer(draws.length);
-      this.writeSpriteParams(paramsBuffer, sprite, timeMs, aspectScale, hitFlash);
+      this.writeSpriteParams(paramsBuffer, sprite, timeMs, aspectScale, hitFlash, frameIndex);
       draws.push({
         bindGroup: this.device.createBindGroup({
           label: `Combat sprite bind group ${sprite.id}`,
@@ -166,6 +174,7 @@ export class CombatSpriteRenderer {
     timeMs: number,
     aspectScale: number,
     hitFlash: number,
+    frameIndex: number,
   ): void {
     this.paramsData.fill(0);
     this.paramsData[0] = sprite.position.x;
@@ -177,8 +186,8 @@ export class CombatSpriteRenderer {
     this.paramsData[6] = encodeRarity(sprite.rarity);
     this.paramsData[7] = encodeKind(sprite.kind);
     this.paramsData[8] = hitFlash;
-    this.paramsData[9] = 0;
-    this.paramsData[10] = 0;
+    this.paramsData[9] = frameIndex;
+    this.paramsData[10] = sprite.animation?.frameCount ?? 1;
     this.paramsData[11] = 0;
     this.paramsData[12] = 0;
     this.paramsData[13] = encodeMotion(sprite.motionPreset);
@@ -187,30 +196,70 @@ export class CombatSpriteRenderer {
     this.device.queue.writeBuffer(buffer, 0, this.paramsData);
   }
 
-  private resolveHitFlash(sprite: RenderableSprite, timeMs: number): number {
-    if (sprite.kind !== "player" || sprite.hpPercent === null) {
-      return 0;
+  private resolveHitState(sprite: RenderableSprite, timeMs: number): SpriteHitState {
+    if (sprite.hpPercent === null) {
+      return inactiveHitState;
     }
 
     const previousHpPercent = this.previousHpPercentBySpriteId.get(sprite.id);
+    const hitDurationMs = getHitDurationMs(sprite);
 
     if (previousHpPercent !== undefined && sprite.hpPercent < previousHpPercent - hpDecreaseEpsilon) {
-      this.hitFlashUntilMsBySpriteId.set(sprite.id, timeMs + hitFlashDurationMs);
+      this.hitStartMsBySpriteId.set(sprite.id, timeMs);
+      this.hitUntilMsBySpriteId.set(sprite.id, timeMs + hitDurationMs);
     }
 
     this.previousHpPercentBySpriteId.set(sprite.id, sprite.hpPercent);
-    const flashUntilMs = this.hitFlashUntilMsBySpriteId.get(sprite.id) ?? 0;
-    return timeMs < flashUntilMs ? 1 : 0;
+    const hitUntilMs = this.hitUntilMsBySpriteId.get(sprite.id) ?? 0;
+
+    if (timeMs >= hitUntilMs) {
+      return inactiveHitState;
+    }
+
+    return {
+      active: true,
+      elapsedMs: Math.max(0, timeMs - (this.hitStartMsBySpriteId.get(sprite.id) ?? timeMs)),
+    };
   }
 
   private pruneSpriteAnimationState(activeSpriteIds: ReadonlySet<string>): void {
     for (const spriteId of this.previousHpPercentBySpriteId.keys()) {
       if (!activeSpriteIds.has(spriteId)) {
         this.previousHpPercentBySpriteId.delete(spriteId);
-        this.hitFlashUntilMsBySpriteId.delete(spriteId);
+        this.hitStartMsBySpriteId.delete(spriteId);
+        this.hitUntilMsBySpriteId.delete(spriteId);
       }
     }
   }
+}
+
+const inactiveHitState: SpriteHitState = { active: false, elapsedMs: 0 };
+
+function resolveAnimationFrameIndex(sprite: RenderableSprite, timeMs: number, hitState: SpriteHitState): number {
+  const animation = sprite.animation;
+
+  if (!animation) {
+    return 0;
+  }
+
+  const frameCount = Math.max(1, animation.frameCount);
+  const movementFrameCount = Math.max(1, Math.min(animation.movementFrameCount, frameCount));
+  const hitFrameCount = Math.max(0, Math.min(animation.hitFrameCount, frameCount - movementFrameCount));
+
+  if (hitState.active && hitFrameCount > 0) {
+    const hitFrame = Math.min(hitFrameCount - 1, Math.floor(hitState.elapsedMs / Math.max(1, animation.hitFrameMs)));
+    return Math.min(frameCount - 1, movementFrameCount + hitFrame);
+  }
+
+  return Math.floor(timeMs / Math.max(1, animation.movementFrameMs)) % movementFrameCount;
+}
+
+function getHitDurationMs(sprite: RenderableSprite): number {
+  if (!sprite.animation || sprite.animation.hitFrameCount <= 0) {
+    return playerHitFlashDurationMs;
+  }
+
+  return Math.max(1, sprite.animation.hitFrameCount) * Math.max(1, sprite.animation.hitFrameMs);
 }
 
 function sortSprites(sprites: readonly RenderableSprite[]): readonly RenderableSprite[] {

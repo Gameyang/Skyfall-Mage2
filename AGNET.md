@@ -23,3 +23,15 @@
 ## V2 responsive layout reference
 
 UI/layout 구현 전에는 `sandbox/v2-responsive-layout-test/README.md`와 `sandbox/v2-responsive-layout-test/index.html`을 확인한다. 이 샌드박스가 desktop landscape, mobile landscape, portrait rotate notice, 입력 소유권, v1식 오른쪽 패널, 4 equipment slots + 5 x 4 bag grid의 현재 기준이다.
+
+## Unified Effect Authoring
+
+All new combat visual effects should use the shared effect preset pipeline instead of one-off hardcoded renderer constants.
+
+- Canonical editable data lives in `src/content/effects/effectPresets.ts`.
+- Shared serializable contracts and pure evaluation rules live in `src/content/effects/effectPresetTypes.ts` and `src/content/effects/effectEvaluation.ts`.
+- Game snapshots should convert gameplay/runtime state into effect preset context, then call the shared evaluator through `src/render/snapshots/createEffectSpritesFromPreset.ts`.
+- The local-only editor lives under `src/tools/effects` and is loaded only in dev mode from `/effects`.
+- Local preset save/load is handled by the Vite dev middleware at `/__local/effects/presets`; do not depend on that endpoint in production code.
+- Effect presets must remain JSON-compatible and must not store DOM nodes, GPU resources, renderer instances, or gameplay state.
+- Registered effect textures come from `assetUrls.effects`; do not add arbitrary remote image URLs to presets.

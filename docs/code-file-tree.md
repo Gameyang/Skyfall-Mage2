@@ -61,12 +61,13 @@ src/
   content/
   features/
   platform/
+  tools/
   tests/
 ```
 
 `src/main.ts`는 bootstrap 진입점만 담당한다. 실제 조립은 `src/app`에 둔다.
 
-`src/assets` stores runtime game art that ships through the app bundle. Imported v1 art is normalized to 64x64 WebP under `items`, `skins`, `enemies`, and `projectiles`.
+`src/assets` stores runtime game art that ships through the app bundle. Imported v1 art is normalized to 64x64 WebP under `items`, `skins`, `enemies`, and `projectiles`; UI frame textures live under `ui`.
 
 ## 4. app
 
@@ -268,6 +269,7 @@ src/ui/styles/
   layout.css
   panels.css
   controls.css
+  textures.css
 ```
 
 UI는 command를 발행한다. state 변경이나 WebGPU resource 접근은 하지 않는다.
@@ -313,9 +315,18 @@ src/content/shop/
   ShopDefinition.ts
   ShopRegistry.ts
   starterShop.ts
+
+src/content/effects/
+  effectPresetTypes.ts
+  effectPresets.ts
+  effectEvaluation.ts
 ```
 
 content는 data와 registry를 둔다. behavior 구현은 `features`에 둔다.
+
+`src/content/effects` stores serializable effect preset data shared by the game renderer and the local effect editor.
+
+`src/tools/effects` owns local-only effect editing UI and preview code. It must stay behind dev-only entrypoints and must not own gameplay state.
 
 ## 14. inventory, equipment, progression, shop
 

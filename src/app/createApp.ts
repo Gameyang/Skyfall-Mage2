@@ -29,6 +29,7 @@ export async function createApp(root: HTMLElement): Promise<AppInstance> {
   const shell = new AppShell({
     dispatch: (command) => commandBus.enqueue(command),
     titleLogoUrl: assetUrls.title.logo,
+    uiTextureUrls: assetUrls.ui,
     onTitleStart: () => startGame(),
   });
   root.replaceChildren(shell.element);
