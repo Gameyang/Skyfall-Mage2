@@ -2,16 +2,16 @@
   --ui-panel-frame: none;
   --ui-button-frame: none;
   --ui-slot-frame: none;
-  --ui-panel-frame-width: 18px;
+  --ui-panel-frame-width: 10px;
   --ui-button-frame-width: 8px;
   --ui-slot-frame-width: 7px;
-  --ui-panel-frame-slice: 94;
+  --ui-panel-frame-slice: 72;
   --ui-button-frame-slice: 96 152;
   --ui-slot-frame-slice: 72;
 }
 
 .skyfall-app[data-layout-mode="mobile-landscape"] {
-  --ui-panel-frame-width: 14px;
+  --ui-panel-frame-width: 8px;
   --ui-button-frame-width: 7px;
   --ui-slot-frame-width: 6px;
 }
@@ -126,7 +126,7 @@
 
 @media (orientation: landscape) and (max-height: 560px), (orientation: landscape) and (max-width: 980px) {
   .skyfall-app {
-    --ui-panel-frame-width: 14px;
+    --ui-panel-frame-width: 8px;
     --ui-button-frame-width: 7px;
     --ui-slot-frame-width: 6px;
   }

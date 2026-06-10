@@ -1,7 +1,7 @@
 // Responsibility: Detect sprite-sheet grid metadata from local image pixels.
 // Owner: tools/sheets
 
-import type { SheetRect } from "../../content/sheets/sheetTypes";
+import type { SheetAnimationClip, SheetFrameDefinition, SheetRect } from "../../content/sheets/sheetTypes";
 
 export interface SpriteAutoMapResult {
   readonly rect: SheetRect;
@@ -13,6 +13,8 @@ export interface SpriteAutoMapResult {
   readonly imageWidth: number;
   readonly imageHeight: number;
   readonly confidence: number;
+  readonly frames: readonly SheetFrameDefinition[];
+  readonly clips: readonly SheetAnimationClip[];
 }
 
 export interface SpriteAutoMapImageData {
@@ -87,12 +89,30 @@ export function analyzeSpriteSheetPixels(
       imageWidth: image.width,
       imageHeight: image.height,
       confidence: 0,
+      frames: [
+        {
+          id: "frame-001",
+          label: "Frame 1",
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+          cellRect: { x: 0, y: 0, width: 1, height: 1 },
+          placement: { x: 0, y: 0, width: 1, height: 1 },
+          pivot: { x: 0.5, y: 0.5 },
+        },
+      ],
+      clips: [
+        {
+          id: "all",
+          label: "All Frames",
+          frameIds: ["frame-001"],
+        },
+      ],
     };
   }
 
   const projectionX = createProjection(image, bounds, "x", settings.alphaThreshold);
   const projectionY = createProjection(image, bounds, "y", settings.alphaThreshold);
   const candidate = findBestGridCandidate(image, bounds, projectionX, projectionY, settings);
+  const frames = createFrameDefinitions(image, bounds, candidate.columns, candidate.rows, settings.alphaThreshold);
 
   return {
     rect: {
@@ -109,7 +129,49 @@ export function analyzeSpriteSheetPixels(
     imageWidth: image.width,
     imageHeight: image.height,
     confidence: clamp(candidate.score, 0, 1),
+    frames,
+    clips: [
+      {
+        id: "all",
+        label: "All Frames",
+        frameIds: frames.map((frame) => frame.id),
+      },
+    ],
   };
+}
+
+export function createGridFrameDefinitions(
+  rect: SheetRect,
+  columns: number,
+  rows: number,
+  frameCount: number,
+): readonly SheetFrameDefinition[] {
+  const safeColumns = Math.max(1, Math.floor(columns));
+  const safeRows = Math.max(1, Math.floor(rows));
+  const safeFrameCount = Math.max(1, Math.floor(frameCount));
+  const frames: SheetFrameDefinition[] = [];
+
+  for (let index = 0; index < Math.min(safeFrameCount, safeColumns * safeRows); index += 1) {
+    const column = index % safeColumns;
+    const row = Math.floor(index / safeColumns);
+    const cellRect = {
+      x: rect.x + (rect.width * column) / safeColumns,
+      y: rect.y + (rect.height * row) / safeRows,
+      width: rect.width / safeColumns,
+      height: rect.height / safeRows,
+    };
+
+    frames.push({
+      id: formatFrameId(index),
+      label: `Frame ${index + 1}`,
+      rect: cellRect,
+      cellRect,
+      placement: { x: 0, y: 0, width: 1, height: 1 },
+      pivot: { x: 0.5, y: 0.5 },
+    });
+  }
+
+  return frames;
 }
 
 function findBestGridCandidate(
@@ -215,6 +277,105 @@ function findAlphaBounds(image: SpriteAutoMapImageData, alphaThreshold: number):
     width: maxX - minX + 1,
     height: maxY - minY + 1,
   };
+}
+
+function createFrameDefinitions(
+  image: SpriteAutoMapImageData,
+  bounds: AlphaBounds,
+  columns: number,
+  rows: number,
+  alphaThreshold: number,
+): readonly SheetFrameDefinition[] {
+  const frames: SheetFrameDefinition[] = [];
+  const cellWidth = bounds.width / columns;
+  const cellHeight = bounds.height / rows;
+
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      const cellBounds = {
+        x: Math.floor(bounds.x + column * cellWidth),
+        y: Math.floor(bounds.y + row * cellHeight),
+        width: Math.max(1, Math.ceil((column + 1) * cellWidth) - Math.floor(column * cellWidth)),
+        height: Math.max(1, Math.ceil((row + 1) * cellHeight) - Math.floor(row * cellHeight)),
+      };
+      const trimmedBounds = findAlphaBoundsInRect(image, cellBounds, alphaThreshold);
+
+      if (!trimmedBounds) {
+        continue;
+      }
+
+      const index = frames.length;
+      frames.push({
+        id: formatFrameId(index),
+        label: `Frame ${index + 1}`,
+        rect: normalizePixelRect(trimmedBounds, image.width, image.height),
+        cellRect: normalizePixelRect(cellBounds, image.width, image.height),
+        placement: {
+          x: (trimmedBounds.x - cellBounds.x) / cellBounds.width,
+          y: (trimmedBounds.y - cellBounds.y) / cellBounds.height,
+          width: trimmedBounds.width / cellBounds.width,
+          height: trimmedBounds.height / cellBounds.height,
+        },
+        pivot: { x: 0.5, y: 0.5 },
+      });
+    }
+  }
+
+  return frames.length > 0
+    ? frames
+    : createGridFrameDefinitions(normalizePixelRect(bounds, image.width, image.height), columns, rows, columns * rows);
+}
+
+function findAlphaBoundsInRect(
+  image: SpriteAutoMapImageData,
+  rect: AlphaBounds,
+  alphaThreshold: number,
+): AlphaBounds | null {
+  let minX = rect.x + rect.width;
+  let minY = rect.y + rect.height;
+  let maxX = rect.x - 1;
+  let maxY = rect.y - 1;
+  const maxScanX = Math.min(image.width, rect.x + rect.width);
+  const maxScanY = Math.min(image.height, rect.y + rect.height);
+
+  for (let y = rect.y; y < maxScanY; y += 1) {
+    for (let x = rect.x; x < maxScanX; x += 1) {
+      const alpha = image.data[(y * image.width + x) * 4 + 3] ?? 0;
+
+      if (alpha <= alphaThreshold) {
+        continue;
+      }
+
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+  }
+
+  if (maxX < minX || maxY < minY) {
+    return null;
+  }
+
+  return {
+    x: minX,
+    y: minY,
+    width: maxX - minX + 1,
+    height: maxY - minY + 1,
+  };
+}
+
+function normalizePixelRect(rect: AlphaBounds, imageWidth: number, imageHeight: number): SheetRect {
+  return {
+    x: rect.x / imageWidth,
+    y: rect.y / imageHeight,
+    width: rect.width / imageWidth,
+    height: rect.height / imageHeight,
+  };
+}
+
+function formatFrameId(index: number): string {
+  return `frame-${String(index + 1).padStart(3, "0")}`;
 }
 
 function createProjection(

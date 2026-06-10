@@ -21,6 +21,7 @@ export interface WaterSurfaceSimulationOptions {
   readonly tension?: number;
   readonly spread?: number;
   readonly speed?: number;
+  readonly smoothing?: number;
   readonly maxVelocity?: number;
   readonly maxHeight?: number;
 }
@@ -35,6 +36,7 @@ export class WaterSurfaceSimulation {
   private readonly tension: number;
   private readonly spread: number;
   private readonly speed: number;
+  private readonly smoothing: number;
   private readonly maxVelocity: number;
   private readonly maxHeight: number;
   private rainAccumulator = 0;
@@ -46,6 +48,7 @@ export class WaterSurfaceSimulation {
     this.tension = options.tension ?? 0.025;
     this.spread = options.spread ?? 0.15;
     this.speed = options.speed ?? 1;
+    this.smoothing = options.smoothing ?? 0;
     this.maxVelocity = options.maxVelocity ?? 8;
     this.maxHeight = options.maxHeight ?? 16;
     this.springs = Array.from({ length: this.columns }, () => ({ height: 0, velocity: 0 }));
@@ -177,6 +180,35 @@ export class WaterSurfaceSimulation {
           this.maxHeight,
         );
       }
+    }
+
+    this.smoothHighFrequencyMotion();
+  }
+
+  private smoothHighFrequencyMotion(): void {
+    if (this.smoothing <= 0 || this.springs.length < 3) {
+      return;
+    }
+
+    this.leftDeltas.fill(0);
+    this.rightDeltas.fill(0);
+
+    for (let index = 1; index < this.springs.length - 1; index += 1) {
+      const left = this.springs[index - 1]!;
+      const spring = this.springs[index]!;
+      const right = this.springs[index + 1]!;
+      const neighborAverage = (left.height + right.height) * 0.5;
+      const neighborVelocityAverage = (left.velocity + right.velocity) * 0.5;
+      this.leftDeltas[index] = (neighborAverage - spring.height) * this.smoothing;
+      this.rightDeltas[index] = (neighborVelocityAverage - spring.velocity) * this.smoothing;
+    }
+
+    for (let index = 1; index < this.springs.length - 1; index += 1) {
+      const spring = this.springs[index]!;
+      const heightCorrection = this.leftDeltas[index]!;
+      const velocityCorrection = this.rightDeltas[index]!;
+      spring.height = clamp(spring.height + heightCorrection, -this.maxHeight, this.maxHeight);
+      spring.velocity = clamp(spring.velocity + velocityCorrection, -this.maxVelocity, this.maxVelocity);
     }
   }
 

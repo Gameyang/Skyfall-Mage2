@@ -66,7 +66,14 @@ describe("WaterSurfaceSimulation", () => {
   });
 
   it("keeps battlefield water tuning bounded under repeated impacts", () => {
-    const simulation = new WaterSurfaceSimulation({ columns: 64, damping: 0.045, tension: 0.027, spread: 0.34 });
+    const simulation = new WaterSurfaceSimulation({
+      columns: 64,
+      damping: 0.045,
+      smoothing: 0.36,
+      speed: 1.8,
+      tension: 0.027,
+      spread: 0.28,
+    });
 
     for (let frame = 0; frame < 48; frame += 1) {
       if (frame % 6 === 0) {
@@ -83,7 +90,31 @@ describe("WaterSurfaceSimulation", () => {
     const heights = simulation.readHeights();
 
     expect(maxAbs(heights)).toBeLessThan(12);
-    expect(maxAdjacentDelta(heights)).toBeLessThan(8);
+    expect(maxAdjacentDelta(heights)).toBeLessThan(4.5);
+  });
+
+  it("damps checkerboard zigzag motion while keeping waves moving", () => {
+    const raw = new WaterSurfaceSimulation({ columns: 32, damping: 0.02, tension: 0.027, spread: 0.28, speed: 1.8 });
+    const smoothed = new WaterSurfaceSimulation({
+      columns: 32,
+      damping: 0.02,
+      smoothing: 0.36,
+      tension: 0.027,
+      spread: 0.28,
+      speed: 1.8,
+    });
+
+    for (let frame = 0; frame < 24; frame += 1) {
+      if (frame % 3 === 0) {
+        raw.applyImpulse({ x: 0.45, radius: 1 / 32, velocity: frame % 2 === 0 ? 4 : -4, kind: "wake" });
+        smoothed.applyImpulse({ x: 0.45, radius: 1 / 32, velocity: frame % 2 === 0 ? 4 : -4, kind: "wake" });
+      }
+      raw.update(16.6667);
+      smoothed.update(16.6667);
+    }
+
+    expect(alternatingEnergy(smoothed.readHeights())).toBeLessThan(alternatingEnergy(raw.readHeights()) * 0.72);
+    expect(maxAbs(smoothed.readHeights())).toBeGreaterThan(0.1);
   });
 
   it("clamps extreme impulses and reset clears spring state", () => {
@@ -112,4 +143,8 @@ function maxAdjacentDelta(heights: Float32Array<ArrayBuffer>): number {
 
     return Math.max(maxDelta, Math.abs(height - (heights[index - 1] ?? 0)));
   }, 0);
+}
+
+function alternatingEnergy(heights: Float32Array<ArrayBuffer>): number {
+  return Math.abs(Array.from(heights).reduce((sum, height, index) => sum + height * (index % 2 === 0 ? 1 : -1), 0));
 }
