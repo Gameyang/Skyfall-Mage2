@@ -1,5 +1,8 @@
 :root {
   --ui-panel-frame: none;
+  --ui-panel-bg-desktop: none;
+  --ui-panel-bg-mobile: none;
+  --ui-panel-bg: var(--ui-panel-bg-desktop);
   --ui-button-frame: none;
   --ui-slot-frame: none;
   --ui-panel-frame-width: 10px;
@@ -11,6 +14,7 @@
 }
 
 .skyfall-app[data-layout-mode="mobile-landscape"] {
+  --ui-panel-bg: var(--ui-panel-bg-mobile);
   --ui-panel-frame-width: 8px;
   --ui-button-frame-width: 7px;
   --ui-slot-frame-width: 6px;
@@ -57,6 +61,94 @@
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.035), rgba(0, 0, 0, 0.16)),
     rgba(0, 0, 0, 0.22);
+}
+
+.panel-host.side-panel {
+  --side-panel-accent-top: rgba(240, 189, 85, 0.1);
+  --side-panel-edge: rgba(240, 189, 85, 0.12);
+  --side-panel-body-tint: rgba(95, 72, 34, 0.16);
+  --side-panel-header-sheen: rgba(240, 189, 85, 0.08);
+  --side-panel-tab-sheen: rgba(240, 189, 85, 0.07);
+  --side-panel-active-bg: #332719;
+  --side-panel-active-ring: rgba(240, 189, 85, 0.52);
+  --side-panel-active-underline: rgba(240, 189, 85, 0.22);
+  --side-panel-edge-width: 28px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0.22)),
+    linear-gradient(
+      90deg,
+      var(--side-panel-edge) 0,
+      transparent var(--side-panel-edge-width),
+      transparent calc(100% - var(--side-panel-edge-width)),
+      var(--side-panel-edge) 100%
+    ),
+    linear-gradient(180deg, var(--side-panel-accent-top), transparent 24%, rgba(0, 0, 0, 0.2)),
+    linear-gradient(135deg, transparent 0 34%, var(--side-panel-body-tint) 34% 52%, transparent 52%),
+    var(--ui-panel-bg),
+    var(--panel);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: auto, auto, auto, auto, cover, auto;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.07),
+    inset 0 0 32px rgba(0, 0, 0, 0.34);
+}
+
+.panel-host.side-panel[data-panel-theme="skills"] {
+  --side-panel-accent-top: rgba(173, 136, 223, 0.14);
+  --side-panel-edge: rgba(67, 196, 184, 0.1);
+  --side-panel-body-tint: rgba(58, 46, 105, 0.2);
+  --side-panel-header-sheen: rgba(67, 196, 184, 0.08);
+  --side-panel-tab-sheen: rgba(173, 136, 223, 0.09);
+  --side-panel-active-bg: #292541;
+  --side-panel-active-ring: rgba(173, 136, 223, 0.58);
+  --side-panel-active-underline: rgba(67, 196, 184, 0.22);
+}
+
+.panel-host.side-panel[data-panel-theme="shop"] {
+  --side-panel-accent-top: rgba(240, 189, 85, 0.16);
+  --side-panel-edge: rgba(116, 174, 98, 0.1);
+  --side-panel-body-tint: rgba(116, 86, 31, 0.2);
+  --side-panel-header-sheen: rgba(240, 189, 85, 0.1);
+  --side-panel-tab-sheen: rgba(116, 174, 98, 0.07);
+  --side-panel-active-bg: #362913;
+  --side-panel-active-ring: rgba(240, 189, 85, 0.62);
+  --side-panel-active-underline: rgba(116, 174, 98, 0.2);
+}
+
+.panel-host.side-panel[data-panel-theme="locked"] {
+  --side-panel-accent-top: rgba(206, 78, 78, 0.11);
+  --side-panel-edge: rgba(173, 136, 223, 0.07);
+  --side-panel-body-tint: rgba(82, 40, 54, 0.16);
+  --side-panel-header-sheen: rgba(206, 78, 78, 0.06);
+  --side-panel-tab-sheen: rgba(173, 136, 223, 0.05);
+  --side-panel-active-bg: #2e2029;
+  --side-panel-active-ring: rgba(206, 78, 78, 0.42);
+  --side-panel-active-underline: rgba(173, 136, 223, 0.16);
+}
+
+.panel-host.side-panel .progress-panel {
+  background:
+    linear-gradient(180deg, var(--side-panel-header-sheen), rgba(0, 0, 0, 0.12)),
+    rgba(0, 0, 0, 0.2);
+}
+
+.panel-host.side-panel .tab-panel-host {
+  background:
+    linear-gradient(180deg, var(--side-panel-tab-sheen), transparent 34%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.28));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    inset 0 0 24px rgba(0, 0, 0, 0.24);
+}
+
+.panel-host.side-panel .tab-button[data-active="true"] {
+  background:
+    linear-gradient(180deg, var(--side-panel-tab-sheen), rgba(0, 0, 0, 0.1)),
+    var(--side-panel-active-bg);
+  box-shadow:
+    inset 0 0 0 2px var(--side-panel-active-ring),
+    inset 0 -4px 0 var(--side-panel-active-underline);
 }
 
 .panel-host::after,
@@ -126,8 +218,13 @@
 
 @media (orientation: landscape) and (max-height: 560px), (orientation: landscape) and (max-width: 980px) {
   .skyfall-app {
+    --ui-panel-bg: var(--ui-panel-bg-mobile);
     --ui-panel-frame-width: 8px;
     --ui-button-frame-width: 7px;
     --ui-slot-frame-width: 6px;
+  }
+
+  .panel-host.side-panel {
+    --side-panel-edge-width: 20px;
   }
 }

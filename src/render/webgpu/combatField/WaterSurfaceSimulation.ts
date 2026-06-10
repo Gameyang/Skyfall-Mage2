@@ -20,8 +20,6 @@ export interface WaterSurfaceSimulationOptions {
   readonly damping?: number;
   readonly tension?: number;
   readonly spread?: number;
-  readonly speed?: number;
-  readonly smoothing?: number;
   readonly maxVelocity?: number;
   readonly maxHeight?: number;
 }
@@ -35,20 +33,16 @@ export class WaterSurfaceSimulation {
   private readonly damping: number;
   private readonly tension: number;
   private readonly spread: number;
-  private readonly speed: number;
-  private readonly smoothing: number;
   private readonly maxVelocity: number;
   private readonly maxHeight: number;
   private rainAccumulator = 0;
   private randomState = 0x7f4a7c15;
 
   constructor(options: WaterSurfaceSimulationOptions = {}) {
-    this.columns = options.columns ?? 96;
+    this.columns = options.columns ?? 100;
     this.damping = options.damping ?? 0.05;
     this.tension = options.tension ?? 0.025;
     this.spread = options.spread ?? 0.15;
-    this.speed = options.speed ?? 1;
-    this.smoothing = options.smoothing ?? 0;
     this.maxVelocity = options.maxVelocity ?? 8;
     this.maxHeight = options.maxHeight ?? 16;
     this.springs = Array.from({ length: this.columns }, () => ({ height: 0, velocity: 0 }));
@@ -57,13 +51,8 @@ export class WaterSurfaceSimulation {
     this.rightDeltas = new Float32Array(new ArrayBuffer(this.columns * Float32Array.BYTES_PER_ELEMENT));
   }
 
-  update(deltaMs: number): void {
-    const scaledDeltaMs = Math.max(1, deltaMs) * this.speed;
-    const steps = Math.max(1, Math.min(8, Math.round(scaledDeltaMs / 16.6667)));
-
-    for (let step = 0; step < steps; step += 1) {
-      this.updateStep();
-    }
+  update(_deltaMs: number): void {
+    this.updateStep();
   }
 
   addRainRipples(deltaMs: number, intensity: number): void {
@@ -74,27 +63,22 @@ export class WaterSurfaceSimulation {
       return;
     }
 
-    this.rainAccumulator += (Math.max(0, deltaMs) / 1_000) * (18 * clampedIntensity);
+    this.rainAccumulator += (Math.max(0, deltaMs) / 1_000) * (16 * clampedIntensity);
 
     while (this.rainAccumulator >= 1) {
       this.rainAccumulator -= 1;
-      const velocity = -(0.8 + this.nextRandom() * 1.8) * (0.45 + clampedIntensity * 0.55);
-      this.applyImpulse({
-        x: this.nextRandom(),
-        radius: 0.012 + clampedIntensity * 0.01,
-        velocity,
-        kind: "drop",
-      });
+      const x = this.nextRandom();
+      const velocity = -(2 + this.nextRandom() * 5) * (0.4 + clampedIntensity * 0.6);
+      this.splash(x, velocity);
     }
   }
 
   splash(normalizedX: number, velocity = 1): void {
-    this.applyImpulse({
-      x: normalizedX,
-      radius: 1 / this.columns,
-      velocity,
-      kind: "drop",
-    });
+    const index = Math.floor(normalizedX * this.columns);
+
+    if (index >= 0 && index < this.springs.length) {
+      this.springs[index]!.velocity = clamp(velocity, -this.maxVelocity, this.maxVelocity);
+    }
   }
 
   applyImpulse(impulse: WaterSurfaceImpulse): void {
@@ -103,8 +87,7 @@ export class WaterSurfaceSimulation {
     const radiusColumns = Math.max(1, Math.ceil(radius * this.columns));
     const start = Math.max(0, Math.floor(center - radiusColumns));
     const end = Math.min(this.columns - 1, Math.ceil(center + radiusColumns));
-    const kindScale = impulseVelocityScale(impulse.kind);
-    const velocity = clamp(impulse.velocity * kindScale, -this.maxVelocity, this.maxVelocity);
+    const velocity = clamp(impulse.velocity, -this.maxVelocity, this.maxVelocity);
 
     for (let index = start; index <= end; index += 1) {
       const distance = Math.abs(index - center) / radiusColumns;
@@ -181,35 +164,6 @@ export class WaterSurfaceSimulation {
         );
       }
     }
-
-    this.smoothHighFrequencyMotion();
-  }
-
-  private smoothHighFrequencyMotion(): void {
-    if (this.smoothing <= 0 || this.springs.length < 3) {
-      return;
-    }
-
-    this.leftDeltas.fill(0);
-    this.rightDeltas.fill(0);
-
-    for (let index = 1; index < this.springs.length - 1; index += 1) {
-      const left = this.springs[index - 1]!;
-      const spring = this.springs[index]!;
-      const right = this.springs[index + 1]!;
-      const neighborAverage = (left.height + right.height) * 0.5;
-      const neighborVelocityAverage = (left.velocity + right.velocity) * 0.5;
-      this.leftDeltas[index] = (neighborAverage - spring.height) * this.smoothing;
-      this.rightDeltas[index] = (neighborVelocityAverage - spring.velocity) * this.smoothing;
-    }
-
-    for (let index = 1; index < this.springs.length - 1; index += 1) {
-      const spring = this.springs[index]!;
-      const heightCorrection = this.leftDeltas[index]!;
-      const velocityCorrection = this.rightDeltas[index]!;
-      spring.height = clamp(spring.height + heightCorrection, -this.maxHeight, this.maxHeight);
-      spring.velocity = clamp(spring.velocity + velocityCorrection, -this.maxVelocity, this.maxVelocity);
-    }
   }
 
   private nextRandom(): number {
@@ -222,15 +176,3 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function impulseVelocityScale(kind: WaterImpulseKind): number {
-  switch (kind) {
-    case "force":
-      return 1.35;
-    case "heat":
-      return 0.78;
-    case "wake":
-      return 1.05;
-    case "drop":
-      return 1;
-  }
-}

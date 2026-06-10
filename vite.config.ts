@@ -154,7 +154,7 @@ function sanitizeSheetDefinitionPayload(value: unknown): unknown[] {
     throw new Error("Sheet definition payload must be an array.");
   }
 
-  if (JSON.stringify(value).length > 400_000) {
+  if (JSON.stringify(value).length > 2_000_000) {
     throw new Error("Sheet definition payload is too large.");
   }
 
@@ -218,6 +218,94 @@ function sanitizeSheetDefinitionPayload(value: unknown): unknown[] {
       (typeof definition.rows !== "number" || !Number.isFinite(definition.rows) || definition.rows < 1)
     ) {
       throw new Error(`Sheet definition ${id} has an invalid rows value.`);
+    }
+
+    if ("frames" in definition) {
+      if (!Array.isArray(definition.frames)) {
+        throw new Error(`Sheet definition ${id} has an invalid frames value.`);
+      }
+
+      const frameIds = new Set<string>();
+
+      for (const frame of definition.frames) {
+        if (!isRecord(frame)) {
+          throw new Error(`Sheet definition ${id} frame entries must be objects.`);
+        }
+
+        if (typeof frame.id !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(frame.id)) {
+          throw new Error(`Sheet definition ${id} has an invalid frame id.`);
+        }
+
+        if (frameIds.has(frame.id)) {
+          throw new Error(`Sheet definition ${id} has duplicate frame id ${frame.id}.`);
+        }
+
+        frameIds.add(frame.id);
+
+        if (typeof frame.label !== "string") {
+          throw new Error(`Sheet definition ${id} frame ${frame.id} must include a label.`);
+        }
+
+        assertRectLike(frame.rect, `Sheet definition ${id} frame ${frame.id} rect`);
+        assertRectLike(frame.cellRect, `Sheet definition ${id} frame ${frame.id} cellRect`);
+        assertRectLike(frame.placement, `Sheet definition ${id} frame ${frame.id} placement`);
+        assertPointLike(frame.pivot, `Sheet definition ${id} frame ${frame.id} pivot`);
+      }
+    }
+
+    if ("clips" in definition) {
+      if (!Array.isArray(definition.clips)) {
+        throw new Error(`Sheet definition ${id} has an invalid clips value.`);
+      }
+
+      const clipIds = new Set<string>();
+      const frameIds = new Set(
+        Array.isArray(definition.frames)
+          ? definition.frames
+              .filter((frame): frame is Record<string, unknown> => isRecord(frame))
+              .map((frame) => frame.id)
+              .filter((frameId): frameId is string => typeof frameId === "string")
+          : [],
+      );
+
+      for (const clip of definition.clips) {
+        if (!isRecord(clip)) {
+          throw new Error(`Sheet definition ${id} clip entries must be objects.`);
+        }
+
+        if (typeof clip.id !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(clip.id)) {
+          throw new Error(`Sheet definition ${id} has an invalid clip id.`);
+        }
+
+        if (clipIds.has(clip.id)) {
+          throw new Error(`Sheet definition ${id} has duplicate clip id ${clip.id}.`);
+        }
+
+        clipIds.add(clip.id);
+
+        if (typeof clip.label !== "string") {
+          throw new Error(`Sheet definition ${id} clip ${clip.id} must include a label.`);
+        }
+
+        if (!Array.isArray(clip.frameIds) || !clip.frameIds.every((frameId) => typeof frameId === "string")) {
+          throw new Error(`Sheet definition ${id} clip ${clip.id} must include string frameIds.`);
+        }
+
+        if (frameIds.size > 0 && !clip.frameIds.every((frameId) => frameIds.has(frameId))) {
+          throw new Error(`Sheet definition ${id} clip ${clip.id} references a missing frame.`);
+        }
+
+        if (
+          "frameMs" in clip &&
+          (typeof clip.frameMs !== "number" || !Number.isFinite(clip.frameMs) || clip.frameMs < 1)
+        ) {
+          throw new Error(`Sheet definition ${id} clip ${clip.id} has an invalid frameMs.`);
+        }
+
+        if ("frameMode" in clip && !["loop", "once", "hold"].includes(String(clip.frameMode))) {
+          throw new Error(`Sheet definition ${id} clip ${clip.id} has an invalid frameMode.`);
+        }
+      }
     }
 
     if (typeof definition.frameMs !== "number" || definition.frameMs < 1) {
@@ -319,6 +407,30 @@ function sendText(response: ServerResponse, statusCode: number, body: string): v
   response.statusCode = statusCode;
   response.setHeader("content-type", "text/plain; charset=utf-8");
   response.end(body);
+}
+
+function assertRectLike(value: unknown, label: string): void {
+  if (!isRecord(value)) {
+    throw new Error(`${label} must be an object.`);
+  }
+
+  for (const key of ["x", "y", "width", "height"]) {
+    if (typeof value[key] !== "number" || !Number.isFinite(value[key])) {
+      throw new Error(`${label} has an invalid ${key}.`);
+    }
+  }
+}
+
+function assertPointLike(value: unknown, label: string): void {
+  if (!isRecord(value)) {
+    throw new Error(`${label} must be an object.`);
+  }
+
+  for (const key of ["x", "y"]) {
+    if (typeof value[key] !== "number" || !Number.isFinite(value[key])) {
+      throw new Error(`${label} has an invalid ${key}.`);
+    }
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

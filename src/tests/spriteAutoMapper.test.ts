@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { analyzeSpriteSheetPixels } from "../tools/sheets/spriteAutoMapper";
+import { analyzeSpriteSheetPixels, createGridFrameDefinitions } from "../tools/sheets/spriteAutoMapper";
 
 describe("sprite auto mapper", () => {
   it("detects a horizontal sprite strip", () => {
@@ -16,6 +16,14 @@ describe("sprite auto mapper", () => {
     expect(result.rows).toBe(1);
     expect(result.frameCount).toBe(4);
     expect(result.rect).toEqual({ x: 0, y: 0, width: 1, height: 1 });
+    expect(result.frames).toHaveLength(4);
+    expect(result.frames[0].id).toBe("frame-001");
+    expect(result.frames[0].cellRect).toEqual({ x: 0, y: 0, width: 0.25, height: 1 });
+    expect(result.clips[0]).toMatchObject({
+      id: "all",
+      label: "All Frames",
+      frameIds: ["frame-001", "frame-002", "frame-003", "frame-004"],
+    });
   });
 
   it("detects a separated 2x2 sprite grid", () => {
@@ -31,6 +39,30 @@ describe("sprite auto mapper", () => {
     expect(result.columns).toBe(2);
     expect(result.rows).toBe(2);
     expect(result.frameCount).toBe(4);
+  });
+
+  it("trims each frame while preserving placement inside the grid cell", () => {
+    const image = createAlphaImage(13, 6);
+
+    fillAlpha(image, 0, 1, 6, 4);
+    fillAlpha(image, 7, 0, 6, 6);
+
+    const result = analyzeSpriteSheetPixels(image, { maxColumns: 2, maxRows: 1 });
+
+    expect(result.columns).toBe(2);
+    expect(result.rows).toBe(1);
+    expect(result.frames[0].rect).toEqual({ x: 0, y: 1 / 6, width: 6 / 13, height: 4 / 6 });
+    expect(result.frames[0].cellRect).toEqual({ x: 0, y: 0, width: 7 / 13, height: 1 });
+    expect(result.frames[0].placement).toEqual({ x: 0, y: 1 / 6, width: 6 / 7, height: 4 / 6 });
+  });
+
+  it("creates deterministic grid frame definitions", () => {
+    const frames = createGridFrameDefinitions({ x: 0.1, y: 0.2, width: 0.8, height: 0.4 }, 2, 2, 3);
+
+    expect(frames).toHaveLength(3);
+    expect(frames.map((frame) => frame.id)).toEqual(["frame-001", "frame-002", "frame-003"]);
+    expect(frames[2].cellRect).toEqual({ x: 0.1, y: 0.4, width: 0.4, height: 0.2 });
+    expect(frames[2].placement).toEqual({ x: 0, y: 0, width: 1, height: 1 });
   });
 });
 

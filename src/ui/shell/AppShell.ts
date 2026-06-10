@@ -31,6 +31,8 @@ export interface AppShellOptions {
 
 export interface UiTextureUrls {
   readonly panelFrame: string;
+  readonly panelBackgroundDesktop: string;
+  readonly panelBackgroundMobile: string;
   readonly buttonFrame: string;
   readonly slotFrame: string;
 }
@@ -59,12 +61,17 @@ export class AppShell {
     this.titleScreen = new TitleScreen(options.titleLogoUrl, options.onTitleStart);
 
     const sidePanel = createPanelHost("side-panel");
+    sidePanel.dataset.panelTheme = "inventory";
     const tabs = new Tabs([
       { id: "inventory", label: t("tabs.items"), content: this.inventoryPanel.element },
       { id: "skills", label: t("tabs.skills"), content: this.skillTreePanel.element },
       { id: "shop", label: t("tabs.shop"), content: this.shopPanel.element },
       { id: "locked", label: t("tabs.lock"), content: createLockedPanel() },
-    ]);
+    ], {
+      onActiveTabChanged: (id) => {
+        sidePanel.dataset.panelTheme = id;
+      },
+    });
     sidePanel.append(this.progressPanel.element, tabs.element);
 
     this.element = createAppLayout({
@@ -121,6 +128,8 @@ export class AppShell {
 
 function applyUiTextureUrls(element: HTMLElement, urls: UiTextureUrls): void {
   element.style.setProperty("--ui-panel-frame", `url("${urls.panelFrame}")`);
+  element.style.setProperty("--ui-panel-bg-desktop", `url("${urls.panelBackgroundDesktop}")`);
+  element.style.setProperty("--ui-panel-bg-mobile", `url("${urls.panelBackgroundMobile}")`);
   element.style.setProperty("--ui-button-frame", `url("${urls.buttonFrame}")`);
   element.style.setProperty("--ui-slot-frame", `url("${urls.slotFrame}")`);
 }

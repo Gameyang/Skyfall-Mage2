@@ -67,7 +67,7 @@ src/
 
 `src/main.ts`는 bootstrap 진입점만 담당한다. 실제 조립은 `src/app`에 둔다.
 
-`src/assets` stores runtime game art that ships through the app bundle. Imported v1 art is normalized to 64x64 WebP under `items`, `skins`, `enemies`, and `projectiles`; UI frame textures live under `ui`.
+`src/assets` stores runtime game art that ships through the app bundle. Imported v1 art is normalized to 64x64 WebP under `items`, `skins`, `enemies`, and `projectiles`; UI frame and panel background textures live under `ui`.
 
 ## 4. app
 

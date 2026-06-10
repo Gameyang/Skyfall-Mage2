@@ -23,6 +23,8 @@ export const assetUrls = {
   },
   ui: {
     panelFrame: new URL("../assets/ui/ui-panel-frame.png", import.meta.url).href,
+    panelBackgroundDesktop: new URL("../assets/ui/ui-panel-bg-desktop.png", import.meta.url).href,
+    panelBackgroundMobile: new URL("../assets/ui/ui-panel-bg-mobile.png", import.meta.url).href,
     buttonFrame: new URL("../assets/ui/ui-button-frame.png", import.meta.url).href,
     slotFrame: new URL("../assets/ui/ui-slot-frame.png", import.meta.url).href,
   },
@@ -61,6 +63,9 @@ export const assetUrls = {
     firestaffProjectile: new URL("../assets/effects/firestaff-projectile-round-v2-sheet.png", import.meta.url).href,
     firestaffImpact: new URL("../assets/effects/firestaff-impact-burst-v1-sheet.png", import.meta.url).href,
     firestaffBurn: new URL("../assets/effects/firestaff-burn-small-v2-sheet.png", import.meta.url).href,
+    firestaffBurnEmbersV1: new URL("../assets/effects/firestaff-burn-embers-v1-sheet.png", import.meta.url).href,
+    firestaffBurnEmbersV2: new URL("../assets/effects/firestaff-burn-embers-v2-sheet.png", import.meta.url).href,
+    firestaffBurnEmbersV3: new URL("../assets/effects/firestaff-burn-embers-v3-sheet.png", import.meta.url).href,
     waterEntrySurface: new URL("../assets/effects/water-entry-surface-sheet.webp", import.meta.url).href,
     waterEntryUnderwater: new URL("../assets/effects/water-entry-underwater-sheet.webp", import.meta.url).href,
     waterUnderwaterLoop: new URL("../assets/effects/water-underwater-loop-sheet.webp", import.meta.url).href,

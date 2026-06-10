@@ -9,13 +9,20 @@ export interface TabDefinition {
   readonly content: HTMLElement;
 }
 
+export interface TabsOptions {
+  readonly onActiveTabChanged?: (id: string) => void;
+}
+
 export class Tabs {
   readonly element: HTMLElement;
   private readonly buttonRow: HTMLElement;
   private readonly panelHost: HTMLElement;
   private activeId: string;
 
-  constructor(private readonly tabs: readonly TabDefinition[]) {
+  constructor(
+    private readonly tabs: readonly TabDefinition[],
+    private readonly options: TabsOptions = {},
+  ) {
     this.element = document.createElement("section");
     this.element.className = "tabs";
     this.buttonRow = document.createElement("div");
@@ -28,6 +35,8 @@ export class Tabs {
   }
 
   private render(): void {
+    this.element.dataset.activeTab = this.activeId;
+    this.panelHost.dataset.activeTab = this.activeId;
     this.buttonRow.replaceChildren(
       ...this.tabs.map((tab) => {
         const button = document.createElement("button");
@@ -37,6 +46,7 @@ export class Tabs {
         button.textContent = tab.label;
         bindPressAction(button, () => {
           this.activeId = tab.id;
+          this.options.onActiveTabChanged?.(tab.id);
           this.render();
         });
         return button;

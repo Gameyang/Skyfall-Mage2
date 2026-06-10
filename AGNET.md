@@ -38,3 +38,14 @@ All new combat visual effects should use the shared effect preset pipeline inste
 - Sprite and textured particle layers should reference shared sprite-sheet metadata with `sheetId`; `sheetRect` is only the custom fallback when no shared sheet is selected.
 - Shared sheet metadata lives in `src/content/sheets/sheetLibrary.ts` and is edited through the local-only `/sheets` tool. Use the same registry for effects, units, items, projectiles, and any future sheet-backed visual content.
 - Local sheet save/load is handled by the Vite dev middleware at `/__local/sheets/definitions`; do not depend on that endpoint in production code.
+
+## Game Image Generation
+
+Generated gameplay art must match Skyfall Mage2's side-view airborne combat presentation.
+
+- Treat the battle camera as side-view, not top-down, isometric, or ground-scene concept art.
+- Characters, enemies, projectiles, impacts, burns, auras, and status effects should read clearly while floating in air.
+- Do not put VFX on visible floor tiles, ground slabs, terrain patches, or horizon scenes unless the request explicitly asks for a ground or terrain effect.
+- Burn, shock, freeze, poison, and similar status sprites should work as overlays on airborne bodies or projectiles; keep them compact, centered, and silhouette-friendly.
+- Sprite sheets for `/sheets` should default to one horizontal strip with equal-sized cells, usually 8 frames, transparent PNG or chroma-key source prepared for alpha removal.
+- Keep each frame centered with generous padding, no grid lines, no labels, no UI, no text, no watermark, and no camera perspective that makes frame cropping ambiguous.

@@ -39,7 +39,7 @@ fn fragmentMain(@builtin(position) position: vec4f) -> @location(0) vec4f {
   let canvasSize = max(params.canvasAndTime.xy, vec2f(1.0, 1.0));
   let uv = clamp(position.xy / canvasSize, vec2f(0.0), vec2f(0.999));
   let time = params.canvasAndTime.z;
-  let wavePx = waterWavePx(uv.x, time);
+  let wavePx = waterWavePx(uv.x, time, canvasSize);
   let waterStart = clamp(params.surface.x, 0.0, 0.98);
   let surfaceY = clamp(waterStart - wavePx / canvasSize.y, 0.0, 1.0);
   let particle = particleLayer(uv, canvasSize, surfaceY);
@@ -104,16 +104,37 @@ fn fragmentMain(@builtin(position) position: vec4f) -> @location(0) vec4f {
   return vec4f(max(color, vec3f(0.0)), alpha);
 }
 
-fn waterWavePx(x: f32, time: f32) -> f32 {
-  let waveTime = time * 1.45;
-  return proceduralWave(x, waveTime) + detailWave(x, waveTime) + springSmoothWave(x) * 2.38;
+fn waterWavePx(x: f32, time: f32, canvasSize: vec2f) -> f32 {
+  let physicsDisplacement = springWave(x);
+  let gerstnerHeight = gerstnerWaves(vec2f(x * canvasSize.x, 0.0), time) * 0.015;
+  let ice = clamp(params.effects.x, 0.0, 1.0);
+  let waveScale = 1.0 - ice * 0.92;
+  return (physicsDisplacement * 3.0 + gerstnerHeight * 8.0) * waveScale;
 }
 
 fn waterSlope(x: f32, time: f32, canvasSize: vec2f) -> f32 {
   let dx = max(1.0 / canvasSize.x, 0.0015);
-  let left = waterWavePx(clamp(x - dx, 0.0, 0.999), time);
-  let right = waterWavePx(clamp(x + dx, 0.0, 0.999), time);
+  let left = waterWavePx(clamp(x - dx, 0.0, 0.999), time, canvasSize);
+  let right = waterWavePx(clamp(x + dx, 0.0, 0.999), time, canvasSize);
   return (right - left) / (dx * 2.0);
+}
+
+fn gerstnerWave(pos: vec2f, direction: vec2f, wavelength: f32, steepness: f32, time: f32) -> f32 {
+  let k = 2.0 * 3.14159 / wavelength;
+  let c = sqrt(9.8 / k);
+  let d = normalize(direction);
+  let f = k * (dot(d, pos) - c * time);
+  let a = steepness / k;
+  return a * cos(f);
+}
+
+fn gerstnerWaves(pos: vec2f, time: f32) -> f32 {
+  var height = 0.0;
+  height += gerstnerWave(pos, vec2f(1.0, 0.0), 120.0, 1.5, time * 0.4);
+  height += gerstnerWave(pos, vec2f(-0.8, 0.0), 60.0, 1.0, time * 0.6);
+  height += gerstnerWave(pos, vec2f(0.6, 0.0), 30.0, 0.6, time * 0.9);
+  height += gerstnerWave(pos, vec2f(-0.4, 0.0), 15.0, 0.3, time * 1.3);
+  return height;
 }
 
 fn particleLayer(uv: vec2f, canvasSize: vec2f, surfaceY: f32) -> vec4f {
@@ -230,58 +251,6 @@ fn springWave(x: f32) -> f32 {
   let left = min(u32(floor(scaled)), maxIndex);
   let right = min(left + 1u, maxIndex);
   return mix(springs[left], springs[right], fract(scaled));
-}
-
-fn springSmoothWave(x: f32) -> f32 {
-  let springCount = max(2u, u32(params.canvasAndTime.w));
-  let dx = clamp(1.5 / f32(springCount), 0.002, 0.008);
-  let farDx = dx * 2.5;
-  let farLeft = springWave(clamp(x - farDx, 0.0, 0.999));
-  let left = springWave(clamp(x - dx, 0.0, 0.999));
-  let center = springWave(x);
-  let right = springWave(clamp(x + dx, 0.0, 0.999));
-  let farRight = springWave(clamp(x + farDx, 0.0, 0.999));
-  return center * 0.42 + (left + right) * 0.22 + (farLeft + farRight) * 0.07;
-}
-
-fn springDetailWave(x: f32) -> f32 {
-  let springCount = max(2u, u32(params.canvasAndTime.w));
-  let dx = clamp(0.72 / f32(springCount), 0.0012, 0.004);
-  let wideDx = dx * 2.0;
-  let farLeft = springWave(clamp(x - wideDx, 0.0, 0.999));
-  let left = springWave(clamp(x - dx, 0.0, 0.999));
-  let center = springWave(x);
-  let right = springWave(clamp(x + dx, 0.0, 0.999));
-  let farRight = springWave(clamp(x + wideDx, 0.0, 0.999));
-  let fineCurve = center * 2.0 - left - right;
-  let wideCurve = center * 2.0 - farLeft - farRight;
-  return fineCurve * 0.74 + wideCurve * 0.24;
-}
-
-fn proceduralWave(x: f32, time: f32) -> f32 {
-  let activity = clamp(params.surface.z, 0.0, 1.0);
-  let wind = params.environment.x;
-  let direction = select(-1.0, 1.0, wind >= 0.0);
-  let windSpeed = 0.7 + abs(wind) * 0.55;
-  let waveA = sin(x * 19.0 + time * windSpeed * direction);
-  let waveB = sin(x * 43.0 - time * 1.35 + 1.7);
-  let waveC = sin(x * 91.0 + time * 2.1 + 0.6);
-  let waveD = sin(x * 137.0 - time * (2.8 + abs(wind) * 0.7) + 2.4);
-  return (waveA * 4.4 + waveB * 2.2 + waveC * 0.95 + waveD * 0.38) * activity;
-}
-
-fn detailWave(x: f32, time: f32) -> f32 {
-  let activity = clamp(params.surface.z, 0.0, 1.0);
-  let interactionEnergy = clamp(params.particles.y, 0.0, 1.0);
-  let wind = params.environment.x;
-  let direction = select(-1.0, 1.0, wind >= 0.0);
-  let noiseA = noise(vec2f(x * 28.0 + time * 0.2, time * 0.07));
-  let noiseB = noise(vec2f(x * 74.0 - time * 0.34, time * 0.19 + wind * 0.13));
-  let capillaryA = sin(x * 142.0 + time * 3.2 * direction + noiseA * 2.4);
-  let capillaryB = sin(x * 218.0 - time * 4.2 + noise(vec2f(x * 18.0, time * 0.13)) * 1.8);
-  let capillaryC = sin(x * 286.0 + time * (2.4 + abs(wind) * 1.2));
-  let capillaryD = sin(x * 348.0 - time * (5.0 + abs(wind) * 1.5) + noiseB * 2.0);
-  return (capillaryA * 0.22 + capillaryB * 0.16 + capillaryC * 0.10 + capillaryD * 0.06) * activity * (0.44 + interactionEnergy * 0.68);
 }
 
 fn random(st: vec2f) -> f32 {

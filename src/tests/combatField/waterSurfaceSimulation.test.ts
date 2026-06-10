@@ -3,6 +3,19 @@ import { describe, expect, it } from "vitest";
 import { WaterSurfaceSimulation } from "../../render/webgpu/combatField/WaterSurfaceSimulation";
 
 describe("WaterSurfaceSimulation", () => {
+  it("applies original splash input to one spring column", () => {
+    const simulation = new WaterSurfaceSimulation({ columns: 10, damping: 0, tension: 0, spread: 0 });
+
+    simulation.splash(0.52, 3);
+    simulation.update(16.6667);
+
+    const heights = simulation.readHeights();
+
+    expect(heights[5]).toBe(3);
+    expect(heights[4]).toBe(0);
+    expect(heights[6]).toBe(0);
+  });
+
   it("distributes radius impulses across nearby spring columns", () => {
     const simulation = new WaterSurfaceSimulation({ columns: 16, damping: 0.02, tension: 0.02, spread: 0.08 });
 
@@ -36,24 +49,7 @@ describe("WaterSurfaceSimulation", () => {
     expect(Math.max(...widerHeights)).toBeLessThanOrEqual(Math.max(...baseHeights));
   });
 
-  it("uses speed to advance wave motion faster without changing the impulse", () => {
-    const base = new WaterSurfaceSimulation({ columns: 24, damping: 0, tension: 0.02, spread: 0.18 });
-    const fast = new WaterSurfaceSimulation({ columns: 24, damping: 0, tension: 0.02, spread: 0.18, speed: 1.8 });
-
-    base.applyImpulse({ x: 0.5, radius: 1 / 24, velocity: 3, kind: "drop" });
-    fast.applyImpulse({ x: 0.5, radius: 1 / 24, velocity: 3, kind: "drop" });
-    base.update(16.6667);
-    fast.update(16.6667);
-
-    const baseHeights = base.readHeights();
-    const fastHeights = fast.readHeights();
-    const baseOuterWave = Math.abs(baseHeights[9] ?? 0) + Math.abs(baseHeights[14] ?? 0);
-    const fastOuterWave = Math.abs(fastHeights[9] ?? 0) + Math.abs(fastHeights[14] ?? 0);
-
-    expect(fastOuterWave).toBeGreaterThan(baseOuterWave * 1.5);
-  });
-
-  it("keeps wake impulses strong enough to be visible", () => {
+  it("keeps wake impulses at the original splash scale", () => {
     const drop = new WaterSurfaceSimulation({ columns: 16, damping: 0, tension: 0, spread: 0.08 });
     const wake = new WaterSurfaceSimulation({ columns: 16, damping: 0, tension: 0, spread: 0.08 });
 
@@ -62,24 +58,37 @@ describe("WaterSurfaceSimulation", () => {
     drop.update(16.6667);
     wake.update(16.6667);
 
-    expect(maxAbs(wake.readHeights())).toBeGreaterThan(maxAbs(drop.readHeights()));
+    expect(maxAbs(wake.readHeights())).toBeCloseTo(maxAbs(drop.readHeights()));
   });
 
-  it("keeps battlefield water tuning bounded under repeated impacts", () => {
+  it("uses higher tension to return surface motion faster", () => {
+    const original = new WaterSurfaceSimulation({ columns: 12, damping: 0.05, tension: 0.025, spread: 0 });
+    const faster = new WaterSurfaceSimulation({ columns: 12, damping: 0.05, tension: 0.042, spread: 0 });
+
+    original.splash(0.5, 3);
+    faster.splash(0.5, 3);
+
+    for (let frame = 0; frame < 8; frame += 1) {
+      original.update(16.6667);
+      faster.update(16.6667);
+    }
+
+    expect(maxAbs(faster.readHeights())).toBeLessThan(maxAbs(original.readHeights()));
+  });
+
+  it("keeps faster battlefield water tuning bounded under repeated impacts", () => {
     const simulation = new WaterSurfaceSimulation({
-      columns: 64,
-      damping: 0.045,
-      smoothing: 0.36,
-      speed: 1.8,
-      tension: 0.027,
-      spread: 0.28,
+      columns: 100,
+      damping: 0.05,
+      tension: 0.042,
+      spread: 0.15,
     });
 
     for (let frame = 0; frame < 48; frame += 1) {
       if (frame % 6 === 0) {
         simulation.applyImpulse({
           x: 0.18 + ((frame / 6) % 5) * 0.16,
-          radius: 1 / 64,
+          radius: 1 / 100,
           velocity: 3.4,
           kind: "drop",
         });
@@ -91,30 +100,6 @@ describe("WaterSurfaceSimulation", () => {
 
     expect(maxAbs(heights)).toBeLessThan(12);
     expect(maxAdjacentDelta(heights)).toBeLessThan(4.5);
-  });
-
-  it("damps checkerboard zigzag motion while keeping waves moving", () => {
-    const raw = new WaterSurfaceSimulation({ columns: 32, damping: 0.02, tension: 0.027, spread: 0.28, speed: 1.8 });
-    const smoothed = new WaterSurfaceSimulation({
-      columns: 32,
-      damping: 0.02,
-      smoothing: 0.36,
-      tension: 0.027,
-      spread: 0.28,
-      speed: 1.8,
-    });
-
-    for (let frame = 0; frame < 24; frame += 1) {
-      if (frame % 3 === 0) {
-        raw.applyImpulse({ x: 0.45, radius: 1 / 32, velocity: frame % 2 === 0 ? 4 : -4, kind: "wake" });
-        smoothed.applyImpulse({ x: 0.45, radius: 1 / 32, velocity: frame % 2 === 0 ? 4 : -4, kind: "wake" });
-      }
-      raw.update(16.6667);
-      smoothed.update(16.6667);
-    }
-
-    expect(alternatingEnergy(smoothed.readHeights())).toBeLessThan(alternatingEnergy(raw.readHeights()) * 0.72);
-    expect(maxAbs(smoothed.readHeights())).toBeGreaterThan(0.1);
   });
 
   it("clamps extreme impulses and reset clears spring state", () => {
@@ -143,8 +128,4 @@ function maxAdjacentDelta(heights: Float32Array<ArrayBuffer>): number {
 
     return Math.max(maxDelta, Math.abs(height - (heights[index - 1] ?? 0)));
   }, 0);
-}
-
-function alternatingEnergy(heights: Float32Array<ArrayBuffer>): number {
-  return Math.abs(Array.from(heights).reduce((sum, height, index) => sum + height * (index % 2 === 0 ? 1 : -1), 0));
 }

@@ -6,7 +6,6 @@ import type {
   RenderSnapshot,
   RenderableSprite,
   RenderableSpriteKind,
-  WeaponEffectSprite,
 } from "../../snapshots/RenderSnapshot";
 import particleShaderSource from "./combatFieldWaterParticles.wgsl?raw";
 import spriteEffectShaderSource from "./combatFieldWaterSpriteEffect.wgsl?raw";
@@ -14,12 +13,10 @@ import waterShaderSource from "./combatFieldWater.wgsl?raw";
 import { SpriteTextureCache } from "./SpriteTextureCache";
 import { WaterSurfaceSimulation, type WaterImpulseKind } from "./WaterSurfaceSimulation";
 
-const springColumns = 320;
-const waterSurfaceWaveDamping = 0.045;
-const waterSurfaceWaveSpeed = 1.8;
-const waterSurfaceWaveSmoothing = 0.36;
-const waterSurfaceWaveSpread = 0.28;
-const waterSurfaceWaveTension = 0.027;
+const springColumns = 100;
+const waterSurfaceWaveDamping = 0.05;
+const waterSurfaceWaveSpread = 0.15;
+const waterSurfaceWaveTension = 0.042;
 const waterSurfaceContactReach = 0.035;
 const waterSurfaceContactDepth = 0.22;
 const maxInteractions = 24;
@@ -94,8 +91,6 @@ export class CombatFieldWaterRenderer {
   private readonly simulation = new WaterSurfaceSimulation({
     columns: springColumns,
     damping: waterSurfaceWaveDamping,
-    smoothing: waterSurfaceWaveSmoothing,
-    speed: waterSurfaceWaveSpeed,
     spread: waterSurfaceWaveSpread,
     tension: waterSurfaceWaveTension,
   });
@@ -121,7 +116,6 @@ export class CombatFieldWaterRenderer {
   private readonly spriteSamples = new Map<string, SpriteSample>();
   private readonly spriteWakeTimes = new Map<string, number>();
   private readonly spriteFoamTimes = new Map<string, number>();
-  private readonly effectWakeTimes = new Map<string, number>();
   private lastTimeMs: number | null = null;
   private randomState = 0x9e37_79b9;
   private pendingSpawnEmitterCount = 0;
@@ -404,7 +398,6 @@ export class CombatFieldWaterRenderer {
     const waterStart = snapshot.environment.waterStart;
 
     this.collectSpriteWakeInteractions(snapshot.sprites, waterStart, timeMs, interactions);
-    this.collectWeaponEffectWakeInteractions(snapshot.weaponEffects, waterStart, timeMs, interactions);
     return interactions;
   }
 
@@ -493,59 +486,6 @@ export class CombatFieldWaterRenderer {
         this.spriteSamples.delete(spriteId);
         this.spriteWakeTimes.delete(spriteId);
         this.spriteFoamTimes.delete(spriteId);
-      }
-    }
-  }
-
-  private collectWeaponEffectWakeInteractions(
-    effects: readonly WeaponEffectSprite[],
-    waterStart: number,
-    timeMs: number,
-    interactions: WaterInteraction[],
-  ): void {
-    const activeIds = new Set<string>();
-
-    for (const effect of effects) {
-      if (interactions.length >= maxInteractions) {
-        break;
-      }
-
-      activeIds.add(effect.id);
-
-      if (!isWaterInteractiveEffect(effect)) {
-        continue;
-      }
-
-      const bottom = effect.position.y + effect.size.y * 0.5;
-      const depth = clamp((bottom - waterStart + waterSurfaceContactReach) / waterSurfaceContactDepth, 0, 1);
-
-      if (depth <= 0) {
-        continue;
-      }
-
-      const lastWakeMs = this.effectWakeTimes.get(effect.id) ?? -Infinity;
-
-      if (timeMs - lastWakeMs < 110) {
-        continue;
-      }
-
-      const size = Math.max(effect.size.x, effect.size.y);
-      const strength = clamp(effect.opacity * (0.22 + size * 2.6 + depth * 0.42), 0.12, 1.35);
-      interactions.push({
-        x: clamp(effect.position.x, 0, 1),
-        y: waterStart,
-        radius: clamp(size * 0.52 + depth * 0.026, 0.018, 0.12),
-        strength,
-        velocity: -strength * 1.16,
-        kind: "force",
-        phase: "surface-impact",
-      });
-      this.effectWakeTimes.set(effect.id, timeMs);
-    }
-
-    for (const effectId of this.effectWakeTimes.keys()) {
-      if (!activeIds.has(effectId)) {
-        this.effectWakeTimes.delete(effectId);
       }
     }
   }
@@ -1037,11 +977,7 @@ function spriteWakeProfile(kind: RenderableSpriteKind): SpriteWakeProfile {
 }
 
 function isWaterInteractiveSprite(sprite: RenderableSprite): boolean {
-  return sprite.kind === "player" || sprite.kind === "enemy" || sprite.kind === "boss" || sprite.kind === "item";
-}
-
-function isWaterInteractiveEffect(effect: WeaponEffectSprite): boolean {
-  return effect.opacity > 0.08 && effect.size.x > 0.001 && effect.size.y > 0.001;
+  return sprite.kind === "player" || sprite.kind === "item";
 }
 
 function encodeEnvironmentKind(kind: BattleEnvironmentVisuals["kind"]): number {
