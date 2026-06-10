@@ -6,6 +6,7 @@ import { KeyboardInput } from "../input/KeyboardInput";
 import { TouchInput } from "../input/TouchInput";
 import { assetUrls, getPreloadAssetUrls } from "../platform/assets";
 import { preloadImageResources } from "../platform/ResourcePreloader";
+import { createRenderSnapshot } from "../render/snapshots/createRenderSnapshot";
 import { CombatFieldGpu } from "../render/webgpu/combatField/CombatFieldGpu";
 import { CommandBus } from "../runtime/CommandBus";
 import { EventBus } from "../runtime/EventBus";
@@ -70,6 +71,9 @@ export async function createApp(root: HTMLElement): Promise<AppInstance> {
 
   shell.update(runtime.getState());
   await resourceLoadPromise;
+  if (gpu.ok) {
+    await warmupGameInstances(gpu.renderer, runtime);
+  }
   shell.setTitleReady();
 
   let startedFromTitle = false;
@@ -102,3 +106,22 @@ export async function createApp(root: HTMLElement): Promise<AppInstance> {
   };
 }
 import { createLocalStorageAdapter } from "../platform/storage";
+
+async function warmupGameInstances(gpu: CombatFieldGpu, runtime: GameRuntime): Promise<void> {
+  const renderInitialFrame = (timeMs: number): void => {
+    gpu.resize();
+    gpu.render(createRenderSnapshot(runtime.getState()), timeMs);
+  };
+
+  renderInitialFrame(performance.now());
+  await gpu.device.queue.onSubmittedWorkDone();
+  await waitForAnimationFrame();
+  renderInitialFrame(performance.now());
+  await gpu.device.queue.onSubmittedWorkDone();
+}
+
+function waitForAnimationFrame(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => resolve());
+  });
+}

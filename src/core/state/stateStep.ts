@@ -24,13 +24,12 @@ import {
 
 const enemyDespawnMargin = 0.12;
 const enemyHitboxRadius = 0.045;
-const playerEdgePadding = 0.054;
 
 export const playerMovementBounds = {
-  minX: playerEdgePadding,
-  maxX: 1 - playerEdgePadding,
-  minY: playerEdgePadding,
-  maxY: 1 - playerEdgePadding,
+  minX: 0,
+  maxX: 1,
+  minY: 0,
+  maxY: 1,
 } as const;
 
 export function stepGameState(state: GameState, deltaMs: number): GameState {

@@ -5,7 +5,7 @@ import type { Vec2 } from "../../core/math/vector";
 import type { EnvironmentKind } from "../../core/state/EnvironmentState";
 import type { MaterialEmitter } from "../../features/combatField/CombatFieldTypes";
 
-export type RenderableSpriteKind = "player" | "enemy" | "boss" | "item" | "projectile" | "effect";
+export type RenderableSpriteKind = "player" | "enemy" | "boss" | "item";
 export type RenderableSpriteRarity = "common" | "uncommon" | "rare" | "epic";
 export type RenderableSpriteStatusEffect =
   | "hit"
@@ -30,6 +30,21 @@ export interface RenderableSprite {
   readonly hpPercent: number | null;
 }
 
+export type WeaponVisualParticleKind = "fireball-core" | "fireball-ember" | "fire-area-flame" | "burn-ember";
+
+export interface WeaponVisualParticle {
+  readonly id: string;
+  readonly kind: WeaponVisualParticleKind;
+  readonly position: Vec2;
+  readonly direction: Vec2;
+  readonly radius: number;
+  readonly seed: number;
+  readonly ageRatio: number;
+  readonly intensity: number;
+  readonly opacity: number;
+  readonly stretch: number;
+}
+
 export interface BattleEnvironmentVisuals {
   readonly kind: EnvironmentKind;
   readonly waterStart: number;
@@ -49,6 +64,7 @@ export interface RenderSnapshot {
   readonly enemyPositions: readonly Vec2[];
   readonly itemDropPositions: readonly Vec2[];
   readonly sprites: readonly RenderableSprite[];
+  readonly weaponParticles: readonly WeaponVisualParticle[];
   readonly environment: BattleEnvironmentVisuals;
   readonly materialEmitters: readonly MaterialEmitter[];
   readonly activeEmitterCount: number;

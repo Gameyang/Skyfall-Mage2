@@ -4,15 +4,13 @@
 import { starterEnemyById } from "../../content/enemies/starterEnemies";
 import { starterItemById } from "../../content/items/starterItems";
 import type { GameState } from "../../core/state/GameState";
-import { assetUrls, resolveSkinUrl } from "../../platform/assets";
+import { resolveSkinUrl } from "../../platform/assets";
 import type { RenderableSprite } from "./RenderSnapshot";
 
 export function createRenderableSprites(state: GameState): readonly RenderableSprite[] {
   return [
     createPlayerSprite(state),
     ...state.entities.enemies.map(createEnemySprite),
-    ...state.entities.projectiles.map(createProjectileSprite),
-    ...state.entities.fireDamageAreas.map(createFireDamageAreaSprite),
     ...state.entities.itemDrops.filter((drop) => !drop.collected).map(createItemDropSprite),
   ].filter((sprite) => sprite.textureUrl.length > 0);
 }
@@ -50,36 +48,6 @@ function createEnemySprite(enemy: GameState["entities"]["enemies"][number]): Ren
     motionPreset: "idle",
     facing: 1,
     hpPercent,
-  };
-}
-
-function createProjectileSprite(projectile: GameState["entities"]["projectiles"][number]): RenderableSprite {
-  return {
-    id: projectile.id,
-    kind: "projectile",
-    position: projectile.position,
-    size: projectile.kind === "fireball" ? { x: 0.048, y: 0.048 } : { x: 0.04, y: 0.04 },
-    textureUrl: assetUrls.projectiles.meteorRock,
-    rarity: "uncommon",
-    statusEffects: projectile.kind === "fireball" ? ["burning-field"] : [],
-    motionPreset: "pulse",
-    facing: projectile.direction.x < 0 ? -1 : 1,
-    hpPercent: null,
-  };
-}
-
-function createFireDamageAreaSprite(area: GameState["entities"]["fireDamageAreas"][number]): RenderableSprite {
-  return {
-    id: area.id,
-    kind: "effect",
-    position: area.position,
-    size: { x: area.radius * 2, y: area.radius * 2 },
-    textureUrl: assetUrls.projectiles.meteorRock,
-    rarity: "common",
-    statusEffects: ["burning-field"],
-    motionPreset: "pulse",
-    facing: 1,
-    hpPercent: null,
   };
 }
 

@@ -47,8 +47,7 @@ describe("runtime systems", () => {
       16,
     );
 
-    expect(playerMovementBounds.minX).toBeLessThan(0.08);
-    expect(playerMovementBounds.minY).toBeLessThan(0.16);
+    expect(playerMovementBounds).toEqual({ minX: 0, maxX: 1, minY: 0, maxY: 1 });
     expect(upperLeft.player.position).toEqual({ x: playerMovementBounds.minX, y: playerMovementBounds.minY });
     expect(lowerRight.player.position).toEqual({ x: playerMovementBounds.maxX, y: playerMovementBounds.maxY });
   });

@@ -222,18 +222,14 @@ function sortSprites(sprites: readonly RenderableSprite[]): readonly RenderableS
 
 function spriteLayer(kind: RenderableSpriteKind): number {
   switch (kind) {
-    case "effect":
-      return 0;
     case "item":
-      return 1;
+      return 0;
     case "enemy":
-      return 2;
+      return 1;
     case "boss":
-      return 3;
-    case "projectile":
-      return 4;
+      return 2;
     case "player":
-      return 5;
+      return 3;
     default:
       return assertNever(kind);
   }
@@ -249,10 +245,6 @@ function encodeKind(kind: RenderableSpriteKind): number {
       return 3;
     case "item":
       return 4;
-    case "projectile":
-      return 5;
-    case "effect":
-      return 6;
     default:
       return assertNever(kind);
   }

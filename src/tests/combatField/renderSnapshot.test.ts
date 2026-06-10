@@ -10,6 +10,7 @@ describe("createRenderSnapshot", () => {
     expect(snapshot.enemyPositions).toHaveLength(1);
     expect(snapshot.itemDropPositions).toHaveLength(1);
     expect(snapshot.sprites.map((sprite) => sprite.kind)).toEqual(["player", "enemy", "item"]);
+    expect(snapshot.weaponParticles).toHaveLength(0);
     expect(snapshot.sprites.every((sprite) => sprite.textureUrl.includes(".webp"))).toBe(true);
     expect(snapshot.activeEmitterCount).toBe(0);
     expect(snapshot.environment.waterStart).toBeCloseTo(0.8);
@@ -39,7 +40,7 @@ describe("createRenderSnapshot", () => {
     expect(snapshot.environment.waveActivity).toBeGreaterThan(0.65);
   });
 
-  it("includes fireball projectiles and fire areas as renderable sprites", () => {
+  it("converts fireball projectiles and fire areas into weapon visual particles", () => {
     const initial = createInitialGameState();
     const snapshot = createRenderSnapshot({
       ...initial,
@@ -83,8 +84,10 @@ describe("createRenderSnapshot", () => {
       },
     });
 
-    expect(snapshot.sprites.map((sprite) => sprite.kind)).toContain("projectile");
-    expect(snapshot.sprites.map((sprite) => sprite.kind)).toContain("effect");
-    expect(snapshot.sprites.find((sprite) => sprite.id === "fire-area")?.statusEffects).toContain("burning-field");
+    expect(snapshot.sprites.map((sprite) => sprite.kind)).toEqual(["player", "enemy", "item"]);
+    expect(snapshot.weaponParticles.some((particle) => particle.kind === "fireball-core")).toBe(true);
+    expect(snapshot.weaponParticles.some((particle) => particle.kind === "fireball-ember")).toBe(true);
+    expect(snapshot.weaponParticles.some((particle) => particle.kind === "fire-area-flame")).toBe(true);
+    expect(snapshot.weaponParticles.every((particle) => particle.opacity >= 0)).toBe(true);
   });
 });

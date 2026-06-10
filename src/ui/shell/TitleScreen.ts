@@ -55,21 +55,21 @@ export class TitleScreen {
 
     this.element.addEventListener("pointerdown", this.handleStartGesture);
     this.element.addEventListener("touchstart", this.handleStartGesture, { capture: true, passive: false });
-    this.element.addEventListener("keydown", this.handleKeyDown);
+    window.addEventListener("keydown", this.handleKeyDown);
   }
 
   setProgress(progress: ResourcePreloadProgress): void {
     const ratio = clampRatio(progress.ratio);
     this.progressFill.style.transform = `scaleX(${ratio})`;
     this.progressValue.textContent = `${Math.round(ratio * 100)}%`;
-    this.status.textContent = progress.loaded >= progress.total ? "READY" : "LOADING";
+    this.status.textContent = progress.loaded >= progress.total ? "WARMING UP" : "LOADING";
     this.element.dataset.ready = String(this.ready);
   }
 
   setReady(): void {
     this.ready = true;
     this.element.dataset.ready = "true";
-    this.status.textContent = "START";
+    this.status.textContent = "PRESS ANY KEY";
   }
 
   hide(): void {
@@ -81,7 +81,7 @@ export class TitleScreen {
   dispose(): void {
     this.element.removeEventListener("pointerdown", this.handleStartGesture);
     this.element.removeEventListener("touchstart", this.handleStartGesture, { capture: true });
-    this.element.removeEventListener("keydown", this.handleKeyDown);
+    window.removeEventListener("keydown", this.handleKeyDown);
   }
 
   private readonly handleStartGesture = (event: Event): void => {
@@ -97,7 +97,7 @@ export class TitleScreen {
   };
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
-    if (event.key !== "Enter" && event.key !== " ") {
+    if (this.hidden || !this.ready) {
       return;
     }
 
