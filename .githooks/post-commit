@@ -1,0 +1,29 @@
+#!/bin/sh
+set -eu
+
+if [ "${SKYFALL_SKIP_AUTO_PUSH:-}" = "1" ]; then
+  echo "[post-commit] SKYFALL_SKIP_AUTO_PUSH=1; skipping auto push." >&2
+  exit 0
+fi
+
+branch="$(git symbolic-ref --quiet --short HEAD || true)"
+
+if [ -z "$branch" ]; then
+  echo "[post-commit] detached HEAD; skipping auto push." >&2
+  exit 0
+fi
+
+upstream="$(git rev-parse --abbrev-ref --symbolic-full-name "@{u}" 2>/dev/null || true)"
+
+if [ -z "$upstream" ]; then
+  echo "[post-commit] no upstream for $branch; skipping auto push." >&2
+  exit 0
+fi
+
+if ! git diff --quiet || ! git diff --cached --quiet; then
+  echo "[post-commit] uncommitted changes remain; skipping auto push." >&2
+  exit 0
+fi
+
+echo "[post-commit] pushing $branch to $upstream"
+git push

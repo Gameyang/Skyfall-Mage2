@@ -80,10 +80,15 @@ function applyWaveEnvironment(state: GameState, plan: WavePlan, events: GameEven
 function spawnDueEnemies(state: GameState, plan: WavePlan): GameState {
   let nextState = state;
   let spawnOrdinal = 0;
+  const maxActiveEnemies = plan.wave.maxActiveEnemies ?? Number.POSITIVE_INFINITY;
 
   for (const spawn of plan.dueSpawns) {
     for (let index = 0; index < spawn.count; index += 1) {
-      const transit = createTransitSpawn(plan.wave.index, spawnOrdinal, index);
+      if (spawn.source === "random-test" && nextState.entities.enemies.length >= maxActiveEnemies) {
+        break;
+      }
+
+      const transit = createTransitSpawn(plan.wave.index, spawn.atMs, spawnOrdinal, index);
       nextState = spawnEnemy(nextState, spawn.enemyId, transit.position, transit.options);
     }
 
@@ -95,19 +100,29 @@ function spawnDueEnemies(state: GameState, plan: WavePlan): GameState {
 
 function createTransitSpawn(
   waveIndex: number,
+  spawnAtMs: number,
   spawnOrdinal: number,
   index: number,
 ): { readonly position: Vec2; readonly options: EnemySpawnOptions } {
-  const direction = (waveIndex + spawnOrdinal + index) % 2 === 0 ? 1 : -1;
+  const seed = waveIndex * 73_856_093 + spawnAtMs * 19_349 + spawnOrdinal * 83_492 + index * 2_654;
+  const direction = randomUnit(seed) > 0.5 ? 1 : -1;
+  const speed = 0.12 + randomUnit(seed + 2_029) * 0.08;
 
   return {
     position: {
       x: direction > 0 ? -0.08 : 1.08,
-      y: clamp(0.34 + ((waveIndex + index + spawnOrdinal) % 4) * 0.08, 0.24, 0.76),
+      y: clamp(0.24 + randomUnit(seed + 1_013) * 0.52, 0.24, 0.76),
     },
     options: {
-      velocity: { x: direction * 0.14, y: 0 },
+      velocity: { x: direction * speed, y: 0 },
       despawnWhenOffscreen: true,
     },
   };
+}
+
+function randomUnit(seed: number): number {
+  let value = Math.imul(seed ^ 0x45d9f3b, 0x45d9f3b);
+  value = Math.imul(value ^ (value >>> 16), 0x45d9f3b);
+
+  return ((value ^ (value >>> 16)) >>> 0) / 0xffffffff;
 }

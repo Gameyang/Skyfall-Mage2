@@ -20,11 +20,17 @@ try {
   await page.goto(url, { waitUntil: "networkidle" });
   await page.waitForSelector('.gpu-badge[data-status="ready"]');
   await page.waitForSelector(".enemy-marker");
-  if (!(await waitForElementBox(page, ".enemy-marker"))) {
+  const enemy = await waitForElementBox(page, ".enemy-marker");
+
+  if (!enemy) {
     throw new Error("Expected an enemy marker before combat verification");
   }
 
-  await page.waitForFunction(() => document.querySelectorAll(".enemy-marker").length === 0, null, { timeout: 15_000 });
+  await page.mouse.move(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(4_200);
+  await page.mouse.up();
+  await page.waitForFunction(() => document.querySelectorAll(".item-drop-marker").length > 0, null, { timeout: 15_000 });
   const dropCount = await page.locator(".item-drop-marker").count();
   await browser.close();
   browser = null;

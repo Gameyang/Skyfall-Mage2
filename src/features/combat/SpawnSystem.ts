@@ -48,6 +48,7 @@ export function spawnEnemy(
   options: EnemySpawnOptions = {},
 ): GameState {
   const scaling = calculateEnemyScaling(state.session.waveIndex, state.player.level);
+  const sequence = createSpawnSequence(state);
 
   return {
     ...state,
@@ -55,7 +56,7 @@ export function spawnEnemy(
       ...state.entities,
       enemies: [
         ...state.entities.enemies,
-        createEnemySpawn(definitionId, position, state.entities.enemies.length + 1, {
+        createEnemySpawn(definitionId, position, sequence, {
           ...options,
           hpScale: options.hpScale ?? scaling.hpScale,
         }),
@@ -70,4 +71,11 @@ export function createSingleSpawnTestState(state: GameState): GameState {
   }
 
   return spawnEnemy(state, "bat", { x: -0.08, y: 0.52 }, { velocity: { x: 0.14, y: 0 }, despawnWhenOffscreen: true });
+}
+
+function createSpawnSequence(state: GameState): number {
+  return Math.max(
+    state.entities.enemies.length + 1,
+    Math.floor(state.session.elapsedMs) * 10 + state.battleField.queryFrame * 1_000 + state.entities.enemies.length + 1,
+  );
 }
