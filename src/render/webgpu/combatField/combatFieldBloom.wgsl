@@ -1,19 +1,12 @@
-struct FieldParams {
-  gridAndCanvas: vec4f,
-  playerAndAim: vec4f,
-  timeAndCounts: vec4f,
+struct BloomParams {
+  sourceTexelAndThreshold: vec4f,
+  targetSizeRadiusAndIntensity: vec4f,
 };
 
-struct MaterialEmitterGpu {
-  data0: vec4f,
-  data1: vec4f,
-};
-
-@group(0) @binding(0) var<uniform> params: FieldParams;
-@group(0) @binding(1) var<storage, read> cellsIn: array<u32>;
-@group(0) @binding(2) var<storage, read> cellsOut: array<u32>;
-@group(0) @binding(3) var<storage, read> emitters: array<MaterialEmitterGpu>;
-@group(0) @binding(4) var<storage, read> materialPalette: array<vec4f>;
+@group(0) @binding(0) var<uniform> params: BloomParams;
+@group(0) @binding(1) var sourceTexture: texture_2d<f32>;
+@group(0) @binding(2) var bloomTexture: texture_2d<f32>;
+@group(0) @binding(3) var bloomSampler: sampler;
 
 struct VertexOut {
   @builtin(position) position: vec4f,
@@ -33,28 +26,62 @@ fn vertexMain(@builtin(vertex_index) vertexIndex: u32) -> VertexOut {
 }
 
 @fragment
-fn fragmentMain(@builtin(position) position: vec4f) -> @location(0) vec4f {
-  let canvasSize = max(params.gridAndCanvas.zw, vec2f(1.0, 1.0));
-  let uv = clamp(position.xy / canvasSize, vec2f(0.0), vec2f(0.999));
-  let bloomIntensityScale = clamp(params.timeAndCounts.w, 0.35, 1.0);
-  var bloom = vec3f(0.0);
-  bloom = bloom + vec3f(0.0, 0.45, 0.38) * smoothstep(0.22, 0.0, distance(uv, params.playerAndAim.xy));
-  bloom = bloom + vec3f(0.75, 0.45, 0.08) * smoothstep(0.16, 0.0, distance(uv, params.playerAndAim.zw));
+fn brightDownsampleFragment(@builtin(position) position: vec4f) -> @location(0) vec4f {
+  let uv = fragmentUv(position);
+  let color = downsampleSource(uv);
+  let brightness = max(max(color.r, color.g), color.b);
+  let threshold = params.sourceTexelAndThreshold.z;
+  let knee = max(0.0001, threshold * 0.18);
+  let soft = clamp((brightness - threshold + knee) / (2.0 * knee), 0.0, 1.0);
+  let contribution = max(brightness - threshold, soft * soft * knee) / max(brightness, 0.0001);
+  return vec4f(color * contribution, 1.0);
+}
 
-  let emitterCount = min(u32(params.timeAndCounts.y), 32u);
-  for (var i = 0u; i < 32u; i = i + 1u) {
-    if (i >= emitterCount) {
-      break;
-    }
+@fragment
+fn downsampleFragment(@builtin(position) position: vec4f) -> @location(0) vec4f {
+  return vec4f(downsampleSource(fragmentUv(position)), 1.0);
+}
 
-    let emitter = emitters[i];
-    let material = u32(emitter.data0.x);
-    let center = emitter.data0.yz;
-    let radius = max(0.0001, emitter.data0.w * 2.2);
-    let strength = emitter.data1.x;
-    let paletteColor = materialPalette[min(material, 31u)].rgb;
-    bloom = bloom + paletteColor * smoothstep(radius, 0.0, distance(uv, center)) * clamp(strength, 0.0, 1.0) * 0.65;
-  }
+@fragment
+fn upsampleFragment(@builtin(position) position: vec4f) -> @location(0) vec4f {
+  let uv = fragmentUv(position);
+  let texel = params.sourceTexelAndThreshold.xy * params.targetSizeRadiusAndIntensity.z;
+  var color = textureSample(sourceTexture, bloomSampler, uv).rgb * 4.0;
+  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(1.0, 0.0)).rgb * 2.0;
+  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(-1.0, 0.0)).rgb * 2.0;
+  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(0.0, 1.0)).rgb * 2.0;
+  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(0.0, -1.0)).rgb * 2.0;
+  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(1.0, 1.0)).rgb;
+  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(-1.0, 1.0)).rgb;
+  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(1.0, -1.0)).rgb;
+  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(-1.0, -1.0)).rgb;
+  return vec4f(color / 16.0, 1.0);
+}
 
-  return vec4f(bloom * bloomIntensityScale, 1.0);
+@fragment
+fn finalCompositeFragment(@builtin(position) position: vec4f) -> @location(0) vec4f {
+  let uv = fragmentUv(position);
+  let scene = textureSample(sourceTexture, bloomSampler, uv).rgb;
+  let bloom = textureSample(bloomTexture, bloomSampler, uv).rgb;
+  let intensity = params.targetSizeRadiusAndIntensity.w;
+  return vec4f(scene + bloom * intensity, 1.0);
+}
+
+fn fragmentUv(position: vec4f) -> vec2f {
+  let targetSize = max(params.targetSizeRadiusAndIntensity.xy, vec2f(1.0, 1.0));
+  return clamp(position.xy / targetSize, vec2f(0.0), vec2f(0.999));
+}
+
+fn downsampleSource(uv: vec2f) -> vec3f {
+  let texel = params.sourceTexelAndThreshold.xy * params.targetSizeRadiusAndIntensity.z;
+  var color = textureSample(sourceTexture, bloomSampler, uv).rgb * 4.0;
+  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(1.0, 0.0)).rgb * 2.0;
+  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(-1.0, 0.0)).rgb * 2.0;
+  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(0.0, 1.0)).rgb * 2.0;
+  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(0.0, -1.0)).rgb * 2.0;
+  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(1.0, 1.0)).rgb;
+  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(-1.0, 1.0)).rgb;
+  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(1.0, -1.0)).rgb;
+  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(-1.0, -1.0)).rgb;
+  return color / 16.0;
 }

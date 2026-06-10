@@ -85,6 +85,8 @@ fn materialColor(material: u32, uv: vec2f) -> vec4f {
     color = mix(color, vec3f(0.18, 0.16, 0.20), 0.34);
   } else if (material == 2u || material == 3u) {
     alpha = min(alpha, 0.66);
+  } else if (material == 4u || material == 10u) {
+    alpha = min(alpha, 0.82);
   } else if (material == 5u || material == 6u) {
     alpha = min(alpha, 0.38);
   } else if (material == 7u || material == 8u || material == 9u) {
@@ -93,5 +95,30 @@ fn materialColor(material: u32, uv: vec2f) -> vec4f {
     alpha = min(alpha, 0.76);
   }
 
+  color = applyHdrEmission(material, color);
   return vec4f(max(vec3f(0.0), color + vec3f(scan)), alpha);
+}
+
+fn applyHdrEmission(material: u32, color: vec3f) -> vec3f {
+  if (material == 4u) {
+    return color * vec3f(2.45, 1.75, 1.35) + vec3f(0.32, 0.05, 0.02);
+  }
+
+  if (material == 7u) {
+    return color * vec3f(3.1, 2.5, 1.8) + vec3f(0.35, 0.2, 0.05);
+  }
+
+  if (material == 8u) {
+    return color * vec3f(1.8, 2.35, 2.1) + vec3f(0.0, 0.22, 0.2);
+  }
+
+  if (material == 9u) {
+    return color * vec3f(2.2, 1.8, 2.65) + vec3f(0.16, 0.05, 0.32);
+  }
+
+  if (material == 10u) {
+    return color * vec3f(2.7, 1.55, 1.2) + vec3f(0.45, 0.07, 0.01);
+  }
+
+  return color;
 }

@@ -25,8 +25,8 @@ export class CombatFieldRenderer {
   private readonly materialPaletteBuffer: GPUBuffer;
   private readonly renderPipeline: GPURenderPipeline;
   private readonly bindGroup: GPUBindGroup;
-  private readonly backgroundRenderer: CombatFieldBackgroundRenderer;
   private readonly bloom: CombatFieldBloom;
+  private readonly backgroundRenderer: CombatFieldBackgroundRenderer;
   private readonly waterRenderer: CombatFieldWaterRenderer;
   private readonly spriteRenderer: CombatSpriteRenderer;
   private readonly paramsData = new Float32Array(12);
@@ -36,6 +36,7 @@ export class CombatFieldRenderer {
     private readonly device: GPUDevice,
     format: GPUTextureFormat,
   ) {
+    this.bloom = new CombatFieldBloom(device, format);
     this.paramsBuffer = device.createBuffer({
       label: "Combat field params",
       size: this.paramsData.byteLength,
@@ -95,7 +96,7 @@ export class CombatFieldRenderer {
         entryPoint: "fragmentMain",
         targets: [
           {
-            format,
+            format: this.bloom.sceneFormat,
             blend: {
               color: {
                 srcFactor: "src-alpha",
@@ -126,10 +127,9 @@ export class CombatFieldRenderer {
         { binding: 4, resource: { buffer: this.materialPaletteBuffer } },
       ],
     });
-    this.backgroundRenderer = new CombatFieldBackgroundRenderer(device, format);
-    this.bloom = new CombatFieldBloom(device, format, bindGroupLayout);
-    this.waterRenderer = new CombatFieldWaterRenderer(device, format);
-    this.spriteRenderer = new CombatSpriteRenderer(device, format);
+    this.backgroundRenderer = new CombatFieldBackgroundRenderer(device, this.bloom.sceneFormat);
+    this.waterRenderer = new CombatFieldWaterRenderer(device, this.bloom.sceneFormat);
+    this.spriteRenderer = new CombatSpriteRenderer(device, this.bloom.sceneFormat);
 
     const starterField = createStarterFieldCells(CombatFieldRenderer.gridWidth, CombatFieldRenderer.gridHeight);
     this.device.queue.writeBuffer(this.cellReadBuffer, 0, starterField);
@@ -147,30 +147,32 @@ export class CombatFieldRenderer {
   ): GPUCommandBuffer {
     this.writeFrameData(width, height, snapshot, timeMs, bloomIntensityScale);
     this.spriteRenderer.prepare(width, height, snapshot.sprites, timeMs);
+    this.bloom.resize(width, height);
 
     const encoder = this.device.createCommandEncoder();
     const pass = encoder.beginRenderPass({
       colorAttachments: [
         {
-          view: textureView,
+          view: this.bloom.getSceneView(),
           clearValue: { r: 0.07, g: 0.09, b: 0.1, a: 1 },
           loadOp: "clear",
           storeOp: "store",
         },
       ],
     });
-    this.backgroundRenderer.render(pass, width, height, timeMs);
+    this.backgroundRenderer.render(pass, width, height, snapshot.environment, timeMs);
     pass.setPipeline(this.renderPipeline);
     pass.setBindGroup(0, this.bindGroup);
     pass.draw(3);
     this.spriteRenderer.render(pass);
     this.waterRenderer.render(pass, width, height, snapshot, timeMs);
-    this.bloom.render(pass, this.bindGroup);
     pass.end();
+    this.bloom.render(encoder, textureView, bloomIntensityScale);
     return encoder.finish();
   }
 
   dispose(): void {
+    this.bloom.dispose();
     this.backgroundRenderer.dispose();
     this.waterRenderer.dispose();
     this.spriteRenderer.dispose();
