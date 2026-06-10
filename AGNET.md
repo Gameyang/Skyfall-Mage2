@@ -9,6 +9,17 @@
 - `AGNET.md`는 사용자 요청에 맞춘 폴더 책임 문서다.
 - 코드 파일을 추가하기 전에는 `docs/code-file-tree.md`의 예정 위치와 네이밍 규칙을 확인한다.
 
+## Sprite combat presentation
+
+전투 스프라이트의 상태 이펙트와 모션은 gameplay state가 아니라 renderer-facing presentation 계약이다.
+
+- canonical data는 `src/render/snapshots/RenderSnapshot.ts`의 `RenderableSprite`다.
+- `src/render/snapshots/createRenderableSprites.ts`에서 game state를 `statusEffects`와 `motionPreset`으로 변환한다.
+- `src/render/webgpu/combatField/CombatSpriteRenderer.ts`는 해당 값을 uniform float slot으로 packing한다.
+- `src/render/webgpu/combatField/combatSpriteRender.wgsl`이 outline, tint, flash, 흔들림, pulse, sway 같은 실제 시각 효과를 만든다.
+- 새 전투 연출을 추가할 때는 gameplay 판정/데미지는 `src/features/combat`와 combat field query에 두고, 스프라이트 장식은 위 render snapshot 계약을 통해 넘긴다.
+- unit test는 스프라이트 이펙트/모션의 세부 presentation 값을 고정하지 않는다. 렌더 스냅샷 테스트는 구조와 데이터 경계만 보고, 시각 변경은 typecheck/build와 browser/WebGPU 검증으로 확인한다.
+
 ## V2 responsive layout reference
 
 UI/layout 구현 전에는 `sandbox/v2-responsive-layout-test/README.md`와 `sandbox/v2-responsive-layout-test/index.html`을 확인한다. 이 샌드박스가 desktop landscape, mobile landscape, portrait rotate notice, 입력 소유권, v1식 오른쪽 패널, 4 equipment slots + 5 x 4 bag grid의 현재 기준이다.

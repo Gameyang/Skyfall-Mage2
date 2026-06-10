@@ -4,6 +4,7 @@
 import { classifyLayoutMode, type LayoutViewport } from "./LayoutMode";
 
 export interface MobileFullscreenController {
+  requestIfNeeded(): void;
   dispose(): void;
 }
 
@@ -35,7 +36,7 @@ export function createMobileFullscreenController(
   let requestPending = false;
   let lastAttemptTimeMs = Number.NEGATIVE_INFINITY;
 
-  const requestIfNeeded = async (): Promise<void> => {
+  const requestFullscreenIfNeeded = async (): Promise<void> => {
     if (disposed || requestPending) {
       return;
     }
@@ -73,17 +74,21 @@ export function createMobileFullscreenController(
       return;
     }
 
-    void requestIfNeeded();
+    void requestFullscreenIfNeeded();
   };
 
   const handleTouchStart = (): void => {
-    void requestIfNeeded();
+    void requestFullscreenIfNeeded();
   };
 
   root.addEventListener("pointerdown", handlePointerDown, { capture: true });
   root.addEventListener("touchstart", handleTouchStart, { capture: true, passive: true });
 
   return {
+    requestIfNeeded() {
+      void requestFullscreenIfNeeded();
+    },
+
     dispose() {
       disposed = true;
       root.removeEventListener("pointerdown", handlePointerDown, { capture: true });

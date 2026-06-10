@@ -39,7 +39,9 @@ export async function createApp(root: HTMLElement): Promise<AppInstance> {
   window.addEventListener("beforeunload", () => saveRuntime.save(runtime.getState()));
 
   const keyboardInput = new KeyboardInput(window, (command) => commandBus.enqueue(command));
-  const touchInput = new TouchInput(shell.playfieldElement, (command) => commandBus.enqueue(command));
+  const touchInput = new TouchInput(shell.playfieldElement, (command) => commandBus.enqueue(command), {
+    onMovementGestureStart: () => shell.requestMobileFullscreen(),
+  });
 
   const gpu = await CombatFieldGpu.create(shell.canvas, {
     maxDevicePixelRatio: defaultAppConfig.maxDevicePixelRatio,

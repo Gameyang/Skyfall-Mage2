@@ -68,6 +68,10 @@ export class AppShell {
     this.battlePanel.setGpuStatus(label, status);
   }
 
+  requestMobileFullscreen(): void {
+    this.mobileFullscreenController.requestIfNeeded();
+  }
+
   update(state: GameState): void {
     this.battlePanel.update(createBattleViewModel(state));
     this.progressPanel.update(createProgressViewModel(state));

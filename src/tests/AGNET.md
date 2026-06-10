@@ -4,6 +4,7 @@
 
 - production code를 여기에 두지 않는다.
 - 작은 grid simulation, command reducer, save migration 검증을 우선한다.
+- 스프라이트 이펙트/모션의 세부 presentation tag는 unit test에서 고정하지 않는다. 테스트는 snapshot 구조와 gameplay 계약을 검증하고, shader 연출은 browser/WebGPU 검증으로 확인한다.
 
 ## V2 responsive layout reference
 

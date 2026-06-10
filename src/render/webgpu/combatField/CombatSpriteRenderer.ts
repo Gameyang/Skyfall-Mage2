@@ -6,10 +6,12 @@ import type {
   RenderableSpriteKind,
   RenderableSpriteMotionPreset,
   RenderableSpriteRarity,
-  RenderableSpriteStatusEffect,
 } from "../../snapshots/RenderSnapshot";
 import spriteShaderSource from "./combatSpriteRender.wgsl?raw";
 import { SpriteTextureCache } from "./SpriteTextureCache";
+
+const hitFlashDurationMs = 1_000;
+const hpDecreaseEpsilon = 0.0001;
 
 interface SpriteDraw {
   readonly bindGroup: GPUBindGroup;
@@ -22,6 +24,8 @@ export class CombatSpriteRenderer {
   private readonly paramsData = new Float32Array(16);
   private readonly bindGroupLayout: GPUBindGroupLayout;
   private readonly pipeline: GPURenderPipeline;
+  private readonly previousHpPercentBySpriteId = new Map<string, number>();
+  private readonly hitFlashUntilMsBySpriteId = new Map<string, number>();
   private draws: readonly SpriteDraw[] = [];
 
   constructor(
@@ -89,8 +93,11 @@ export class CombatSpriteRenderer {
   prepare(width: number, height: number, sprites: readonly RenderableSprite[], timeMs: number): void {
     const aspectScale = height / Math.max(1, width);
     const draws: SpriteDraw[] = [];
+    const activeSpriteIds = new Set<string>();
 
     sortSprites(sprites).forEach((sprite) => {
+      activeSpriteIds.add(sprite.id);
+      const hitFlash = this.resolveHitFlash(sprite, timeMs);
       const texture = this.textureCache.get(sprite.textureUrl);
 
       if (!texture) {
@@ -98,7 +105,7 @@ export class CombatSpriteRenderer {
       }
 
       const paramsBuffer = this.ensureParamsBuffer(draws.length);
-      this.writeSpriteParams(paramsBuffer, sprite, timeMs, aspectScale);
+      this.writeSpriteParams(paramsBuffer, sprite, timeMs, aspectScale, hitFlash);
       draws.push({
         bindGroup: this.device.createBindGroup({
           label: `Combat sprite bind group ${sprite.id}`,
@@ -112,6 +119,7 @@ export class CombatSpriteRenderer {
       });
     });
 
+    this.pruneSpriteAnimationState(activeSpriteIds);
     this.draws = draws;
   }
 
@@ -152,7 +160,13 @@ export class CombatSpriteRenderer {
     return buffer;
   }
 
-  private writeSpriteParams(buffer: GPUBuffer, sprite: RenderableSprite, timeMs: number, aspectScale: number): void {
+  private writeSpriteParams(
+    buffer: GPUBuffer,
+    sprite: RenderableSprite,
+    timeMs: number,
+    aspectScale: number,
+    hitFlash: number,
+  ): void {
     this.paramsData.fill(0);
     this.paramsData[0] = sprite.position.x;
     this.paramsData[1] = sprite.position.y;
@@ -162,15 +176,40 @@ export class CombatSpriteRenderer {
     this.paramsData[5] = sprite.facing;
     this.paramsData[6] = encodeRarity(sprite.rarity);
     this.paramsData[7] = encodeKind(sprite.kind);
-    this.paramsData[8] = hasStatus(sprite.statusEffects, "hit") ? 1 : 0;
-    this.paramsData[9] = hasStatus(sprite.statusEffects, "buff") ? 1 : 0;
-    this.paramsData[10] = hasStatus(sprite.statusEffects, "burning-field") ? 1 : 0;
-    this.paramsData[11] = hasStatus(sprite.statusEffects, "slowed-field") || hasStatus(sprite.statusEffects, "frozen") ? 1 : 0;
-    this.paramsData[12] = hasStatus(sprite.statusEffects, "magic-field") || hasStatus(sprite.statusEffects, "poisoned") ? 1 : 0;
+    this.paramsData[8] = hitFlash;
+    this.paramsData[9] = 0;
+    this.paramsData[10] = 0;
+    this.paramsData[11] = 0;
+    this.paramsData[12] = 0;
     this.paramsData[13] = encodeMotion(sprite.motionPreset);
     this.paramsData[14] = sprite.hpPercent ?? -1;
     this.paramsData[15] = 0;
     this.device.queue.writeBuffer(buffer, 0, this.paramsData);
+  }
+
+  private resolveHitFlash(sprite: RenderableSprite, timeMs: number): number {
+    if (sprite.hpPercent === null) {
+      return 0;
+    }
+
+    const previousHpPercent = this.previousHpPercentBySpriteId.get(sprite.id);
+
+    if (previousHpPercent !== undefined && sprite.hpPercent < previousHpPercent - hpDecreaseEpsilon) {
+      this.hitFlashUntilMsBySpriteId.set(sprite.id, timeMs + hitFlashDurationMs);
+    }
+
+    this.previousHpPercentBySpriteId.set(sprite.id, sprite.hpPercent);
+    const flashUntilMs = this.hitFlashUntilMsBySpriteId.get(sprite.id) ?? 0;
+    return timeMs < flashUntilMs ? 1 : 0;
+  }
+
+  private pruneSpriteAnimationState(activeSpriteIds: ReadonlySet<string>): void {
+    for (const spriteId of this.previousHpPercentBySpriteId.keys()) {
+      if (!activeSpriteIds.has(spriteId)) {
+        this.previousHpPercentBySpriteId.delete(spriteId);
+        this.hitFlashUntilMsBySpriteId.delete(spriteId);
+      }
+    }
   }
 }
 
@@ -235,6 +274,3 @@ function encodeMotion(motion: RenderableSpriteMotionPreset): number {
   }
 }
 
-function hasStatus(effects: readonly RenderableSpriteStatusEffect[], effect: RenderableSpriteStatusEffect): boolean {
-  return effects.includes(effect);
-}

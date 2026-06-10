@@ -5,7 +5,7 @@ import bloomShaderSource from "./combatFieldBloom.wgsl?raw";
 
 const hdrSceneFormat: GPUTextureFormat = "rgba16float";
 const bloomThreshold = 0.98;
-const bloomIntensity = 0.95;
+const bloomIntensity = 0.475;
 const bloomRadius = 1.35;
 const bloomLevels = 6;
 
@@ -14,6 +14,11 @@ interface BloomTarget {
   readonly view: GPUTextureView;
   readonly width: number;
   readonly height: number;
+}
+
+interface BloomPassResources {
+  readonly paramsBuffer: GPUBuffer;
+  readonly bindGroup: GPUBindGroup;
 }
 
 export class CombatFieldBloom {
@@ -28,6 +33,7 @@ export class CombatFieldBloom {
   private readonly finalCompositePipeline: GPURenderPipeline;
   private sceneTarget: BloomTarget | null = null;
   private bloomTargets: readonly BloomTarget[] = [];
+  private passResources: readonly BloomPassResources[] = [];
   private width = 0;
   private height = 0;
 
@@ -98,6 +104,7 @@ export class CombatFieldBloom {
     this.height = nextHeight;
     this.sceneTarget = this.createTarget("Combat field HDR scene", nextWidth, nextHeight);
     this.bloomTargets = this.createBloomTargets(nextWidth, nextHeight);
+    this.passResources = this.createPassResources();
   }
 
   getSceneView(): GPUTextureView {
@@ -115,23 +122,21 @@ export class CombatFieldBloom {
 
     let paramsIndex = 0;
     const firstBloomTarget = this.bloomTargets[0];
+    const brightResources = this.passResources[paramsIndex];
+    this.writeParams(
+      brightResources.paramsBuffer,
+      this.sceneTarget.width,
+      this.sceneTarget.height,
+      firstBloomTarget.width,
+      firstBloomTarget.height,
+      bloomIntensityScale,
+    );
     this.renderFullscreenPass({
       encoder,
       label: "Combat field bright downsample pass",
       pipeline: this.brightDownsamplePipeline,
       targetView: firstBloomTarget.view,
-      bindGroup: this.createBindGroup(
-        this.writeParams(
-          paramsIndex,
-          this.sceneTarget.width,
-          this.sceneTarget.height,
-          firstBloomTarget.width,
-          firstBloomTarget.height,
-          bloomIntensityScale,
-        ),
-        this.sceneTarget.view,
-        this.sceneTarget.view,
-      ),
+      bindGroup: brightResources.bindGroup,
       loadOp: "clear",
     });
     paramsIndex += 1;
@@ -139,16 +144,14 @@ export class CombatFieldBloom {
     for (let index = 1; index < this.bloomTargets.length; index += 1) {
       const source = this.bloomTargets[index - 1];
       const target = this.bloomTargets[index];
+      const resources = this.passResources[paramsIndex];
+      this.writeParams(resources.paramsBuffer, source.width, source.height, target.width, target.height, bloomIntensityScale);
       this.renderFullscreenPass({
         encoder,
         label: `Combat field bloom downsample pass ${index}`,
         pipeline: this.downsamplePipeline,
         targetView: target.view,
-        bindGroup: this.createBindGroup(
-          this.writeParams(paramsIndex, source.width, source.height, target.width, target.height, bloomIntensityScale),
-          source.view,
-          source.view,
-        ),
+        bindGroup: resources.bindGroup,
         loadOp: "clear",
       });
       paramsIndex += 1;
@@ -157,38 +160,34 @@ export class CombatFieldBloom {
     for (let index = this.bloomTargets.length - 2; index >= 0; index -= 1) {
       const source = this.bloomTargets[index + 1];
       const target = this.bloomTargets[index];
+      const resources = this.passResources[paramsIndex];
+      this.writeParams(resources.paramsBuffer, source.width, source.height, target.width, target.height, bloomIntensityScale);
       this.renderFullscreenPass({
         encoder,
         label: `Combat field bloom upsample pass ${index}`,
         pipeline: this.upsamplePipeline,
         targetView: target.view,
-        bindGroup: this.createBindGroup(
-          this.writeParams(paramsIndex, source.width, source.height, target.width, target.height, bloomIntensityScale),
-          source.view,
-          source.view,
-        ),
+        bindGroup: resources.bindGroup,
         loadOp: "load",
       });
       paramsIndex += 1;
     }
 
+    const finalResources = this.passResources[paramsIndex];
+    this.writeParams(
+      finalResources.paramsBuffer,
+      this.sceneTarget.width,
+      this.sceneTarget.height,
+      this.sceneTarget.width,
+      this.sceneTarget.height,
+      bloomIntensityScale,
+    );
     this.renderFullscreenPass({
       encoder,
       label: "Combat field bloom final composite pass",
       pipeline: this.finalCompositePipeline,
       targetView: outputView,
-      bindGroup: this.createBindGroup(
-        this.writeParams(
-          paramsIndex,
-          this.sceneTarget.width,
-          this.sceneTarget.height,
-          this.sceneTarget.width,
-          this.sceneTarget.height,
-          bloomIntensityScale,
-        ),
-        this.sceneTarget.view,
-        firstBloomTarget.view,
-      ),
+      bindGroup: finalResources.bindGroup,
       loadOp: "clear",
     });
   }
@@ -281,15 +280,47 @@ export class CombatFieldBloom {
     };
   }
 
+  private createPassResources(): readonly BloomPassResources[] {
+    if (!this.sceneTarget || this.bloomTargets.length === 0) {
+      return [];
+    }
+
+    const passInputs: { readonly sourceView: GPUTextureView; readonly secondaryView: GPUTextureView }[] = [
+      { sourceView: this.sceneTarget.view, secondaryView: this.sceneTarget.view },
+    ];
+
+    for (let index = 1; index < this.bloomTargets.length; index += 1) {
+      const source = this.bloomTargets[index - 1];
+      passInputs.push({ sourceView: source.view, secondaryView: source.view });
+    }
+
+    for (let index = this.bloomTargets.length - 2; index >= 0; index -= 1) {
+      const source = this.bloomTargets[index + 1];
+      passInputs.push({ sourceView: source.view, secondaryView: source.view });
+    }
+
+    passInputs.push({
+      sourceView: this.sceneTarget.view,
+      secondaryView: this.bloomTargets[0].view,
+    });
+
+    return passInputs.map((passInput, index) => {
+      const paramsBuffer = this.ensureParamsBuffer(index);
+      return {
+        paramsBuffer,
+        bindGroup: this.createBindGroup(paramsBuffer, passInput.sourceView, passInput.secondaryView),
+      };
+    });
+  }
+
   private writeParams(
-    index: number,
+    buffer: GPUBuffer,
     sourceWidth: number,
     sourceHeight: number,
     targetWidth: number,
     targetHeight: number,
     bloomIntensityScale: number,
-  ): GPUBuffer {
-    const buffer = this.ensureParamsBuffer(index);
+  ): void {
     this.paramsData[0] = 1 / Math.max(1, sourceWidth);
     this.paramsData[1] = 1 / Math.max(1, sourceHeight);
     this.paramsData[2] = bloomThreshold;
@@ -299,7 +330,6 @@ export class CombatFieldBloom {
     this.paramsData[6] = bloomRadius;
     this.paramsData[7] = bloomIntensity * clamp(bloomIntensityScale, 0.35, 1);
     this.device.queue.writeBuffer(buffer, 0, this.paramsData);
-    return buffer;
   }
 
   private ensureParamsBuffer(index: number): GPUBuffer {
@@ -372,6 +402,7 @@ export class CombatFieldBloom {
 
     this.sceneTarget = null;
     this.bloomTargets = [];
+    this.passResources = [];
   }
 }
 

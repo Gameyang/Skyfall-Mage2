@@ -45,17 +45,7 @@ fn downsampleFragment(@builtin(position) position: vec4f) -> @location(0) vec4f 
 @fragment
 fn upsampleFragment(@builtin(position) position: vec4f) -> @location(0) vec4f {
   let uv = fragmentUv(position);
-  let texel = params.sourceTexelAndThreshold.xy * params.targetSizeRadiusAndIntensity.z;
-  var color = textureSample(sourceTexture, bloomSampler, uv).rgb * 4.0;
-  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(1.0, 0.0)).rgb * 2.0;
-  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(-1.0, 0.0)).rgb * 2.0;
-  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(0.0, 1.0)).rgb * 2.0;
-  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(0.0, -1.0)).rgb * 2.0;
-  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(1.0, 1.0)).rgb;
-  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(-1.0, 1.0)).rgb;
-  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(1.0, -1.0)).rgb;
-  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(-1.0, -1.0)).rgb;
-  return vec4f(color / 16.0, 1.0);
+  return vec4f(dualFilterSample(uv), 1.0);
 }
 
 @fragment
@@ -73,15 +63,14 @@ fn fragmentUv(position: vec4f) -> vec2f {
 }
 
 fn downsampleSource(uv: vec2f) -> vec3f {
-  let texel = params.sourceTexelAndThreshold.xy * params.targetSizeRadiusAndIntensity.z;
-  var color = textureSample(sourceTexture, bloomSampler, uv).rgb * 4.0;
-  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(1.0, 0.0)).rgb * 2.0;
-  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(-1.0, 0.0)).rgb * 2.0;
-  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(0.0, 1.0)).rgb * 2.0;
-  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(0.0, -1.0)).rgb * 2.0;
-  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(1.0, 1.0)).rgb;
-  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(-1.0, 1.0)).rgb;
-  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(1.0, -1.0)).rgb;
-  color = color + textureSample(sourceTexture, bloomSampler, uv + texel * vec2f(-1.0, -1.0)).rgb;
-  return color / 16.0;
+  return dualFilterSample(uv);
+}
+
+fn dualFilterSample(uv: vec2f) -> vec3f {
+  let offset = params.sourceTexelAndThreshold.xy * params.targetSizeRadiusAndIntensity.z;
+  var color = textureSample(sourceTexture, bloomSampler, uv + offset * vec2f(-1.0, -1.0)).rgb;
+  color = color + textureSample(sourceTexture, bloomSampler, uv + offset * vec2f(1.0, -1.0)).rgb;
+  color = color + textureSample(sourceTexture, bloomSampler, uv + offset * vec2f(-1.0, 1.0)).rgb;
+  color = color + textureSample(sourceTexture, bloomSampler, uv + offset * vec2f(1.0, 1.0)).rgb;
+  return color * 0.25;
 }

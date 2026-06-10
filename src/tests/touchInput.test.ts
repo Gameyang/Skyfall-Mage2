@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { canClaimMovementPointer, createMovementAnchor, pointerToMovementVector } from "../input/TouchInput";
+import {
+  canClaimMovementPointer,
+  createMovementAnchor,
+  pointerToMovementVector,
+  shouldRequestFullscreenForMovementPointer,
+} from "../input/TouchInput";
 
 describe("TouchInput movement helpers", () => {
   it("claims only the first active movement pointer", () => {
@@ -11,6 +16,12 @@ describe("TouchInput movement helpers", () => {
   it("ignores non-primary mouse buttons", () => {
     expect(canClaimMovementPointer(null, "mouse", 0)).toBe(true);
     expect(canClaimMovementPointer(null, "mouse", 2)).toBe(false);
+  });
+
+  it("requests fullscreen from direct movement touch gestures only", () => {
+    expect(shouldRequestFullscreenForMovementPointer("touch")).toBe(true);
+    expect(shouldRequestFullscreenForMovementPointer("pen")).toBe(true);
+    expect(shouldRequestFullscreenForMovementPointer("mouse")).toBe(false);
   });
 
   it("uses the pointer start as an anchor where the old fixed joystick used to be", () => {

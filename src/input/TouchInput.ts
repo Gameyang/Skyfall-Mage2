@@ -7,6 +7,10 @@ import { touchVectorToCommand } from "./InputMapper";
 type CommandSink = (command: GameCommand) => void;
 const defaultMovementRadius = 48;
 
+export interface TouchInputOptions {
+  readonly onMovementGestureStart?: () => void;
+}
+
 export interface MovementAnchor {
   readonly x: number;
   readonly y: number;
@@ -25,6 +29,7 @@ export class TouchInput {
   constructor(
     private readonly playfieldElement: HTMLElement,
     private readonly sink: CommandSink,
+    private readonly options: TouchInputOptions = {},
   ) {
     playfieldElement.addEventListener("pointerdown", this.handlePointerDown);
     playfieldElement.addEventListener("pointermove", this.handlePointerMove);
@@ -44,6 +49,10 @@ export class TouchInput {
   private readonly handlePointerDown = (event: PointerEvent): void => {
     if (!canClaimMovementPointer(this.activeMovement?.pointerId ?? null, event.pointerType, event.button)) {
       return;
+    }
+
+    if (shouldRequestFullscreenForMovementPointer(event.pointerType)) {
+      this.options.onMovementGestureStart?.();
     }
 
     const anchor = createMovementAnchor({
@@ -105,6 +114,10 @@ export function canClaimMovementPointer(
   }
 
   return pointerType !== "mouse" || button === 0;
+}
+
+export function shouldRequestFullscreenForMovementPointer(pointerType: string): boolean {
+  return pointerType !== "mouse";
 }
 
 export function createMovementAnchor(options: MovementAnchorOptions): MovementAnchor {

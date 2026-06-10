@@ -5,7 +5,7 @@ import { starterEnemyById } from "../../content/enemies/starterEnemies";
 import { starterItemById } from "../../content/items/starterItems";
 import type { GameState } from "../../core/state/GameState";
 import { resolveSkinUrl } from "../../platform/assets";
-import type { RenderableSprite, RenderableSpriteStatusEffect } from "./RenderSnapshot";
+import type { RenderableSprite } from "./RenderSnapshot";
 
 export function createRenderableSprites(state: GameState): readonly RenderableSprite[] {
   return [
@@ -23,8 +23,8 @@ function createPlayerSprite(state: GameState): RenderableSprite {
     size: { x: 0.108, y: 0.108 },
     textureUrl: resolveSkinUrl(state.player.skinId),
     rarity: "rare",
-    statusEffects: resolvePlayerStatusEffects(state),
-    motionPreset: state.player.movement.x !== 0 || state.player.movement.y !== 0 ? "bounce" : "idle",
+    statusEffects: [],
+    motionPreset: "idle",
     facing: state.player.aim.x < state.player.position.x ? -1 : 1,
     hpPercent: state.player.hp.max <= 0 ? null : state.player.hp.current / state.player.hp.max,
   };
@@ -42,8 +42,8 @@ function createEnemySprite(enemy: GameState["entities"]["enemies"][number]): Ren
     size: isBoss ? { x: 0.122, y: 0.122 } : { x: 0.082, y: 0.082 },
     textureUrl: definition?.iconUrl ?? "",
     rarity: enemy.kind === "boss" ? "epic" : enemy.kind === "miniboss" ? "rare" : "common",
-    statusEffects: hpPercent < 1 ? ["hit"] : [],
-    motionPreset: hpPercent < 1 ? "shake" : isBoss ? "pulse" : "sway",
+    statusEffects: [],
+    motionPreset: "idle",
     facing: 1,
     hpPercent,
   };
@@ -59,35 +59,9 @@ function createItemDropSprite(drop: GameState["entities"]["itemDrops"][number]):
     size: { x: 0.058, y: 0.058 },
     textureUrl: definition?.iconUrl ?? "",
     rarity: definition?.rarity ?? "common",
-    statusEffects: definition && definition.rarity !== "common" ? ["buff"] : [],
-    motionPreset: definition?.rarity === "rare" || definition?.rarity === "epic" ? "pulse" : "sway",
+    statusEffects: [],
+    motionPreset: "idle",
     facing: 1,
     hpPercent: null,
   };
-}
-
-function resolvePlayerStatusEffects(state: GameState): readonly RenderableSpriteStatusEffect[] {
-  const effects: RenderableSpriteStatusEffect[] = [];
-
-  if (state.player.hp.current < state.player.hp.max) {
-    effects.push("hit");
-  }
-
-  if (state.progression.activeBuffIds.length > 0) {
-    effects.push("buff");
-  }
-
-  if (state.progression.activeBuffIds.includes("magic-field")) {
-    effects.push("magic-field");
-  }
-
-  if (state.progression.activeDebuffIds.includes("burning-field")) {
-    effects.push("burning-field");
-  }
-
-  if (state.progression.activeDebuffIds.includes("slowed-field")) {
-    effects.push("slowed-field");
-  }
-
-  return effects;
 }
