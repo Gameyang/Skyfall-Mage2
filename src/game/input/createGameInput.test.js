@@ -1,18 +1,50 @@
 import { describe, expect, it } from 'vitest';
-import { getDominantTouchDirection } from './createGameInput.js';
+import { getTouchMovementSnapshot } from './createGameInput.js';
+
+const NO_MOVEMENT = Object.freeze({
+  up: false,
+  down: false,
+  left: false,
+  right: false,
+});
 
 describe('hidden mobile joystick input', () => {
   it('ignores tiny movements around the first touch position', () => {
-    expect(getDominantTouchDirection({ deltaX: 8, deltaY: 6 })).toBeNull();
+    expect(getTouchMovementSnapshot({ deltaX: 8, deltaY: 6 })).toEqual(NO_MOVEMENT);
   });
 
-  it('uses the dominant horizontal axis for left and right movement', () => {
-    expect(getDominantTouchDirection({ deltaX: 32, deltaY: 12 })).toBe('right');
-    expect(getDominantTouchDirection({ deltaX: -32, deltaY: 12 })).toBe('left');
+  it('keeps shallow horizontal drags on the horizontal axis', () => {
+    expect(getTouchMovementSnapshot({ deltaX: 48, deltaY: 12 })).toEqual({
+      ...NO_MOVEMENT,
+      right: true,
+    });
+    expect(getTouchMovementSnapshot({ deltaX: -48, deltaY: 12 })).toEqual({
+      ...NO_MOVEMENT,
+      left: true,
+    });
   });
 
-  it('uses the dominant vertical axis for up and down movement', () => {
-    expect(getDominantTouchDirection({ deltaX: 10, deltaY: -34 })).toBe('up');
-    expect(getDominantTouchDirection({ deltaX: 10, deltaY: 34 })).toBe('down');
+  it('keeps shallow vertical drags on the vertical axis', () => {
+    expect(getTouchMovementSnapshot({ deltaX: 10, deltaY: -44 })).toEqual({
+      ...NO_MOVEMENT,
+      up: true,
+    });
+    expect(getTouchMovementSnapshot({ deltaX: 10, deltaY: 44 })).toEqual({
+      ...NO_MOVEMENT,
+      down: true,
+    });
+  });
+
+  it('supports diagonal movement when both axes are intentional', () => {
+    expect(getTouchMovementSnapshot({ deltaX: 34, deltaY: -34 })).toEqual({
+      ...NO_MOVEMENT,
+      up: true,
+      right: true,
+    });
+    expect(getTouchMovementSnapshot({ deltaX: -34, deltaY: 34 })).toEqual({
+      ...NO_MOVEMENT,
+      down: true,
+      left: true,
+    });
   });
 });

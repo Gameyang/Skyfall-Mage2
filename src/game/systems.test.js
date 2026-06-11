@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ENEMY_DEFINITIONS } from './content/enemies.js';
 import { GAME_CONTENT } from './content/index.js';
 import { ITEM_DEFINITIONS } from './content/items.js';
@@ -726,6 +726,7 @@ describe('item drops', () => {
     return createTestContent({
       items: overrides.items ?? {
         coin: ITEM_DEFINITIONS.coin,
+        hpPotion: ITEM_DEFINITIONS.hpPotion,
         gem: {
           ...ITEM_DEFINITIONS.coin,
           id: 'gem',
@@ -780,6 +781,13 @@ describe('item drops', () => {
     expect(GAME_CONTENT.loot.enemyDrops).toContainEqual(expect.objectContaining({
       itemId: 'coin',
       chance: 0.7,
+    }));
+  });
+
+  it('defines hp potions as a default enemy drop at five percent chance', () => {
+    expect(GAME_CONTENT.loot.enemyDrops).toContainEqual(expect.objectContaining({
+      itemId: 'hpPotion',
+      chance: 0.05,
     }));
   });
 
@@ -952,5 +960,222 @@ describe('item drops', () => {
       { itemId: 'coin', quantity: 3 },
       { itemId: 'gem', quantity: 1 },
     ]);
+  });
+
+  it('heals immediately when picking up an hp potion below full health', () => {
+    const content = createLootContent();
+    const state = createGameState({ width: 800, height: 600, content });
+    state.player.x = 100;
+    state.player.y = 100;
+    state.player.hp = 60;
+    state.entities.itemDrops.push({
+      id: 1,
+      itemId: 'hpPotion',
+      quantity: 1,
+      x: 100,
+      y: 100,
+      radius: 11,
+      pickupRadius: 20,
+      ageMs: 0,
+      driftSeed: 1,
+    });
+
+    updateGame(state, 16, content);
+
+    expect(state.player.hp).toBe(90);
+    expect(state.player.collectedItems).toHaveLength(0);
+    expect(state.frameEvents).toContainEqual(expect.objectContaining({
+      type: 'PlayerHealed',
+      itemId: 'hpPotion',
+      source: 'pickup',
+      healAmount: 30,
+      playerHp: 90,
+    }));
+  });
+
+  it('caps immediate hp potion healing at max hp', () => {
+    const content = createLootContent();
+    const state = createGameState({ width: 800, height: 600, content });
+    state.player.x = 100;
+    state.player.y = 100;
+    state.player.hp = 85;
+    state.entities.itemDrops.push({
+      id: 1,
+      itemId: 'hpPotion',
+      quantity: 1,
+      x: 100,
+      y: 100,
+      radius: 11,
+      pickupRadius: 20,
+      ageMs: 0,
+      driftSeed: 1,
+    });
+
+    updateGame(state, 16, content);
+
+    expect(state.player.hp).toBe(100);
+    expect(state.frameEvents).toContainEqual(expect.objectContaining({
+      type: 'PlayerHealed',
+      healAmount: 15,
+      playerHp: 100,
+    }));
+  });
+
+  it('stores hp potions as ribbon items when picked up at full health', () => {
+    const content = createLootContent();
+    const state = createGameState({ width: 800, height: 600, content });
+    state.player.x = 100;
+    state.player.y = 100;
+    state.player.hp = state.player.maxHp;
+    state.entities.itemDrops.push({
+      id: 1,
+      itemId: 'hpPotion',
+      quantity: 1,
+      x: 100,
+      y: 100,
+      radius: 11,
+      pickupRadius: 20,
+      ageMs: 0,
+      driftSeed: 1,
+    });
+
+    updateGame(state, 16, content);
+
+    expect(state.player.hp).toBe(100);
+    expect(state.player.collectedItems.map((item) => ({
+      itemId: item.itemId,
+      quantity: item.quantity,
+    }))).toEqual([
+      { itemId: 'hpPotion', quantity: 1 },
+    ]);
+  });
+
+  it('auto uses one stored hp potion when player hp is fifty percent or lower', () => {
+    const content = createLootContent();
+    const state = createGameState({ width: 800, height: 600, content });
+    state.player.hp = 50;
+    state.player.collectedItems.push({
+      itemId: 'hpPotion',
+      quantity: 2,
+      name: 'HP Potion',
+      spriteUrl: ITEM_DEFINITIONS.hpPotion.spriteUrl,
+      spriteSize: ITEM_DEFINITIONS.hpPotion.tailSize,
+      visual: ITEM_DEFINITIONS.hpPotion.visual,
+    });
+
+    updateGame(state, 16, content);
+
+    expect(state.player.hp).toBe(80);
+    expect(state.player.collectedItems).toContainEqual(expect.objectContaining({
+      itemId: 'hpPotion',
+      quantity: 1,
+    }));
+    expect(state.frameEvents).toContainEqual(expect.objectContaining({
+      type: 'PlayerHealed',
+      itemId: 'hpPotion',
+      source: 'auto',
+      healAmount: 30,
+    }));
+  });
+
+  it('does not auto use stored hp potions above fifty percent hp', () => {
+    const content = createLootContent();
+    const state = createGameState({ width: 800, height: 600, content });
+    state.player.hp = 51;
+    state.player.collectedItems.push({
+      itemId: 'hpPotion',
+      quantity: 1,
+      name: 'HP Potion',
+      spriteUrl: ITEM_DEFINITIONS.hpPotion.spriteUrl,
+      spriteSize: ITEM_DEFINITIONS.hpPotion.tailSize,
+      visual: ITEM_DEFINITIONS.hpPotion.visual,
+    });
+
+    updateGame(state, 16, content);
+
+    expect(state.player.hp).toBe(51);
+    expect(state.player.collectedItems).toContainEqual(expect.objectContaining({
+      itemId: 'hpPotion',
+      quantity: 1,
+    }));
+    expect(state.frameEvents.some((event) => event.type === 'PlayerHealed')).toBe(false);
+  });
+
+  it('loses five to ten percent of ribbon items when the player is damaged', () => {
+    const content = createLootContent();
+    const state = createGameState({ width: 800, height: 600, content });
+    state.player.x = 100;
+    state.player.y = 100;
+    state.player.collectedItems.push({
+      itemId: 'coin',
+      quantity: 100,
+      name: 'Coin',
+      spriteUrl: ITEM_DEFINITIONS.coin.spriteUrl,
+      spriteSize: ITEM_DEFINITIONS.coin.tailSize,
+      visual: ITEM_DEFINITIONS.coin.visual,
+    });
+    state.entities.enemies.push({
+      id: 1,
+      hp: 30,
+      x: 100,
+      y: 100,
+      radius: 18,
+      progress: 0,
+      travelDistance: 1000,
+      contactDamage: 12,
+    });
+
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0);
+    try {
+      updateGame(state, 16, content);
+    } finally {
+      randomSpy.mockRestore();
+    }
+
+    expect(state.player.hp).toBe(88);
+    expect(state.player.collectedItems).toContainEqual(expect.objectContaining({
+      itemId: 'coin',
+      quantity: 95,
+    }));
+    expect(state.entities.lostItems).toHaveLength(5);
+    expect(state.frameEvents).toContainEqual(expect.objectContaining({
+      type: 'RibbonItemsLost',
+      source: 'enemyContact',
+      enemyId: 1,
+      lostQuantity: 5,
+      totalQuantityBefore: 100,
+      items: { coin: 5 },
+    }));
+  });
+
+  it('removes lost item visuals after they fall outside the field', () => {
+    const content = createLootContent();
+    const state = createGameState({ width: 800, height: 600, content });
+    state.entities.lostItems.push({
+      id: 1,
+      itemId: 'coin',
+      x: 400,
+      y: 590,
+      vx: 0,
+      vy: 1000,
+      gravity: 760,
+      radius: 11,
+      spriteUrl: ITEM_DEFINITIONS.coin.spriteUrl,
+      spriteSize: ITEM_DEFINITIONS.coin.tailSize,
+      visual: ITEM_DEFINITIONS.coin.visual,
+      rotation: 0,
+      rotationSpeed: 0,
+      ageMs: 0,
+      lifetimeMs: 4000,
+    });
+
+    updateGame(state, 500, content);
+
+    expect(state.entities.lostItems).toHaveLength(0);
+    expect(state.frameEvents).toContainEqual(expect.objectContaining({
+      type: 'LostItemExpired',
+      lostItemId: 1,
+      itemId: 'coin',
+    }));
   });
 });

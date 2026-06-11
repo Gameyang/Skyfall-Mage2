@@ -1,3 +1,5 @@
+import gameOverScreenUrl from '../../assets/generated/game-over-screen.webp?url';
+
 export function createGameCanvasRenderer({ canvas }) {
   return new GameCanvasRenderer({ canvas });
 }
@@ -10,6 +12,7 @@ class GameCanvasRenderer {
     if (!this.context) {
       throw new Error('The game canvas could not create a 2D context.');
     }
+    this.getSprite(gameOverScreenUrl);
   }
 
   resize() {
@@ -43,10 +46,11 @@ class GameCanvasRenderer {
     drawProjectiles(ctx, state);
     drawEnemies(ctx, state, this);
     drawCollectedItemTrail(ctx, state, this);
+    drawLostItems(ctx, state, this);
     drawPlayer(ctx, state, this);
 
     if (state.session.gameOver) {
-      drawGameOver(ctx, width, height, state);
+      drawGameOver(ctx, width, height, state, this);
     }
   }
 
@@ -188,6 +192,27 @@ function drawCollectedItemTrail(ctx, state, renderer) {
       drawCoinFallback(ctx, size, item.visual);
     }
     drawItemQuantity(ctx, item.quantity, size);
+    ctx.restore();
+  }
+}
+
+function drawLostItems(ctx, state, renderer) {
+  for (const item of state.entities.lostItems || []) {
+    const sprite = renderer.getSprite(item.spriteUrl);
+    const size = item.spriteSize ?? 24;
+    const lifetimeMs = item.lifetimeMs ?? 4000;
+    const ageRatio = Math.max(0, Math.min(1, (item.ageMs || 0) / Math.max(1, lifetimeMs)));
+
+    ctx.save();
+    ctx.globalAlpha = 1 - ageRatio * 0.45;
+    ctx.translate(item.x, item.y);
+    ctx.rotate(item.rotation || 0);
+    drawItemGlow(ctx, size, item.visual);
+    if (sprite) {
+      drawPixelSprite(ctx, sprite, size);
+    } else {
+      drawCoinFallback(ctx, size, item.visual);
+    }
     ctx.restore();
   }
 }
@@ -381,21 +406,35 @@ function samplePlayerTrailPoint(player, distanceBehind) {
   };
 }
 
-function drawGameOver(ctx, width, height, state) {
+function drawGameOver(ctx, width, height, state, renderer) {
   ctx.fillStyle = 'rgba(0, 0, 0, 0.58)';
   ctx.fillRect(0, 0, width, height);
 
   const remainingMs = Math.max(0, state.session.autoRestartRemainingMs ?? 3000);
   const remainingSeconds = Math.max(1, Math.ceil(remainingMs / 1000));
+  const centerX = width * 0.5;
+  const centerY = height * 0.5;
+  const art = renderer.getSprite(gameOverScreenUrl);
+  const artSize = clamp(Math.min(width, height) * 0.44, 150, 260);
 
-  ctx.fillStyle = '#f4fbff';
+  if (art) {
+    const previousSmoothing = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(art, centerX - artSize * 0.5, centerY - artSize * 0.62, artSize, artSize);
+    ctx.imageSmoothingEnabled = previousSmoothing;
+  } else {
+    ctx.fillStyle = '#f4fbff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '700 34px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    ctx.fillText('Game Over', centerX, centerY - 12);
+  }
+
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = '700 34px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-  ctx.fillText('Game Over', width * 0.5, height * 0.5 - 12);
   ctx.font = '500 15px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
   ctx.fillStyle = 'rgba(244, 251, 255, 0.78)';
-  ctx.fillText(`Restarting in ${remainingSeconds}`, width * 0.5, height * 0.5 + 26);
+  ctx.fillText(`Restarting in ${remainingSeconds}`, centerX, centerY + artSize * 0.48);
   ctx.textAlign = 'start';
 }
 

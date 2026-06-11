@@ -23,6 +23,7 @@ export function createGameState({ width = 1280, height = 720, content = GAME_CON
       nextProjectileId: 1,
       nextHazardId: 1,
       nextItemDropId: 1,
+      nextLostItemId: 1,
       contactFlashMs: 0,
     },
     input: {
@@ -49,6 +50,7 @@ export function createGameState({ width = 1280, height = 720, content = GAME_CON
       projectiles: [],
       hazards: [],
       itemDrops: [],
+      lostItems: [],
     },
     skills: createSkillState(content.skills),
     waves: createWaveState(content.waves),

@@ -1,5 +1,6 @@
 import batSpriteUrl from '../../assets/imported/enemy/bat.webp?url';
 import coinSpriteUrl from '../../assets/imported/items/coin.webp?url';
+import hpPotionSpriteUrl from '../../assets/imported/items/hp_potion_1.webp?url';
 
 const playerSkinModules = import.meta.glob('../../assets/imported/skins/*.webp', {
   eager: true,
@@ -19,4 +20,5 @@ export const ENEMY_SPRITES = Object.freeze({
 
 export const ITEM_SPRITES = Object.freeze({
   coin: coinSpriteUrl,
+  hpPotion: hpPotionSpriteUrl,
 });

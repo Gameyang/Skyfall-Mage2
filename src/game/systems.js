@@ -13,6 +13,11 @@ const ITEM_MAX_WIND_SPEED = 18;
 const ITEM_MAX_NOISE_SPEED = 10;
 const ITEM_TRAIL_HISTORY_SPACING = 4;
 const ITEM_TRAIL_HISTORY_LIMIT = 180;
+const ITEM_LOSS_MIN_RATIO = 0.05;
+const ITEM_LOSS_MAX_RATIO = 0.1;
+const LOST_ITEM_GRAVITY = 760;
+const LOST_ITEM_DESPAWN_MARGIN = 96;
+const LOST_ITEM_MAX_LIFETIME_MS = 4000;
 
 export function updateGame(state, dtMs, content = GAME_CONTENT) {
   const dt = Math.max(dtMs, 0);
@@ -29,12 +34,14 @@ export function updateGame(state, dtMs, content = GAME_CONTENT) {
   updateWaveSpawns(state, content);
   updateEnemies(state, dt);
   updateItemDrops(state, dt, content);
+  updateLostItems(state, dt);
   updateAutoSkills(state, dt, content);
   updateProjectiles(state, dt);
   resolveProjectileHits(state, content);
   updateHazards(state, dt, content);
   resolveItemPickups(state, content);
-  resolvePlayerContacts(state);
+  resolvePlayerContacts(state, content);
+  autoUsePlayerConsumables(state, content);
   cleanupEntities(state);
 
   return state;
@@ -47,11 +54,17 @@ export function syncRuntimeCollections(state, content = GAME_CONTENT) {
   if (!state.entities.itemDrops) {
     state.entities.itemDrops = [];
   }
+  if (!state.entities.lostItems) {
+    state.entities.lostItems = [];
+  }
   if (!state.session.nextHazardId) {
     state.session.nextHazardId = 1;
   }
   if (!state.session.nextItemDropId) {
     state.session.nextItemDropId = 1;
+  }
+  if (!state.session.nextLostItemId) {
+    state.session.nextLostItemId = 1;
   }
   if (!state.player.trailHistory) {
     state.player.trailHistory = [];
@@ -395,6 +408,33 @@ export function updateItemDrops(state, dtMs, content = GAME_CONTENT) {
   state.entities.itemDrops = remainingDrops;
 }
 
+export function updateLostItems(state, dtMs) {
+  if (!state.entities.lostItems?.length) return;
+
+  const dt = dtMs / 1000;
+  const remainingLostItems = [];
+  for (const item of state.entities.lostItems) {
+    item.ageMs = (item.ageMs || 0) + dtMs;
+    item.vy += (item.gravity ?? LOST_ITEM_GRAVITY) * dt;
+    item.x += item.vx * dt;
+    item.y += item.vy * dt;
+    item.rotation = (item.rotation || 0) + (item.rotationSpeed || 0) * dt;
+
+    if (item.ageMs > (item.lifetimeMs ?? LOST_ITEM_MAX_LIFETIME_MS) || isLostItemOutsideField(state, item)) {
+      state.frameEvents.push({
+        type: 'LostItemExpired',
+        lostItemId: item.id,
+        itemId: item.itemId,
+      });
+      continue;
+    }
+
+    remainingLostItems.push(item);
+  }
+
+  state.entities.lostItems = remainingLostItems;
+}
+
 export function resolveProjectileHits(state, content = GAME_CONTENT) {
   const remainingProjectiles = [];
 
@@ -494,19 +534,20 @@ export function resolveItemPickups(state, content = GAME_CONTENT) {
       continue;
     }
 
-    collectPlayerItem(state, drop, content);
+    const collectResult = collectPlayerItem(state, drop, content);
     state.frameEvents.push({
       type: 'ItemCollected',
       itemDropId: drop.id,
       itemId: drop.itemId,
       quantity: drop.quantity ?? 1,
+      consumed: collectResult.consumed,
     });
   }
 
   state.entities.itemDrops = remainingDrops;
 }
 
-export function resolvePlayerContacts(state) {
+export function resolvePlayerContacts(state, content = GAME_CONTENT) {
   const remainingEnemies = [];
   for (const enemy of state.entities.enemies) {
     if (!circlesIntersect(enemy, state.player)) {
@@ -521,6 +562,10 @@ export function resolvePlayerContacts(state) {
       enemyId: enemy.id,
       damage: enemy.contactDamage,
       playerHp: state.player.hp,
+    });
+    losePlayerRibbonItems(state, content, {
+      source: 'enemyContact',
+      enemyId: enemy.id,
     });
     pushMaterialEffect(state, {
       material: 'smoke',
@@ -735,6 +780,10 @@ function applyHazardTick(state, hazard, tickMs, content = GAME_CONTENT) {
       damage,
       playerHp: state.player.hp,
     });
+    losePlayerRibbonItems(state, content, {
+      source: 'hazard',
+      hazardId: hazard.id,
+    });
     if (state.player.hp <= 0) {
       state.session.gameOver = true;
     }
@@ -815,22 +864,209 @@ function rollEnemyLootDrops(state, enemy, content = GAME_CONTENT) {
 function collectPlayerItem(state, drop, content = GAME_CONTENT) {
   const item = content.items?.[drop.itemId] || {};
   const quantity = Math.max(1, drop.quantity ?? 1);
+  let remainingQuantity = quantity;
+  if (shouldConsumeItemOnPickup(state, item)) {
+    const consumedQuantity = consumeHealingItem(state, item, {
+      itemId: drop.itemId,
+      quantity,
+      source: 'pickup',
+      itemDropId: drop.id,
+    });
+    remainingQuantity = Math.max(0, quantity - consumedQuantity);
+    if (remainingQuantity <= 0) {
+      return {
+        consumed: true,
+        quantity: consumedQuantity,
+      };
+    }
+  }
+
   const existing = state.player.collectedItems.find((entry) => entry.itemId === drop.itemId);
   if (existing) {
-    existing.quantity += quantity;
-    return existing;
+    existing.quantity += remainingQuantity;
+    return {
+      consumed: remainingQuantity < quantity,
+      entry: existing,
+    };
   }
 
   const entry = {
     itemId: drop.itemId,
-    quantity,
+    quantity: remainingQuantity,
     name: item.name ?? drop.itemId,
     spriteUrl: item.spriteUrl ?? drop.spriteUrl,
     spriteSize: item.tailSize ?? item.spriteSize ?? drop.spriteSize ?? 24,
     visual: item.visual ?? drop.visual,
   };
   state.player.collectedItems.push(entry);
-  return entry;
+  return {
+    consumed: remainingQuantity < quantity,
+    entry,
+  };
+}
+
+function shouldConsumeItemOnPickup(state, item) {
+  return item.consumable?.type === 'heal' && state.player.hp < state.player.maxHp;
+}
+
+export function autoUsePlayerConsumables(state, content = GAME_CONTENT) {
+  const items = state.player.collectedItems || [];
+  for (let index = 0; index < items.length; index += 1) {
+    const entry = items[index];
+    const item = content.items?.[entry.itemId];
+    if (!shouldAutoUseHealingItem(state, item)) continue;
+
+    consumeHealingItem(state, item, {
+      itemId: entry.itemId,
+      quantity: 1,
+      source: 'auto',
+    });
+    entry.quantity -= 1;
+    if (entry.quantity <= 0) {
+      items.splice(index, 1);
+    }
+    return true;
+  }
+
+  return false;
+}
+
+function shouldAutoUseHealingItem(state, item) {
+  if (item?.consumable?.type !== 'heal') return false;
+  const maxHp = Math.max(1, state.player.maxHp || 1);
+  const hpRatio = state.player.hp / maxHp;
+  return hpRatio <= (item.consumable.autoUseHpRatio ?? 0);
+}
+
+function consumeHealingItem(state, item, { itemId, quantity = 1, source, itemDropId } = {}) {
+  if (item?.consumable?.type !== 'heal') return 0;
+
+  let consumed = 0;
+  for (let index = 0; index < quantity; index += 1) {
+    if (state.player.hp >= state.player.maxHp) break;
+
+    const healAmount = Math.max(0, state.player.maxHp * (item.consumable.healFraction ?? 0));
+    if (healAmount <= 0) break;
+
+    const previousHp = state.player.hp;
+    state.player.hp = Math.min(state.player.maxHp, state.player.hp + healAmount);
+    consumed += 1;
+    state.frameEvents.push({
+      type: 'PlayerHealed',
+      itemId,
+      itemDropId,
+      source,
+      healAmount: state.player.hp - previousHp,
+      playerHp: state.player.hp,
+    });
+  }
+
+  return consumed;
+}
+
+export function losePlayerRibbonItems(state, content = GAME_CONTENT, eventBase = {}) {
+  const totalQuantity = getCollectedItemQuantity(state);
+  if (totalQuantity <= 0) return 0;
+
+  const lossRatio = lerp(ITEM_LOSS_MIN_RATIO, ITEM_LOSS_MAX_RATIO, Math.random());
+  const lossCount = clamp(Math.ceil(totalQuantity * lossRatio), 1, totalQuantity);
+  const lostItems = [];
+
+  for (let index = 0; index < lossCount; index += 1) {
+    const lostItem = removeRandomCollectedItemUnit(state, content);
+    if (!lostItem) break;
+    lostItems.push(lostItem);
+    spawnLostItemVisual(state, lostItem, content, index, lossCount);
+  }
+
+  if (!lostItems.length) return 0;
+
+  const lostByItemId = {};
+  for (const lostItem of lostItems) {
+    lostByItemId[lostItem.itemId] = (lostByItemId[lostItem.itemId] || 0) + 1;
+  }
+
+  state.frameEvents.push({
+    type: 'RibbonItemsLost',
+    ...eventBase,
+    lossRatio,
+    lostQuantity: lostItems.length,
+    totalQuantityBefore: totalQuantity,
+    items: lostByItemId,
+  });
+  return lostItems.length;
+}
+
+function getCollectedItemQuantity(state) {
+  return (state.player.collectedItems || []).reduce((total, item) => total + Math.max(0, item.quantity || 0), 0);
+}
+
+function removeRandomCollectedItemUnit(state, content = GAME_CONTENT) {
+  const items = state.player.collectedItems || [];
+  let totalQuantity = getCollectedItemQuantity(state);
+  if (totalQuantity <= 0) return null;
+
+  let roll = Math.random() * totalQuantity;
+  for (let index = 0; index < items.length; index += 1) {
+    const entry = items[index];
+    const quantity = Math.max(0, entry.quantity || 0);
+    if (roll >= quantity) {
+      roll -= quantity;
+      continue;
+    }
+
+    entry.quantity -= 1;
+    if (entry.quantity <= 0) {
+      items.splice(index, 1);
+    }
+
+    const item = content.items?.[entry.itemId] || {};
+    return {
+      itemId: entry.itemId,
+      spriteUrl: entry.spriteUrl ?? item.spriteUrl,
+      spriteSize: entry.spriteSize ?? item.tailSize ?? item.spriteSize ?? 24,
+      visual: entry.visual ?? item.visual,
+    };
+  }
+
+  return null;
+}
+
+function spawnLostItemVisual(state, lostItem, content = GAME_CONTENT, index = 0, total = 1) {
+  const item = content.items?.[lostItem.itemId] || {};
+  const randomAngle = -Math.PI * 0.9 + Math.random() * Math.PI * 0.8;
+  const fanOffset = total > 1 ? (index / Math.max(1, total - 1) - 0.5) * Math.PI * 0.7 : 0;
+  const angle = randomAngle + fanOffset;
+  const speed = 230 + Math.random() * 170;
+  const lostVisual = {
+    id: state.session.nextLostItemId,
+    itemId: lostItem.itemId,
+    x: state.player.x,
+    y: state.player.y,
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed - 120,
+    gravity: LOST_ITEM_GRAVITY,
+    rotation: Math.random() * Math.PI * 2,
+    rotationSpeed: (Math.random() - 0.5) * 9,
+    radius: item.radius ?? 10,
+    spriteUrl: lostItem.spriteUrl ?? item.spriteUrl,
+    spriteSize: lostItem.spriteSize ?? item.tailSize ?? item.spriteSize ?? 24,
+    visual: lostItem.visual ?? item.visual,
+    ageMs: 0,
+    lifetimeMs: LOST_ITEM_MAX_LIFETIME_MS,
+  };
+  state.session.nextLostItemId += 1;
+  state.entities.lostItems.push(lostVisual);
+  return lostVisual;
+}
+
+function isLostItemOutsideField(state, item) {
+  const radius = item.radius ?? 0;
+  return (
+    item.x < -LOST_ITEM_DESPAWN_MARGIN - radius ||
+    item.x > state.viewport.width + LOST_ITEM_DESPAWN_MARGIN + radius ||
+    item.y > state.viewport.height + LOST_ITEM_DESPAWN_MARGIN + radius
+  );
 }
 
 function getItemFlowConfig(content = GAME_CONTENT) {

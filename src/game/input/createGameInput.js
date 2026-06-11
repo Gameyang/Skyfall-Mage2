@@ -1,5 +1,7 @@
 const MOVEMENT_INPUTS = Object.freeze(['up', 'down', 'left', 'right']);
-const TOUCH_DEADZONE_PX = 18;
+const TOUCH_DEADZONE_PX = 16;
+const TOUCH_AXIS_THRESHOLD = 0.38;
+const TOUCH_FOLLOW_RADIUS_PX = 56;
 
 const KEY_TO_INPUT = Object.freeze({
   KeyW: 'up',
@@ -40,18 +42,31 @@ export function createGameInput({ canvas, state }) {
     syncInput();
   };
 
-  const setTouchDirection = (event) => {
+  const updateTouchInput = (event) => {
     if (!touchOrigin) return;
 
-    const direction = getDominantTouchDirection({
-      deltaX: event.clientX - touchOrigin.x,
-      deltaY: event.clientY - touchOrigin.y,
-    });
-    clearInputSnapshot(touchInput);
-    if (direction) {
-      touchInput[direction] = true;
-    }
+    copyInputSnapshot(touchInput, getTouchMovementSnapshot(getTouchDelta(event)));
     syncInput();
+  };
+
+  const getTouchDelta = (event) => {
+    let deltaX = event.clientX - touchOrigin.x;
+    let deltaY = event.clientY - touchOrigin.y;
+    const distance = Math.hypot(deltaX, deltaY);
+
+    if (distance > TOUCH_FOLLOW_RADIUS_PX) {
+      const normalX = deltaX / distance;
+      const normalY = deltaY / distance;
+      const overflow = distance - TOUCH_FOLLOW_RADIUS_PX;
+      touchOrigin = {
+        x: touchOrigin.x + normalX * overflow,
+        y: touchOrigin.y + normalY * overflow,
+      };
+      deltaX = normalX * TOUCH_FOLLOW_RADIUS_PX;
+      deltaY = normalY * TOUCH_FOLLOW_RADIUS_PX;
+    }
+
+    return { deltaX, deltaY };
   };
 
   const onKeyDown = (event) => setKeyboardInput(event, true);
@@ -68,14 +83,14 @@ export function createGameInput({ canvas, state }) {
       y: event.clientY,
     };
     canvas.setPointerCapture?.(event.pointerId);
-    setTouchDirection(event);
+    updateTouchInput(event);
   };
 
   const onPointerMove = (event) => {
     if (event.pointerId !== activeTouchId) return;
 
     event.preventDefault();
-    setTouchDirection(event);
+    updateTouchInput(event);
   };
 
   const onPointerEnd = (event) => {
@@ -118,15 +133,30 @@ export function createGameInput({ canvas, state }) {
   };
 }
 
-export function getDominantTouchDirection({ deltaX, deltaY }, deadzonePx = TOUCH_DEADZONE_PX) {
-  const absX = Math.abs(deltaX);
-  const absY = Math.abs(deltaY);
-  if (Math.hypot(absX, absY) < deadzonePx) return null;
+export function getTouchMovementSnapshot(
+  { deltaX, deltaY },
+  { deadzonePx = TOUCH_DEADZONE_PX, axisThreshold = TOUCH_AXIS_THRESHOLD } = {},
+) {
+  const movement = createInputSnapshot();
+  const distance = Math.hypot(deltaX, deltaY);
+  if (distance < deadzonePx) return movement;
 
-  if (absX >= absY) {
-    return deltaX >= 0 ? 'right' : 'left';
+  const normalizedX = deltaX / distance;
+  const normalizedY = deltaY / distance;
+
+  if (normalizedX <= -axisThreshold) {
+    movement.left = true;
+  } else if (normalizedX >= axisThreshold) {
+    movement.right = true;
   }
-  return deltaY >= 0 ? 'down' : 'up';
+
+  if (normalizedY <= -axisThreshold) {
+    movement.up = true;
+  } else if (normalizedY >= axisThreshold) {
+    movement.down = true;
+  }
+
+  return movement;
 }
 
 function createInputSnapshot() {
@@ -141,5 +171,11 @@ function createInputSnapshot() {
 function clearInputSnapshot(input) {
   for (const key of MOVEMENT_INPUTS) {
     input[key] = false;
+  }
+}
+
+function copyInputSnapshot(target, source) {
+  for (const key of MOVEMENT_INPUTS) {
+    target[key] = Boolean(source[key]);
   }
 }
