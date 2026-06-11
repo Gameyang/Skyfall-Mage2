@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { computeScreenEffectIntensities } from './ScreenEffectsRenderer.js';
 
-function createState({ hp, maxHp = 100, contactFlashMs = 0 }) {
+function createState({ hp, maxHp = 100, contactFlashMs = 0, gameOver = false }) {
   return {
     session: {
       contactFlashMs,
+      gameOver,
     },
     player: {
       hp,
@@ -26,5 +27,16 @@ describe('screen effect intensities', () => {
     expect(computeScreenEffectIntensities(createState({ hp: 10 })).danger).toBeCloseTo(0.526, 3);
     expect(computeScreenEffectIntensities(createState({ hp: 1 })).danger).toBe(1);
     expect(computeScreenEffectIntensities(createState({ hp: 0 })).danger).toBe(1);
+  });
+
+  it('disables screen effects after game over', () => {
+    expect(computeScreenEffectIntensities(createState({
+      hp: 0,
+      contactFlashMs: 180,
+      gameOver: true,
+    }))).toEqual({
+      hitFlash: 0,
+      danger: 0,
+    });
   });
 });

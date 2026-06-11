@@ -10,6 +10,13 @@ export function createScreenEffectsRenderer({ canvas }) {
 }
 
 export function computeScreenEffectIntensities(state) {
+  if (state.session?.gameOver) {
+    return {
+      hitFlash: 0,
+      danger: 0,
+    };
+  }
+
   const hitFlash = clamp((state.session?.contactFlashMs ?? 0) / HIT_FLASH_DURATION_MS, 0, 1);
   const hp = Math.max(0, state.player?.hp ?? 0);
   const maxHp = Math.max(1, state.player?.maxHp ?? 1);
