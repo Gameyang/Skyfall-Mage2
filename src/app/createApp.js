@@ -11,10 +11,10 @@ function createFatalMessage() {
 
   const panel = document.createElement('div');
   const title = document.createElement('strong');
-  title.textContent = 'WebGPU is required';
+  title.textContent = 'WebGPU material effects disabled';
 
   const detail = document.createElement('span');
-  detail.textContent = 'This page intentionally has no CPU, Canvas2D, or WebGL fallback.';
+  detail.textContent = 'The battle can continue without the compute shader material layer.';
 
   panel.append(title, detail);
   fatal.append(panel);

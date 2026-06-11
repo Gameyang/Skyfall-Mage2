@@ -35,7 +35,7 @@ class MaterialFieldRenderer {
 
   async initialize() {
     if (!navigator.gpu) {
-      throw new Error('WebGPU is required. This app does not include a CPU, Canvas2D, or WebGL fallback.');
+      throw new Error('WebGPU material field is unavailable in this browser.');
     }
 
     const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });

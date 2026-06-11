@@ -1,7 +1,8 @@
 import { createMaterialInputController } from './input/createMaterialInputController.js';
-import { EMITTER_FLAG_EXPLOSION, GRID_HEIGHT, GRID_WIDTH } from './config.js';
+import { EMITTER_FLAG_EXPLOSION } from './config.js';
 import { MaterialEmitterState } from './MaterialEmitterState.js';
 import { createMaterialFieldRenderer } from './MaterialFieldRenderer.js';
+import { mapEffectToGrid } from './ViewportMapper.js';
 import { createMaterialHub } from './ui/createMaterialHub.js';
 import { MATERIAL } from './materials.js';
 
@@ -12,6 +13,7 @@ const EFFECT_MATERIALS = Object.freeze({
   steam: MATERIAL.STEAM,
   water: MATERIAL.WATER,
   sand: MATERIAL.SAND,
+  wetSand: MATERIAL.WET_SAND,
 });
 
 function showFatal(fatal, title, detail) {
@@ -27,6 +29,7 @@ export function createMaterialFieldApp({ canvas, fatal = null, materialHub = nul
   const input = enableDemoInput ? createMaterialInputController({ canvas, emitterState }) : null;
   let renderer = null;
   let startPromise = null;
+  let disabled = false;
 
   return {
     start() {
@@ -35,14 +38,20 @@ export function createMaterialFieldApp({ canvas, fatal = null, materialHub = nul
       startPromise = createMaterialFieldRenderer({
         canvas,
         onDeviceLost(info) {
+          disabled = true;
+          canvas.hidden = true;
           showFatal(fatal, 'WebGPU device lost', info.message || 'The browser released the GPU device.');
         },
       })
         .then((nextRenderer) => {
           renderer = nextRenderer;
+          disabled = false;
+          canvas.hidden = false;
           renderer.start({ emitterState });
         })
         .catch((error) => {
+          disabled = true;
+          canvas.hidden = true;
           console.warn('WebGPU material field disabled:', error);
           showFatal(fatal, 'WebGPU material field failed', String(error.message || error));
         });
@@ -50,6 +59,7 @@ export function createMaterialFieldApp({ canvas, fatal = null, materialHub = nul
       return startPromise;
     },
     emitEffects(effects, viewport) {
+      if (disabled) return;
       for (const effect of effects) {
         addEffectEmitter(emitterState, effect, viewport);
       }
@@ -70,15 +80,13 @@ function addEffectEmitter(emitterState, effect, viewport) {
 
   const width = Math.max(1, viewport.width);
   const height = Math.max(1, viewport.height);
-  const gridX = Math.round((effect.x / width) * (GRID_WIDTH - 1));
-  const gridY = Math.round((effect.y / height) * (GRID_HEIGHT - 1));
-  const radiusScale = Math.max(GRID_WIDTH / width, GRID_HEIGHT / height);
+  const gridEffect = mapEffectToGrid(effect, { width, height });
 
   emitterState.addEmitter({
     material,
-    x: gridX,
-    y: gridY,
-    radius: Math.max(2, Math.round(effect.radius * radiusScale)),
+    x: gridEffect.x,
+    y: gridEffect.y,
+    radius: gridEffect.radius,
     strength: effect.strength,
     frames: effect.frames,
     flags: effect.flags || (effect.explosion ? EMITTER_FLAG_EXPLOSION : 0),

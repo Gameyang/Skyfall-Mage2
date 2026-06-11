@@ -138,9 +138,63 @@ describe('fireball skill', () => {
     updateGame(state, 1, content);
     expect(state.entities.projectiles).toHaveLength(2);
   });
+
+  it('casts every configured ready skill without relying on a hardcoded skill id', () => {
+    const createSkill = (id) => ({
+      id,
+      cooldownMs: 1000,
+      targeting: { type: 'progress-risk' },
+      projectile: {
+        speed: 0,
+        damage: 1,
+        radius: 4,
+        lifetimeMs: 1000,
+      },
+    });
+    const content = createTestContent({
+      skills: {
+        firebolt: createSkill('firebolt'),
+        sparkbolt: createSkill('sparkbolt'),
+      },
+    });
+    const state = createGameState({ width: 800, height: 600, content });
+    state.entities.enemies.push({
+      id: 1,
+      hp: 30,
+      x: 700,
+      y: 300,
+      radius: 18,
+      progress: 400,
+      travelDistance: 1000,
+      contactDamage: 12,
+    });
+
+    updateGame(state, 16, content);
+
+    expect(state.entities.projectiles.map((projectile) => projectile.skillId).sort()).toEqual(['firebolt', 'sparkbolt']);
+  });
 });
 
 describe('combat resolution', () => {
+  it('clears stale frame effects even after game over', () => {
+    const content = createTestContent();
+    const state = createGameState({ width: 800, height: 600, content });
+    state.session.gameOver = true;
+    state.frameEffects.push({
+      type: 'MaterialEmitter',
+      material: 'smoke',
+      x: 120,
+      y: 120,
+      radius: 8,
+      strength: 100,
+      frames: 2,
+    });
+
+    updateGame(state, 16, content);
+
+    expect(state.frameEffects).toHaveLength(0);
+  });
+
   it('damages an enemy and removes the projectile on hit', () => {
     const content = createTestContent();
     const state = createGameState({ width: 800, height: 600, content });
@@ -172,6 +226,141 @@ describe('combat resolution', () => {
 
     expect(state.entities.projectiles).toHaveLength(0);
     expect(state.entities.enemies[0].hp).toBe(10);
+  });
+
+  it('applies skill impact area damage around a projectile hit', () => {
+    const content = createTestContent({
+      skills: {
+        blast: {
+          id: 'blast',
+          targeting: { type: 'progress-risk' },
+          projectile: {
+            speed: 0,
+            damage: 0,
+            radius: 8,
+            lifetimeMs: 1000,
+          },
+          impact: {
+            areaDamage: {
+              radius: 64,
+              damage: 10,
+            },
+          },
+        },
+      },
+    });
+    const state = createGameState({ width: 800, height: 600, content });
+    state.skills.blast.cooldownRemainingMs = 9999;
+    state.entities.enemies.push(
+      {
+        id: 1,
+        hp: 30,
+        x: 120,
+        y: 120,
+        radius: 18,
+        progress: 0,
+        travelDistance: 1000,
+        contactDamage: 12,
+      },
+      {
+        id: 2,
+        hp: 30,
+        x: 166,
+        y: 120,
+        radius: 18,
+        progress: 0,
+        travelDistance: 1000,
+        contactDamage: 12,
+      },
+      {
+        id: 3,
+        hp: 30,
+        x: 260,
+        y: 120,
+        radius: 18,
+        progress: 0,
+        travelDistance: 1000,
+        contactDamage: 12,
+      },
+    );
+    state.entities.projectiles.push({
+      id: 1,
+      skillId: 'blast',
+      x: 120,
+      y: 120,
+      vx: 0,
+      vy: 0,
+      radius: 8,
+      damage: 0,
+      lifetimeMs: 1000,
+      ageMs: 0,
+    });
+
+    updateGame(state, 16, content);
+
+    expect(state.entities.enemies.find((enemy) => enemy.id === 1).hp).toBe(20);
+    expect(state.entities.enemies.find((enemy) => enemy.id === 2).hp).toBe(20);
+    expect(state.entities.enemies.find((enemy) => enemy.id === 3).hp).toBe(30);
+  });
+
+  it('ticks CPU hazards spawned by skill impact without reading back the GPU field', () => {
+    const content = createTestContent({
+      skills: {
+        burn: {
+          id: 'burn',
+          targeting: { type: 'progress-risk' },
+          projectile: {
+            speed: 0,
+            damage: 0,
+            radius: 8,
+            lifetimeMs: 1000,
+          },
+          impact: {
+            hazards: [
+              {
+                type: 'burn',
+                radius: 48,
+                damagePerSecond: 10,
+                lifetimeMs: 1000,
+                tickMs: 250,
+              },
+            ],
+          },
+        },
+      },
+    });
+    const state = createGameState({ width: 800, height: 600, content });
+    state.skills.burn.cooldownRemainingMs = 9999;
+    state.entities.enemies.push({
+      id: 1,
+      hp: 30,
+      x: 120,
+      y: 120,
+      radius: 18,
+      progress: 0,
+      travelDistance: 1000,
+      contactDamage: 12,
+    });
+    state.entities.projectiles.push({
+      id: 1,
+      skillId: 'burn',
+      x: 120,
+      y: 120,
+      vx: 0,
+      vy: 0,
+      radius: 8,
+      damage: 0,
+      lifetimeMs: 1000,
+      ageMs: 0,
+    });
+
+    updateGame(state, 16, content);
+    expect(state.entities.hazards).toHaveLength(1);
+
+    updateGame(state, 250, content);
+
+    expect(state.entities.enemies[0].hp).toBeCloseTo(27.5);
+    expect(state.frameEvents.some((event) => event.type === 'HazardTick')).toBe(true);
   });
 
   it('applies contact damage to the player and removes the touching enemy', () => {

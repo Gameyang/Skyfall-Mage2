@@ -17,7 +17,10 @@ export const SKILL_DEFINITIONS = Object.freeze({
         glowColor: 'rgba(255, 110, 28, 0.58)',
       }),
     }),
-    effects: Object.freeze({
+    impact: Object.freeze({
+      damage: 20,
+    }),
+    materialEffects: Object.freeze({
       cast: Object.freeze([
         Object.freeze({ material: 'fire', radius: 5, strength: 185, frames: 2 }),
         Object.freeze({ material: 'spark', radius: 3, strength: 150, frames: 2 }),

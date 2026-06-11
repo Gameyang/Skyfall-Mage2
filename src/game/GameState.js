@@ -12,6 +12,7 @@ export function createGameState({ width = 1280, height = 720, content = GAME_CON
       score: 0,
       nextEnemyId: 1,
       nextProjectileId: 1,
+      nextHazardId: 1,
       contactFlashMs: 0,
     },
     input: {
@@ -31,6 +32,7 @@ export function createGameState({ width = 1280, height = 720, content = GAME_CON
     entities: {
       enemies: [],
       projectiles: [],
+      hazards: [],
     },
     skills: createSkillState(content.skills),
     waves: createWaveState(content.waves),
