@@ -1,3 +1,5 @@
+import hudPanelUrl from '../../assets/generated/hud-panel.png?url';
+
 export function createGameCanvasRenderer({ canvas }) {
   return new GameCanvasRenderer({ canvas });
 }
@@ -10,6 +12,7 @@ class GameCanvasRenderer {
     if (!this.context) {
       throw new Error('The game canvas could not create a 2D context.');
     }
+    this.getSprite(hudPanelUrl);
   }
 
   resize() {
@@ -42,7 +45,7 @@ class GameCanvasRenderer {
     drawProjectiles(ctx, state);
     drawEnemies(ctx, state, this);
     drawPlayer(ctx, state, this);
-    drawHud(ctx, state);
+    drawHud(ctx, state, this);
 
     if (state.session.gameOver) {
       drawGameOver(ctx, width, height, state);
@@ -206,25 +209,91 @@ function drawPixelSprite(ctx, image, size) {
   ctx.imageSmoothingEnabled = previousSmoothing;
 }
 
-function drawHud(ctx, state) {
+function drawHud(ctx, state, renderer) {
   const visible = state.viewport.visible || {
     x: 0,
     y: 0,
     width: state.viewport.width,
     height: state.viewport.height,
   };
-  const pad = 16;
+  const pad = 12;
   const x = visible.x + pad;
   const y = visible.y + pad;
-  const barWidth = Math.min(260, Math.max(160, visible.width * 0.34));
-  drawSmallBar(ctx, x, y, barWidth, 12, state.player.hp / state.player.maxHp, '#38d996', 'rgba(3, 9, 12, 0.72)');
+  const panelWidth = Math.min(360, Math.max(284, visible.width - pad * 2));
+  const panelImage = renderer.getSprite(hudPanelUrl);
+  const panelRatio = panelImage ? panelImage.height / Math.max(1, panelImage.width) : 0.405;
+  const panelHeight = Math.round(panelWidth * panelRatio);
 
-  ctx.font = '600 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-  ctx.fillStyle = 'rgba(236, 246, 255, 0.92)';
+  drawHudPanel(ctx, panelImage, x, y, panelWidth, panelHeight);
+
+  const contentX = x + Math.max(28, Math.round(panelWidth * 0.105));
+  const contentY = y + Math.max(26, Math.round(panelHeight * 0.21));
+  const contentWidth = panelWidth - (contentX - x) - Math.max(24, Math.round(panelWidth * 0.08));
+  const hpRatio = state.player.hp / state.player.maxHp;
+
+  ctx.font = '700 12px "Courier New", monospace';
+  ctx.fillStyle = '#f4fbff';
   ctx.textBaseline = 'top';
-  ctx.fillText(`HP ${Math.ceil(state.player.hp)}/${state.player.maxHp}`, x, y + 18);
-  ctx.fillText(`Kills ${state.session.score}`, x, y + 38);
-  ctx.fillText(`Threats ${state.entities.enemies.length}`, x, y + 58);
+  ctx.fillText(`HP ${Math.ceil(state.player.hp)}/${state.player.maxHp}`, contentX, contentY);
+  drawHudBar(ctx, contentX, contentY + 18, contentWidth, 12, hpRatio);
+
+  const statY = contentY + 40;
+  const statGap = Math.min(24, Math.max(12, Math.round(contentWidth * 0.08)));
+  const statWidth = Math.floor((contentWidth - statGap) * 0.5);
+  drawHudCounter(ctx, contentX, statY, statWidth, 'KILLS', state.session.score, '#ffd66b');
+  drawHudCounter(ctx, contentX + statWidth + statGap, statY, statWidth, 'THREAT', state.entities.enemies.length, '#ff6f8a');
+}
+
+function drawHudPanel(ctx, image, x, y, width, height) {
+  if (image) {
+    const previousSmoothing = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(image, x, y, width, height);
+    ctx.imageSmoothingEnabled = previousSmoothing;
+    return;
+  }
+
+  ctx.fillStyle = 'rgba(6, 9, 15, 0.82)';
+  ctx.fillRect(x + 12, y + 10, width - 24, height - 20);
+  ctx.strokeStyle = '#394656';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x + 12.5, y + 10.5, width - 25, height - 21);
+  ctx.strokeStyle = '#81222d';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 18.5, y + 16.5, width - 37, height - 33);
+  ctx.fillStyle = '#35dfff';
+  ctx.fillRect(x + width * 0.5 - 3, y + 7, 6, 12);
+}
+
+function drawHudBar(ctx, x, y, width, height, ratio) {
+  const clamped = Math.max(0, Math.min(1, ratio));
+  ctx.fillStyle = 'rgba(2, 4, 8, 0.72)';
+  ctx.fillRect(x, y, width, height);
+  ctx.fillStyle = '#17322b';
+  ctx.fillRect(x + 2, y + 2, width - 4, height - 4);
+  ctx.fillStyle = clamped < 0.28 ? '#ff5877' : '#38d996';
+  ctx.fillRect(x + 2, y + 2, Math.max(0, (width - 4) * clamped), height - 4);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
+  ctx.fillRect(x + 2, y + 2, Math.max(0, (width - 4) * clamped), 2);
+  ctx.strokeStyle = 'rgba(228, 244, 255, 0.48)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, width - 1, height - 1);
+}
+
+function drawHudCounter(ctx, x, y, width, label, value, accent) {
+  ctx.fillStyle = 'rgba(3, 7, 12, 0.58)';
+  ctx.fillRect(x, y, width, 28);
+  ctx.strokeStyle = 'rgba(160, 182, 205, 0.32)';
+  ctx.strokeRect(x + 0.5, y + 0.5, width - 1, 27);
+
+  ctx.fillStyle = accent;
+  ctx.fillRect(x + 6, y + 9, 5, 5);
+  ctx.fillStyle = 'rgba(178, 198, 222, 0.82)';
+  ctx.font = '700 9px "Courier New", monospace';
+  ctx.fillText(label, x + 16, y + 5);
+  ctx.fillStyle = '#f8fbff';
+  ctx.font = '700 13px "Courier New", monospace';
+  ctx.fillText(String(value), x + 16, y + 16);
 }
 
 function drawSmallBar(ctx, x, y, width, height, ratio, color, background = 'rgba(0, 0, 0, 0.46)') {
