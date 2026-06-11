@@ -1,6 +1,7 @@
 import { createMaterialFieldApp } from '../features/material-field/MaterialFieldApp.js';
 import { createGameRuntime } from '../game/GameRuntime.js';
 import { createNightSkyRenderer } from '../rendering/webgl/NightSkyRenderer.js';
+import { createScreenEffectsRenderer } from '../rendering/webgl/ScreenEffectsRenderer.js';
 import { APP_TITLE } from './config.js';
 
 function createFatalMessage() {
@@ -43,8 +44,13 @@ export function createApp({ root }) {
   gameCanvas.className = 'game-canvas';
   gameCanvas.setAttribute('aria-label', 'Skyfall Mage2 battle');
 
+  const screenEffectsCanvas = document.createElement('canvas');
+  screenEffectsCanvas.id = 'screenEffectsCanvas';
+  screenEffectsCanvas.className = 'screen-effects-canvas';
+  screenEffectsCanvas.setAttribute('aria-hidden', 'true');
+
   const fatal = createFatalMessage();
-  shell.append(skyCanvas, canvas, gameCanvas, fatal);
+  shell.append(skyCanvas, canvas, gameCanvas, screenEffectsCanvas, fatal);
   root.append(shell);
 
   const skyRenderer = createNightSkyRenderer({
@@ -53,9 +59,13 @@ export function createApp({ root }) {
   const materialFieldApp = createMaterialFieldApp({
     canvas,
   });
+  const screenEffectsRenderer = createScreenEffectsRenderer({
+    canvas: screenEffectsCanvas,
+  });
   const gameRuntime = createGameRuntime({
     canvas: gameCanvas,
     materialEffects: materialFieldApp,
+    screenEffects: screenEffectsRenderer,
   });
 
   return {
@@ -66,6 +76,7 @@ export function createApp({ root }) {
     },
     destroy() {
       gameRuntime.destroy();
+      screenEffectsRenderer.destroy();
       materialFieldApp.destroy();
       skyRenderer.destroy();
       root.replaceChildren();

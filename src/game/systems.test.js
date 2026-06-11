@@ -272,7 +272,7 @@ describe('fireball skill', () => {
     expect(trailEffects).toContainEqual(expect.objectContaining({
       material: 'fire',
       profile: 'projectileFire',
-      life: 44,
+      life: SKILL_DEFINITIONS.fireball.projectile.energy.trailEffects[0].life,
     }));
     expect(trailEffects.some((effect) => effect.material === 'smoke')).toBe(false);
     expect(trailEffects.some((effect) => effect.material === 'spark')).toBe(false);

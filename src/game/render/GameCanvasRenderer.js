@@ -6,6 +6,7 @@ class GameCanvasRenderer {
   constructor({ canvas }) {
     this.canvas = canvas;
     this.context = canvas.getContext('2d', { alpha: true });
+    this.spriteCache = new Map();
     if (!this.context) {
       throw new Error('The game canvas could not create a 2D context.');
     }
@@ -39,8 +40,8 @@ class GameCanvasRenderer {
     ctx.clearRect(0, 0, width, height);
 
     drawProjectiles(ctx, state);
-    drawEnemies(ctx, state);
-    drawPlayer(ctx, state);
+    drawEnemies(ctx, state, this);
+    drawPlayer(ctx, state, this);
     drawHud(ctx, state);
 
     if (state.session.gameOver) {
@@ -50,6 +51,34 @@ class GameCanvasRenderer {
 
   destroy() {
     this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.spriteCache.clear();
+  }
+
+  getSprite(url) {
+    if (!url || typeof Image === 'undefined') return null;
+
+    const cached = this.spriteCache.get(url);
+    if (cached) {
+      return cached.loaded && !cached.failed ? cached.image : null;
+    }
+
+    const image = new Image();
+    const next = {
+      image,
+      loaded: false,
+      failed: false,
+    };
+    image.decoding = 'async';
+    image.onload = () => {
+      next.loaded = true;
+    };
+    image.onerror = () => {
+      next.failed = true;
+    };
+    image.src = url;
+    this.spriteCache.set(url, next);
+
+    return null;
   }
 }
 
@@ -84,35 +113,21 @@ function drawProjectiles(ctx, state) {
   }
 }
 
-function drawEnemies(ctx, state) {
+function drawEnemies(ctx, state, renderer) {
   const time = state.session.elapsedMs;
   for (const enemy of state.entities.enemies) {
-    const angle = Math.atan2(enemy.direction.y, enemy.direction.x);
-    const flap = Math.sin(time * 0.013 + enemy.phase) * 0.25;
     const hpRatio = Math.max(0, enemy.hp / enemy.maxHp);
+    const sprite = renderer.getSprite(enemy.spriteUrl);
 
     ctx.save();
     ctx.translate(enemy.x, enemy.y);
-    ctx.rotate(angle);
-
-    ctx.fillStyle = 'rgba(20, 13, 26, 0.92)';
-    ctx.strokeStyle = 'rgba(197, 120, 255, 0.58)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(-enemy.radius * 0.2, 0);
-    ctx.bezierCurveTo(-enemy.radius * 1.3, -enemy.radius * (0.9 + flap), -enemy.radius * 1.8, enemy.radius * 0.15, -enemy.radius * 0.48, enemy.radius * 0.42);
-    ctx.bezierCurveTo(-enemy.radius * 0.25, enemy.radius * 0.68, enemy.radius * 0.25, enemy.radius * 0.68, enemy.radius * 0.48, enemy.radius * 0.42);
-    ctx.bezierCurveTo(enemy.radius * 1.8, enemy.radius * 0.15, enemy.radius * 1.3, -enemy.radius * (0.9 - flap), enemy.radius * 0.2, 0);
-    ctx.bezierCurveTo(enemy.radius * 0.16, -enemy.radius * 0.42, -enemy.radius * 0.16, -enemy.radius * 0.42, -enemy.radius * 0.2, 0);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = '#ff4c86';
-    ctx.beginPath();
-    ctx.arc(enemy.radius * 0.25, -enemy.radius * 0.12, 2.2, 0, Math.PI * 2);
-    ctx.arc(-enemy.radius * 0.25, -enemy.radius * 0.12, 2.2, 0, Math.PI * 2);
-    ctx.fill();
+    if (sprite) {
+      drawPixelSprite(ctx, sprite, enemy.spriteSize ?? enemy.radius * 2.8);
+    } else {
+      const angle = Math.atan2(enemy.direction.y, enemy.direction.x);
+      const flap = Math.sin(time * 0.013 + enemy.phase) * 0.25;
+      drawBatFallback(ctx, enemy, angle, flap);
+    }
 
     ctx.restore();
 
@@ -122,20 +137,19 @@ function drawEnemies(ctx, state) {
   }
 }
 
-function drawPlayer(ctx, state) {
+function drawPlayer(ctx, state, renderer) {
   const player = state.player;
   const damaged = state.session.contactFlashMs > 0;
+  const sprite = renderer.getSprite(player.spriteUrl);
 
   ctx.save();
   ctx.translate(player.x, player.y);
 
-  const aura = ctx.createRadialGradient(0, 0, 4, 0, 0, player.radius * 3.6);
-  aura.addColorStop(0, damaged ? 'rgba(255, 73, 92, 0.42)' : 'rgba(96, 210, 255, 0.28)');
-  aura.addColorStop(1, 'rgba(96, 210, 255, 0)');
-  ctx.fillStyle = aura;
-  ctx.beginPath();
-  ctx.arc(0, 0, player.radius * 3.6, 0, Math.PI * 2);
-  ctx.fill();
+  if (sprite) {
+    drawPixelSprite(ctx, sprite, player.spriteSize ?? player.radius * 3.4);
+    ctx.restore();
+    return;
+  }
 
   ctx.fillStyle = damaged ? '#ffd4dc' : '#eaf8ff';
   ctx.strokeStyle = damaged ? '#ff4966' : '#5ed8ff';
@@ -161,6 +175,35 @@ function drawPlayer(ctx, state) {
   ctx.stroke();
 
   ctx.restore();
+}
+
+function drawBatFallback(ctx, enemy, angle, flap) {
+  ctx.rotate(angle);
+  ctx.fillStyle = 'rgba(20, 13, 26, 0.92)';
+  ctx.strokeStyle = 'rgba(197, 120, 255, 0.58)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-enemy.radius * 0.2, 0);
+  ctx.bezierCurveTo(-enemy.radius * 1.3, -enemy.radius * (0.9 + flap), -enemy.radius * 1.8, enemy.radius * 0.15, -enemy.radius * 0.48, enemy.radius * 0.42);
+  ctx.bezierCurveTo(-enemy.radius * 0.25, enemy.radius * 0.68, enemy.radius * 0.25, enemy.radius * 0.68, enemy.radius * 0.48, enemy.radius * 0.42);
+  ctx.bezierCurveTo(enemy.radius * 1.8, enemy.radius * 0.15, enemy.radius * 1.3, -enemy.radius * (0.9 - flap), enemy.radius * 0.2, 0);
+  ctx.bezierCurveTo(enemy.radius * 0.16, -enemy.radius * 0.42, -enemy.radius * 0.16, -enemy.radius * 0.42, -enemy.radius * 0.2, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = '#ff4c86';
+  ctx.beginPath();
+  ctx.arc(enemy.radius * 0.25, -enemy.radius * 0.12, 2.2, 0, Math.PI * 2);
+  ctx.arc(-enemy.radius * 0.25, -enemy.radius * 0.12, 2.2, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawPixelSprite(ctx, image, size) {
+  const previousSmoothing = ctx.imageSmoothingEnabled;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(image, -size * 0.5, -size * 0.5, size, size);
+  ctx.imageSmoothingEnabled = previousSmoothing;
 }
 
 function drawHud(ctx, state) {

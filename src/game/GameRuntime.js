@@ -4,14 +4,15 @@ import { createGameInput } from './input/createGameInput.js';
 import { createGameCanvasRenderer } from './render/GameCanvasRenderer.js';
 import { updateGame, updateViewport } from './systems.js';
 
-export function createGameRuntime({ canvas, materialEffects, content = GAME_CONTENT }) {
-  return new GameRuntime({ canvas, materialEffects, content });
+export function createGameRuntime({ canvas, materialEffects, screenEffects = null, content = GAME_CONTENT }) {
+  return new GameRuntime({ canvas, materialEffects, screenEffects, content });
 }
 
 class GameRuntime {
-  constructor({ canvas, materialEffects, content }) {
+  constructor({ canvas, materialEffects, screenEffects, content }) {
     this.canvas = canvas;
     this.materialEffects = materialEffects;
+    this.screenEffects = screenEffects;
     this.content = content;
     this.renderer = createGameCanvasRenderer({ canvas });
     const initialWidth = Math.max(1, Math.floor(canvas.getBoundingClientRect().width || window.innerWidth));
@@ -44,6 +45,7 @@ class GameRuntime {
     updateGame(this.state, dtMs, this.content);
     this.materialEffects?.emitEffects?.(this.state.frameEffects, this.state.viewport);
     this.renderer.render(this.state);
+    this.screenEffects?.render?.(this.state, now);
 
     this.animationFrameId = requestAnimationFrame(this.renderFrame);
   }

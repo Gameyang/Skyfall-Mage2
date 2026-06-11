@@ -17,6 +17,7 @@ export const EMITTER_BYTES = MAX_EMITTERS * EMITTER_WORDS * Uint32Array.BYTES_PE
 export const GAS_FLOW_CONFIG = Object.freeze({
   windX: 1,
   windY: 0,
+  windStrength: 85,
   noiseStrength: 64,
   noiseScale: 18,
   noiseSpeed: 10,

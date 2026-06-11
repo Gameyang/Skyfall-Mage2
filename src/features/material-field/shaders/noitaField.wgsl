@@ -12,6 +12,7 @@ const EMITTER_PROFILE_DEFAULT: u32 = 0u;
 const EMITTER_PROFILE_PURE: u32 = 1u;
 const EMITTER_PROFILE_PROJECTILE_FIRE: u32 = 2u;
 const AUX_PROJECTILE_FIRE: u32 = 251u;
+const PROJECTILE_FIRE_DECAY_PER_STEP: u32 = 3u;
 
 struct SimParams {
   width: u32,
@@ -27,7 +28,7 @@ struct SimParams {
   gasNoiseStrength: u32,
   gasNoiseScale: u32,
   gasNoiseSpeed: u32,
-  pad5: u32,
+  gasWindStrength: u32,
   pad6: u32,
   pad7: u32,
 };
@@ -149,7 +150,13 @@ fn gasNoiseX(x: i32, y: i32, salt: u32) -> i32 {
 }
 
 fn gasFlowX(x: i32, y: i32, salt: u32) -> i32 {
-  return clamp(gasWindX() + gasNoiseX(x, y, salt), -1, 1);
+  var wind = gasWindX();
+  let windStrength = min(params.gasWindStrength, 255u);
+  if (wind != 0 && randByte(x, y, salt + 2u) >= windStrength) {
+    wind = 0;
+  }
+
+  return clamp(wind + gasNoiseX(x, y, salt), -1, 1);
 }
 
 fn gasVerticalPause(x: i32, y: i32, salt: u32) -> bool {
@@ -529,6 +536,61 @@ fn fireTarget(x: i32, y: i32) -> vec2<i32> {
   return vec2<i32>(x, y);
 }
 
+fn decayProjectileFireAge(age: u32) -> u32 {
+  if (age <= PROJECTILE_FIRE_DECAY_PER_STEP) {
+    return 0u;
+  }
+  return age - PROJECTILE_FIRE_DECAY_PER_STEP;
+}
+
+fn projectileFireTarget(x: i32, y: i32) -> vec2<i32> {
+  if (gasVerticalPause(x, y, 35u)) {
+    return vec2<i32>(x, y);
+  }
+
+  let flowX = gasFlowX(x, y, 36u);
+  if (flowX != 0) {
+    let flowMat = material(getCell(x + flowX, y - 1));
+    if (canFireEnter(flowMat)) {
+      return vec2<i32>(x + flowX, y - 1);
+    }
+  }
+
+  if (randByte(x, y, 37u) < 96u) {
+    return vec2<i32>(x, y);
+  }
+
+  let up = material(getCell(x, y - 1));
+  if (canFireEnter(up)) {
+    return vec2<i32>(x, y - 1);
+  }
+
+  var first = -1;
+  var second = 1;
+  if (flowX < 0) {
+    first = -1;
+    second = 1;
+  } else if (flowX > 0) {
+    first = 1;
+    second = -1;
+  } else if (randBit(x, y, 38u)) {
+    first = 1;
+    second = -1;
+  }
+
+  let firstMat = material(getCell(x + first, y - 1));
+  if (canFireEnter(firstMat)) {
+    return vec2<i32>(x + first, y - 1);
+  }
+
+  let secondMat = material(getCell(x + second, y - 1));
+  if (canFireEnter(secondMat)) {
+    return vec2<i32>(x + second, y - 1);
+  }
+
+  return vec2<i32>(x, y);
+}
+
 fn sparkTarget(x: i32, y: i32) -> vec2<i32> {
   return sandTarget(x, y, SPARK);
 }
@@ -613,11 +675,15 @@ fn applyCurrentOutgoing(cell: u32, x: i32, y: i32) -> u32 {
 
   if (mat == FIRE) {
     if (isProjectileFire(cell)) {
-      let age = life(cell);
-      if (age <= 1u) {
+      let nextAge = decayProjectileFireAge(life(cell));
+      if (nextAge == 0u) {
         return pack(EMPTY, 0u, 0u);
       }
-      return pack(FIRE, age - 1u, AUX_PROJECTILE_FIRE);
+      let moveTo = projectileFireTarget(x, y);
+      if (!targetMatches(moveTo, x, y)) {
+        return pack(EMPTY, 0u, 0u);
+      }
+      return pack(FIRE, nextAge, AUX_PROJECTILE_FIRE);
     }
 
     if (isWetNear(x, y)) {
@@ -735,17 +801,32 @@ fn applyIncoming(outCell: u32, x: i32, y: i32) -> u32 {
     }
 
     let fireBelow = getCell(x, y + 1);
-    if (material(fireBelow) == FIRE && !isProjectileFire(fireBelow) && life(fireBelow) > 1u && targetMatches(fireTarget(x, y + 1), x, y)) {
+    if (isProjectileFire(fireBelow) && targetMatches(projectileFireTarget(x, y + 1), x, y)) {
+      let nextAge = decayProjectileFireAge(life(fireBelow));
+      if (nextAge > 0u) {
+        out = pack(FIRE, nextAge, AUX_PROJECTILE_FIRE);
+      }
+    } else if (material(fireBelow) == FIRE && life(fireBelow) > 1u && targetMatches(fireTarget(x, y + 1), x, y)) {
       out = pack(FIRE, max(life(fireBelow), 24u) - 1u, randByte(x, y, 73u));
     }
 
     let fireBelowLeft = getCell(x - 1, y + 1);
-    if (material(fireBelowLeft) == FIRE && !isProjectileFire(fireBelowLeft) && life(fireBelowLeft) > 1u && targetMatches(fireTarget(x - 1, y + 1), x, y)) {
+    if (isProjectileFire(fireBelowLeft) && targetMatches(projectileFireTarget(x - 1, y + 1), x, y)) {
+      let nextAge = decayProjectileFireAge(life(fireBelowLeft));
+      if (nextAge > 0u) {
+        out = pack(FIRE, nextAge, AUX_PROJECTILE_FIRE);
+      }
+    } else if (material(fireBelowLeft) == FIRE && life(fireBelowLeft) > 1u && targetMatches(fireTarget(x - 1, y + 1), x, y)) {
       out = pack(FIRE, max(life(fireBelowLeft), 20u) - 1u, randByte(x, y, 74u));
     }
 
     let fireBelowRight = getCell(x + 1, y + 1);
-    if (material(fireBelowRight) == FIRE && !isProjectileFire(fireBelowRight) && life(fireBelowRight) > 1u && targetMatches(fireTarget(x + 1, y + 1), x, y)) {
+    if (isProjectileFire(fireBelowRight) && targetMatches(projectileFireTarget(x + 1, y + 1), x, y)) {
+      let nextAge = decayProjectileFireAge(life(fireBelowRight));
+      if (nextAge > 0u) {
+        out = pack(FIRE, nextAge, AUX_PROJECTILE_FIRE);
+      }
+    } else if (material(fireBelowRight) == FIRE && life(fireBelowRight) > 1u && targetMatches(fireTarget(x + 1, y + 1), x, y)) {
       out = pack(FIRE, max(life(fireBelowRight), 20u) - 1u, randByte(x, y, 75u));
     }
   }

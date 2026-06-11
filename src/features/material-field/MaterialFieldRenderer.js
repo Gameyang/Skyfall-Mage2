@@ -321,6 +321,7 @@ class MaterialFieldRenderer {
     params[10] = this.gasFlow.noiseStrength;
     params[11] = this.gasFlow.noiseScale;
     params[12] = this.gasFlow.noiseSpeed;
+    params[13] = this.gasFlow.windStrength;
 
     state.device.queue.writeBuffer(state.paramsBuffer, 0, params);
     state.device.queue.writeBuffer(state.emitterBuffer, 0, emitterPayload.words);
@@ -406,6 +407,7 @@ function normalizeGasFlow(gasFlow = GAS_FLOW_CONFIG) {
   return {
     windX: clampInteger(gasFlow.windX ?? GAS_FLOW_CONFIG.windX, -1, 1),
     windY: clampInteger(gasFlow.windY ?? GAS_FLOW_CONFIG.windY, -1, 1),
+    windStrength: clampInteger(gasFlow.windStrength ?? GAS_FLOW_CONFIG.windStrength, 0, 255),
     noiseStrength: clampInteger(gasFlow.noiseStrength ?? GAS_FLOW_CONFIG.noiseStrength, 0, 255),
     noiseScale: clampInteger(gasFlow.noiseScale ?? GAS_FLOW_CONFIG.noiseScale, 1, 255),
     noiseSpeed: clampInteger(gasFlow.noiseSpeed ?? GAS_FLOW_CONFIG.noiseSpeed, 1, 255),

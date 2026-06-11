@@ -96,6 +96,8 @@ export function createEnemyFromWave({ state, wave, definition, index, groupIndex
     travelDistance: path.travelDistance,
     progress: 0,
     speed: definition.speed,
+    spriteUrl: definition.spriteUrl ?? null,
+    spriteSize: definition.spriteSize ?? radius * 2.8,
     amplitude,
     frequency,
     phase,

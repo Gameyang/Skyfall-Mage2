@@ -60,10 +60,13 @@ describe('MaterialEmitterState', () => {
 });
 
 describe('material field shader profiles', () => {
-  it('keeps projectile fire marked and stationary instead of using fire buoyancy', () => {
+  it('keeps projectile fire marked while letting the tail follow gas flow and decay quickly', () => {
     expect(materialFieldShaderSource).toContain('const AUX_PROJECTILE_FIRE');
+    expect(materialFieldShaderSource).toContain('const PROJECTILE_FIRE_DECAY_PER_STEP');
     expect(materialFieldShaderSource).toContain('fn isProjectileFire');
-    expect(materialFieldShaderSource).toContain('return pack(FIRE, age - 1u, AUX_PROJECTILE_FIRE)');
+    expect(materialFieldShaderSource).toContain('fn projectileFireTarget');
+    expect(materialFieldShaderSource).toContain('let moveTo = projectileFireTarget(x, y)');
+    expect(materialFieldShaderSource).toContain('return pack(FIRE, nextAge, AUX_PROJECTILE_FIRE)');
     expect(materialFieldShaderSource).toContain('profile == EMITTER_PROFILE_PROJECTILE_FIRE');
   });
 
@@ -71,11 +74,14 @@ describe('material field shader profiles', () => {
     expect(GAS_FLOW_CONFIG).toEqual(expect.objectContaining({
       windX: 1,
       windY: 0,
+      windStrength: 85,
       noiseStrength: 64,
     }));
     expect(materialFieldShaderSource).toContain('gasWindX: u32');
+    expect(materialFieldShaderSource).toContain('gasWindStrength: u32');
     expect(materialFieldShaderSource).toContain('gasNoiseStrength: u32');
     expect(materialFieldShaderSource).toContain('fn gasFlowX');
+    expect(materialFieldShaderSource).toContain('let windStrength = min(params.gasWindStrength, 255u)');
     expect(materialFieldShaderSource).toContain('let flowX = gasFlowX(x, y, 30u)');
     expect(materialFieldShaderSource).toContain('let flowX = gasFlowX(x, y, 33u)');
   });

@@ -1,6 +1,8 @@
 import { GAME_CONTENT } from './content/index.js';
 
-export function createGameState({ width = 1280, height = 720, content = GAME_CONTENT } = {}) {
+export function createGameState({ width = 1280, height = 720, content = GAME_CONTENT, rng = Math.random } = {}) {
+  const playerSkinUrl = selectRandomUrl(content.player?.skinUrls, rng);
+
   return {
     viewport: {
       width,
@@ -31,6 +33,8 @@ export function createGameState({ width = 1280, height = 720, content = GAME_CON
       x: width * 0.5,
       y: height * 0.55,
       radius: 18,
+      spriteUrl: playerSkinUrl,
+      spriteSize: 64,
       speed: 260,
       hp: 100,
       maxHp: 100,
@@ -46,6 +50,15 @@ export function createGameState({ width = 1280, height = 720, content = GAME_CON
     frameEvents: [],
     frameEffects: [],
   };
+}
+
+function selectRandomUrl(urls = [], rng = Math.random) {
+  if (!Array.isArray(urls) || urls.length === 0) return null;
+
+  const nextRandom = rng();
+  const randomValue = Number.isFinite(nextRandom) ? nextRandom : Math.random();
+  const index = Math.min(urls.length - 1, Math.max(0, Math.floor(randomValue * urls.length)));
+  return urls[index];
 }
 
 export function createSkillState(skillDefinitions = {}) {

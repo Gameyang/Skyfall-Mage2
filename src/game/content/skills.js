@@ -17,7 +17,7 @@ export const SKILL_DEFINITIONS = Object.freeze({
         trailIntervalMs: 48,
         trailLeakPerSecond: 0,
         trailEffects: Object.freeze([
-          Object.freeze({ material: 'fire', profile: 'projectileFire', life: 44, radius: 4, strength: 190, frames: 1 }),
+          Object.freeze({ material: 'fire', profile: 'projectileFire', life: 16, radius: 4, strength: 600, frames: 1 }),
         ]),
         explosion: Object.freeze({
           minRadius: 24,
@@ -42,7 +42,7 @@ export const SKILL_DEFINITIONS = Object.freeze({
     }),
     materialEffects: Object.freeze({
       cast: Object.freeze([
-        Object.freeze({ material: 'fire', profile: 'projectileFire', life: 48, radius: 5, strength: 210, frames: 2 }),
+        Object.freeze({ material: 'fire', profile: 'projectileFire', life: 18, radius: 5, strength: 210, frames: 2 }),
       ]),
       hit: Object.freeze([]),
     }),

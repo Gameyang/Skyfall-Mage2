@@ -43,7 +43,8 @@ canvas {
   }
 }
 
-.sky-canvas {
+.sky-canvas,
+.screen-effects-canvas {
   position: absolute;
   inset: 0;
   width: var(--screen-width);
@@ -72,6 +73,12 @@ canvas {
 .game-canvas {
   z-index: 2;
   background: transparent;
+}
+
+.screen-effects-canvas {
+  z-index: 3;
+  background: transparent;
+  pointer-events: none;
 }
 
 .material-hub {
