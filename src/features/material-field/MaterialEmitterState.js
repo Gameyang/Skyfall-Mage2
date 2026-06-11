@@ -97,18 +97,43 @@ export class MaterialEmitterState {
     });
   }
 
-  addEmitter({ material, x, y, radius, strength = 220, flags = 0, frames = 3, profile = EMITTER_PROFILE.DEFAULT, life = 0 }) {
+  addEmitter({
+    material,
+    x,
+    y,
+    radius,
+    strength = 220,
+    flags = 0,
+    frames = 3,
+    profile = EMITTER_PROFILE.DEFAULT,
+    life = 0,
+    radialForce = 0,
+    expansionFrames = 0,
+  }) {
+    const targetRadius = Math.max(1, Math.round(radius || 1));
+    const force = Math.max(0, Number(radialForce) || 0);
+    const expandsRadially = force > 0;
+    const burstFrames = Math.max(1, Math.round(frames || 1));
+    const expansionFrameCount = expandsRadially ? Math.max(1, Math.round(expansionFrames || burstFrames)) : 0;
+    const startRatio = clamp(0.26 - force * 0.08, 0.08, 0.26);
+    const startRadius = expandsRadially ? Math.max(3, Math.round(targetRadius * startRatio)) : targetRadius;
+
     this.burstEmitters.push({
       material,
       x,
       y,
-      radius,
+      radius: startRadius,
+      startRadius,
+      targetRadius,
       strength,
       seed: randomSeed(),
       flags,
-      frames,
+      frames: burstFrames,
       profile,
       life,
+      radialForce: force,
+      expansionFrames: expansionFrameCount,
+      ageFrames: 0,
     });
 
     while (this.burstEmitters.length > MAX_EMITTERS) {
@@ -157,10 +182,20 @@ export class MaterialEmitterState {
 
   ageBurstEmitters() {
     for (let index = this.burstEmitters.length - 1; index >= 0; index -= 1) {
-      this.burstEmitters[index].frames -= 1;
-      this.burstEmitters[index].radius = Math.max(4, this.burstEmitters[index].radius - 1);
-      if (this.burstEmitters[index].frames <= 0) {
+      const burst = this.burstEmitters[index];
+      burst.frames -= 1;
+      if (burst.frames <= 0) {
         this.burstEmitters.splice(index, 1);
+        continue;
+      }
+
+      if (burst.radialForce > 0) {
+        burst.ageFrames += 1;
+        const ratio = clamp(burst.ageFrames / burst.expansionFrames, 0, 1);
+        const easedRatio = 1 - (1 - ratio) * (1 - ratio);
+        burst.radius = Math.max(1, Math.round(lerp(burst.startRadius, burst.targetRadius, easedRatio)));
+      } else {
+        burst.radius = Math.max(4, burst.radius - 1);
       }
     }
   }
@@ -206,6 +241,10 @@ function pushEmitter(words, count, emitter) {
   words[offset + 7] = packEmitterProfileData(emitter.profile, emitter.life);
 
   return count + 1;
+}
+
+function lerp(min, max, ratio) {
+  return min + (max - min) * ratio;
 }
 
 function packEmitterProfileData(profile = EMITTER_PROFILE.DEFAULT, life = 0) {

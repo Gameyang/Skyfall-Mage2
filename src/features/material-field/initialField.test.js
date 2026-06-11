@@ -57,6 +57,26 @@ describe('MaterialEmitterState', () => {
     expect(profileData & 0xff).toBe(EMITTER_PROFILE.PROJECTILE_FIRE);
     expect((profileData >> 8) & 0xff).toBe(44);
   });
+
+  it('expands radial burst emitters instead of shrinking them', () => {
+    const emitterState = new MaterialEmitterState();
+    emitterState.addEmitter({
+      material: MATERIAL.FIRE,
+      x: 10,
+      y: 12,
+      radius: 40,
+      frames: 5,
+      radialForce: 1,
+      expansionFrames: 5,
+    });
+
+    const firstRadius = emitterState.buildEmitterBuffer().words[3];
+    emitterState.ageBurstEmitters();
+    const secondRadius = emitterState.buildEmitterBuffer().words[3];
+
+    expect(firstRadius).toBeLessThan(40);
+    expect(secondRadius).toBeGreaterThan(firstRadius);
+  });
 });
 
 describe('material field shader profiles', () => {
@@ -78,6 +98,8 @@ describe('material field shader profiles', () => {
     expect(materialFieldShaderSource).toContain('fn isSkillExplosionFire');
     expect(materialFieldShaderSource).toContain('fn decaySkillExplosionFireAge');
     expect(materialFieldShaderSource).toContain('emitterProfile(emitter) == EMITTER_PROFILE_SKILL_EXPLOSION_FIRE');
+    expect(materialFieldShaderSource).toContain('let ringWidth = max(2, radius / 4)');
+    expect(materialFieldShaderSource).toContain('let innerRadius2 = innerRadius * innerRadius');
   });
 
   it('uses global gas wind and noise when selecting gas movement targets', () => {

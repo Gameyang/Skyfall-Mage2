@@ -694,5 +694,7 @@ function pushMaterialEffect(state, effect) {
     explosion: Boolean(effect.explosion),
     profile: effect.profile,
     life: effect.life || 0,
+    radialForce: effect.radialForce || 0,
+    expansionFrames: effect.expansionFrames || 0,
   });
 }

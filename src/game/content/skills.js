@@ -25,7 +25,7 @@ export const SKILL_DEFINITIONS = Object.freeze({
           minDamage: 10,
           maxDamage: 28,
           materialEffects: Object.freeze([
-            Object.freeze({ material: 'fire', profile: 'skillExplosionFire', life: 14, radiusScale: 0.76, strength: 255, frames: 4, explosion: true }),
+            Object.freeze({ material: 'fire', profile: 'skillExplosionFire', life: 14, radiusScale: 0.92, strength: 255, frames: 5, radialForce: 1, expansionFrames: 5, explosion: true }),
             Object.freeze({ material: 'spark', radiusScale: 0.42, strength: 235, frames: 4, explosion: true }),
             Object.freeze({ material: 'smoke', life: 10, radiusScale: 0.62, strength: 145, frames: 2, explosion: true }),
           ]),

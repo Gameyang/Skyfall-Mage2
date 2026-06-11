@@ -328,6 +328,9 @@ describe('fireball skill', () => {
       material: 'fire',
       profile: 'skillExplosionFire',
       life: 14,
+      frames: 5,
+      radialForce: 1,
+      expansionFrames: 5,
       explosion: true,
     }));
     expect(state.frameEffects).toContainEqual(expect.objectContaining({

@@ -103,6 +103,8 @@ function addEffectEmitter(emitterState, effect, viewport) {
     flags: effect.flags || (effect.explosion ? EMITTER_FLAG_EXPLOSION : 0),
     profile: resolveEffectProfile(effect.profile),
     life: effect.life || 0,
+    radialForce: effect.radialForce || 0,
+    expansionFrames: effect.expansionFrames || effect.frames,
   });
 }
 

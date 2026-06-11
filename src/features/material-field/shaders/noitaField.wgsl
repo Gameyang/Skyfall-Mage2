@@ -959,19 +959,24 @@ fn applyExplosionEmitter(cell: u32, emitter: Emitter, x: i32, y: i32, dist2: i32
 
   if (emitterProfile(emitter) == EMITTER_PROFILE_SKILL_EXPLOSION_FIRE) {
     let fireLife = emitterLife(emitter, 14u + (roll & 15u));
-    if (dist2 < radius2 / 5) {
-      if (roll < 56u) {
+    let ringWidth = max(2, radius / 4);
+    let innerRadius = max(0, radius - ringWidth);
+    let innerRadius2 = innerRadius * innerRadius;
+
+    if (dist2 < innerRadius2) {
+      if (roll < 80u) {
         return pack(EMPTY, 0u, 0u);
       }
-      return pack(FIRE, min(255u, fireLife + 4u), AUX_SKILL_EXPLOSION_FIRE);
+      return cell;
     }
-    if (roll < 194u) {
+
+    if (roll < 214u) {
       return pack(FIRE, fireLife, AUX_SKILL_EXPLOSION_FIRE);
     }
-    if (roll < 224u) {
+    if (roll < 238u) {
       return pack(SPARK, 8u + (roll & 15u), roll);
     }
-    if (roll < 242u) {
+    if (roll < 248u) {
       return pack(SMOKE, 8u + (roll & 15u), roll);
     }
     return cell;
