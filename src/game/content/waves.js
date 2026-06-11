@@ -1,0 +1,38 @@
+export const WAVE_DEFINITIONS = Object.freeze([
+  Object.freeze({
+    id: 'left-flock',
+    startMs: 450,
+    intervalMs: 5200,
+    count: 4,
+    side: 'left',
+    enemyType: 'normalBat',
+    pattern: Object.freeze({ amplitude: 64, frequency: 2.05 }),
+  }),
+  Object.freeze({
+    id: 'right-flock',
+    startMs: 1850,
+    intervalMs: 5800,
+    count: 4,
+    side: 'right',
+    enemyType: 'normalBat',
+    pattern: Object.freeze({ amplitude: 56, frequency: 2.35 }),
+  }),
+  Object.freeze({
+    id: 'top-dive',
+    startMs: 3200,
+    intervalMs: 6800,
+    count: 3,
+    side: 'top',
+    enemyType: 'normalBat',
+    pattern: Object.freeze({ amplitude: 72, frequency: 1.85 }),
+  }),
+  Object.freeze({
+    id: 'bottom-rise',
+    startMs: 4700,
+    intervalMs: 7600,
+    count: 3,
+    side: 'bottom',
+    enemyType: 'normalBat',
+    pattern: Object.freeze({ amplitude: 66, frequency: 2.2 }),
+  }),
+]);

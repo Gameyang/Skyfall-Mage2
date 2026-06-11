@@ -817,8 +817,7 @@ fn materialColor(cell: u32, x: u32, y: u32) -> vec4<f32> {
     return vec4<f32>(a * 0.82 + n * 0.04, a * 0.94 + n * 0.05, a + n * 0.08, 1.0);
   }
 
-  let sky = 0.025 + f32(y) / f32(max(params.height, 1u)) * 0.035;
-  return vec4<f32>(sky * 0.7, sky * 0.8, sky, 1.0);
+  return vec4<f32>(0.0, 0.0, 0.0, 0.0);
 }
 
 @fragment

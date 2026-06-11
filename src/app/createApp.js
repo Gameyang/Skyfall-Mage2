@@ -1,4 +1,6 @@
 import { createMaterialFieldApp } from '../features/material-field/MaterialFieldApp.js';
+import { createGameRuntime } from '../game/GameRuntime.js';
+import { createNightSkyRenderer } from '../rendering/webgl/NightSkyRenderer.js';
 import { APP_TITLE } from './config.js';
 
 function createFatalMessage() {
@@ -26,32 +28,50 @@ export function createApp({ root }) {
   const shell = document.createElement('main');
   shell.className = 'app-shell';
 
+  const skyCanvas = document.createElement('canvas');
+  skyCanvas.id = 'skyCanvas';
+  skyCanvas.className = 'sky-canvas';
+  skyCanvas.setAttribute('aria-hidden', 'true');
+
   const canvas = document.createElement('canvas');
   canvas.id = 'fieldCanvas';
-  canvas.setAttribute('aria-label', 'WebGPU material field');
+  canvas.className = 'material-canvas';
+  canvas.setAttribute('aria-label', 'WebGPU material effects');
 
-  const materialHub = document.createElement('nav');
-  materialHub.id = 'materialHub';
-  materialHub.className = 'material-hub';
-  materialHub.setAttribute('aria-label', 'Material brush slots');
+  const gameCanvas = document.createElement('canvas');
+  gameCanvas.id = 'gameCanvas';
+  gameCanvas.className = 'game-canvas';
+  gameCanvas.setAttribute('aria-label', 'Skyfall Mage2 battle');
 
   const fatal = createFatalMessage();
-  shell.append(canvas, materialHub, fatal);
+  shell.append(skyCanvas, canvas, gameCanvas, fatal);
   root.append(shell);
 
+  const skyRenderer = createNightSkyRenderer({
+    canvas: skyCanvas,
+  });
   const materialFieldApp = createMaterialFieldApp({
     canvas,
-    fatal,
-    materialHub,
+  });
+  const gameRuntime = createGameRuntime({
+    canvas: gameCanvas,
+    materialEffects: materialFieldApp,
   });
 
   return {
     start() {
+      skyRenderer.start();
       materialFieldApp.start();
+      gameRuntime.start();
     },
     destroy() {
+      gameRuntime.destroy();
       materialFieldApp.destroy();
+      skyRenderer.destroy();
       root.replaceChildren();
+    },
+    getDebugState() {
+      return gameRuntime.state;
     },
   };
 }

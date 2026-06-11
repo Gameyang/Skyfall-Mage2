@@ -17,7 +17,7 @@ export const EXPLOSION_FRAMES = 5;
 export const DPR_LIMIT = 2;
 
 export const HDR_SCENE_FORMAT = 'rgba16float';
-export const SCENE_CLEAR_COLOR = Object.freeze({ r: 0.02, g: 0.02, b: 0.03, a: 1 });
+export const SCENE_CLEAR_COLOR = Object.freeze({ r: 0, g: 0, b: 0, a: 0 });
 export const BLOOM_CONFIG = Object.freeze({
   enabled: true,
   threshold: 0.98,

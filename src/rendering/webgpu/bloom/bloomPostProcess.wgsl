@@ -56,8 +56,9 @@ fn bloomMask(color: vec3<f32>) -> f32 {
 
 @fragment
 fn brightDownsampleFragment(in: VertexOut) -> @location(0) vec4<f32> {
+  let sample = textureSample(primaryTexture, linearSampler, in.uv);
   let color = sampleBox(primaryTexture, in.uv, params.radius);
-  return vec4<f32>(color * bloomMask(color), 1.0);
+  return vec4<f32>(color * bloomMask(color), sample.a);
 }
 
 @fragment
@@ -74,8 +75,12 @@ fn upsampleFragment(in: VertexOut) -> @location(0) vec4<f32> {
 
 @fragment
 fn finalCompositeFragment(in: VertexOut) -> @location(0) vec4<f32> {
-  let scene = textureSample(primaryTexture, linearSampler, in.uv).rgb;
+  let sceneSample = textureSample(primaryTexture, linearSampler, in.uv);
+  let scene = sceneSample.rgb;
   let bloom = textureSample(secondaryTexture, linearSampler, in.uv).rgb;
   let enabled = select(0.0, 1.0, params.enabled > 0.5);
-  return vec4<f32>(min(scene + bloom * params.intensity * enabled, vec3<f32>(1.0)), 1.0);
+  let color = min(scene + bloom * params.intensity * enabled, vec3<f32>(1.0));
+  let bloomAlpha = clamp(max(max(bloom.r, bloom.g), bloom.b) * params.intensity * enabled, 0.0, 1.0);
+  let alpha = max(sceneSample.a, bloomAlpha);
+  return vec4<f32>(color * alpha, alpha);
 }

@@ -5,7 +5,7 @@ body,
   height: 100%;
   margin: 0;
   overflow: hidden;
-  background: #050507;
+  background: #050719;
   color: #d7e4ff;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   user-select: none;
@@ -30,8 +30,29 @@ canvas {
   display: block;
   width: 100vw;
   height: 100vh;
-  background: #050507;
+  background: #050719;
   touch-action: none;
+}
+
+.sky-canvas,
+.material-canvas,
+.game-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.sky-canvas {
+  z-index: 0;
+}
+
+.material-canvas {
+  z-index: 1;
+  background: transparent;
+}
+
+.game-canvas {
+  z-index: 2;
+  background: transparent;
 }
 
 .material-hub {

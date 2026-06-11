@@ -85,18 +85,30 @@ export class MaterialEmitterState {
   }
 
   addExplosion(x = this.lastGrid.x, y = this.lastGrid.y) {
-    this.burstEmitters.push({
+    this.addEmitter({
       material: MATERIAL.FIRE,
       x,
       y,
       radius: EXPLOSION_RADIUS,
       strength: 255,
-      seed: randomSeed(),
       flags: EMITTER_FLAG_EXPLOSION,
       frames: EXPLOSION_FRAMES,
     });
+  }
 
-    while (this.burstEmitters.length > 12) {
+  addEmitter({ material, x, y, radius, strength = 220, flags = 0, frames = 3 }) {
+    this.burstEmitters.push({
+      material,
+      x,
+      y,
+      radius,
+      strength,
+      seed: randomSeed(),
+      flags,
+      frames,
+    });
+
+    while (this.burstEmitters.length > MAX_EMITTERS) {
       this.burstEmitters.shift();
     }
   }

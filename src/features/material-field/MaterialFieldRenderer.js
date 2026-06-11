@@ -59,7 +59,7 @@ class MaterialFieldRenderer {
     context.configure({
       device,
       format,
-      alphaMode: 'opaque',
+      alphaMode: 'premultiplied',
     });
 
     const shaderModule = device.createShaderModule({
