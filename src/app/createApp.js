@@ -45,53 +45,70 @@ function createTitleOverlay() {
   art.decoding = 'async';
   art.draggable = false;
 
-  const loadingList = document.createElement('div');
-  loadingList.className = 'title-loading-list';
+  const completedSteps = new Set();
+  const loadingBar = document.createElement('div');
+  loadingBar.className = 'title-loading-bar';
+  loadingBar.setAttribute('role', 'progressbar');
+  loadingBar.setAttribute('aria-label', 'Loading');
+  loadingBar.setAttribute('aria-valuemin', '0');
+  loadingBar.setAttribute('aria-valuemax', '100');
+  loadingBar.setAttribute('aria-valuenow', '0');
 
-  const resourceRow = createLoadingRow('Game Resources');
-  const shaderRow = createLoadingRow('Shader Compile');
-  loadingList.append(resourceRow.element, shaderRow.element);
+  const loadingBarFill = document.createElement('span');
+  loadingBarFill.className = 'title-loading-bar-fill';
+  loadingBar.append(loadingBarFill);
 
-  const prompt = document.createElement('button');
+  const prompt = document.createElement('div');
   prompt.className = 'title-prompt';
-  prompt.type = 'button';
   prompt.textContent = 'Press Any Key';
-  prompt.disabled = true;
+  prompt.hidden = true;
+  let ready = false;
 
-  panel.append(art, loadingList, prompt);
+  panel.append(art, loadingBar, prompt);
   overlay.append(panel);
 
   return {
     element: overlay,
     setStepStatus(step, status) {
-      const row = step === LOADING_STEPS.resources ? resourceRow : shaderRow;
-      row.status.textContent = status;
-      row.element.dataset.status = status.toLowerCase();
+      if (status.toLowerCase() === 'ready') {
+        completedSteps.add(step);
+      } else {
+        completedSteps.delete(step);
+      }
+
+      const progress = Math.round((completedSteps.size / Object.keys(LOADING_STEPS).length) * 100);
+      loadingBar.setAttribute('aria-valuenow', String(progress));
+      loadingBarFill.style.transform = `scaleX(${progress / 100})`;
     },
     showReady() {
-      prompt.disabled = false;
+      ready = true;
+      loadingBar.hidden = true;
+      prompt.hidden = false;
+      overlay.classList.add('is-ready');
       prompt.classList.add('is-ready');
-      prompt.focus({ preventScroll: true });
     },
     showError(message) {
+      ready = false;
+      loadingBar.hidden = true;
       prompt.textContent = message;
-      prompt.disabled = true;
+      prompt.hidden = false;
+      overlay.classList.remove('is-ready');
       prompt.classList.add('is-error');
     },
     waitForActivation() {
       return new Promise((resolve) => {
         const activate = (event) => {
-          if (prompt.disabled) return;
+          if (!ready) return;
           event?.preventDefault?.();
           cleanup();
           resolve();
         };
         const cleanup = () => {
-          prompt.removeEventListener('click', activate);
+          overlay.removeEventListener('pointerdown', activate);
           window.removeEventListener('keydown', activate);
         };
 
-        prompt.addEventListener('click', activate);
+        overlay.addEventListener('pointerdown', activate);
         window.addEventListener('keydown', activate);
       });
     },
@@ -99,23 +116,6 @@ function createTitleOverlay() {
       overlay.hidden = true;
     },
   };
-}
-
-function createLoadingRow(labelText) {
-  const element = document.createElement('div');
-  element.className = 'title-loading-row';
-  element.dataset.status = 'loading';
-
-  const label = document.createElement('span');
-  label.className = 'title-loading-label';
-  label.textContent = labelText;
-
-  const status = document.createElement('span');
-  status.className = 'title-loading-status';
-  status.textContent = 'Loading';
-
-  element.append(label, status);
-  return { element, status };
 }
 
 function preloadImages(urls) {

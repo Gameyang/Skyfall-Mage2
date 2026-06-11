@@ -15,7 +15,12 @@ const ITEM_TRAIL_HISTORY_SPACING = 4;
 const ITEM_TRAIL_HISTORY_LIMIT = 180;
 const ITEM_LOSS_MIN_RATIO = 0.05;
 const ITEM_LOSS_MAX_RATIO = 0.1;
-const LOST_ITEM_GRAVITY = 760;
+const LOST_ITEM_GRAVITY = 1520;
+const LOST_ITEM_VISUAL_LIMIT = 6;
+const LOST_ITEM_HORIZONTAL_SPEED_MIN = 180;
+const LOST_ITEM_HORIZONTAL_SPEED_RANGE = 180;
+const LOST_ITEM_LIFT_SPEED_MIN = 420;
+const LOST_ITEM_LIFT_SPEED_RANGE = 180;
 const LOST_ITEM_DESPAWN_MARGIN = 96;
 const LOST_ITEM_MAX_LIFETIME_MS = 4000;
 
@@ -976,10 +981,14 @@ export function losePlayerRibbonItems(state, content = GAME_CONTENT, eventBase =
     const lostItem = removeRandomCollectedItemUnit(state, content);
     if (!lostItem) break;
     lostItems.push(lostItem);
-    spawnLostItemVisual(state, lostItem, content, index, lossCount);
   }
 
   if (!lostItems.length) return 0;
+
+  const visualItems = lostItems.slice(0, LOST_ITEM_VISUAL_LIMIT);
+  for (let index = 0; index < visualItems.length; index += 1) {
+    spawnLostItemVisual(state, visualItems[index], content, index, visualItems.length);
+  }
 
   const lostByItemId = {};
   for (const lostItem of lostItems) {
@@ -1037,14 +1046,15 @@ function spawnLostItemVisual(state, lostItem, content = GAME_CONTENT, index = 0,
   const randomAngle = -Math.PI * 0.9 + Math.random() * Math.PI * 0.8;
   const fanOffset = total > 1 ? (index / Math.max(1, total - 1) - 0.5) * Math.PI * 0.7 : 0;
   const angle = randomAngle + fanOffset;
-  const speed = 230 + Math.random() * 170;
+  const horizontalSpeed = LOST_ITEM_HORIZONTAL_SPEED_MIN + Math.random() * LOST_ITEM_HORIZONTAL_SPEED_RANGE;
+  const liftSpeed = LOST_ITEM_LIFT_SPEED_MIN + Math.random() * LOST_ITEM_LIFT_SPEED_RANGE;
   const lostVisual = {
     id: state.session.nextLostItemId,
     itemId: lostItem.itemId,
     x: state.player.x,
     y: state.player.y,
-    vx: Math.cos(angle) * speed,
-    vy: Math.sin(angle) * speed - 120,
+    vx: Math.cos(angle) * horizontalSpeed,
+    vy: -liftSpeed + Math.sin(angle) * 70,
     gravity: LOST_ITEM_GRAVITY,
     rotation: Math.random() * Math.PI * 2,
     rotationSpeed: (Math.random() - 0.5) * 9,

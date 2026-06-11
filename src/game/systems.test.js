@@ -5,7 +5,7 @@ import { ITEM_DEFINITIONS } from './content/items.js';
 import { SKILL_DEFINITIONS } from './content/skills.js';
 import { createEnemyFromWave, createSCurvePath, sampleSCurvePath } from './enemyPaths.js';
 import { createGameState } from './GameState.js';
-import { selectProgressRiskTarget, updateGame, updateViewport } from './systems.js';
+import { losePlayerRibbonItems, selectProgressRiskTarget, updateGame, updateViewport } from './systems.js';
 
 function createTestContent(overrides = {}) {
   return {
@@ -1145,6 +1145,45 @@ describe('item drops', () => {
       lostQuantity: 5,
       totalQuantityBefore: 100,
       items: { coin: 5 },
+    }));
+  });
+
+  it('caps lost ribbon item visuals at six regardless of lost quantity', () => {
+    const content = createLootContent();
+    const state = createGameState({ width: 800, height: 600, content });
+    state.player.x = 100;
+    state.player.y = 100;
+    state.player.collectedItems.push({
+      itemId: 'coin',
+      quantity: 1000,
+      name: 'Coin',
+      spriteUrl: ITEM_DEFINITIONS.coin.spriteUrl,
+      spriteSize: ITEM_DEFINITIONS.coin.tailSize,
+      visual: ITEM_DEFINITIONS.coin.visual,
+    });
+
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0);
+    let lostQuantity = 0;
+    try {
+      lostQuantity = losePlayerRibbonItems(state, content, { source: 'testDamage' });
+    } finally {
+      randomSpy.mockRestore();
+    }
+
+    expect(lostQuantity).toBe(50);
+    expect(state.player.collectedItems).toContainEqual(expect.objectContaining({
+      itemId: 'coin',
+      quantity: 950,
+    }));
+    expect(state.entities.lostItems).toHaveLength(6);
+    expect(state.entities.lostItems.every((item) => item.gravity === 1520)).toBe(true);
+    expect(state.entities.lostItems.every((item) => item.vy < -320)).toBe(true);
+    expect(state.frameEvents).toContainEqual(expect.objectContaining({
+      type: 'RibbonItemsLost',
+      source: 'testDamage',
+      lostQuantity: 50,
+      totalQuantityBefore: 1000,
+      items: { coin: 50 },
     }));
   });
 

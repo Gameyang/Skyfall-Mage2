@@ -5,14 +5,34 @@ import { createGameCanvasRenderer } from './render/GameCanvasRenderer.js';
 import { updateGame, updateViewport } from './systems.js';
 
 const GAME_OVER_RESTART_DELAY_MS = 3000;
+const HIT_SHAKE_DURATION_MS = 180;
+const HIT_SHAKE_MAX_OFFSET_PX = 10;
 
 export function createGameRuntime({ canvas, materialEffects, screenEffects = null, content = GAME_CONTENT }) {
   return new GameRuntime({ canvas, materialEffects, screenEffects, content });
 }
 
+export function computeScreenShakeOffset(state) {
+  if (state.session?.gameOver) {
+    return { x: 0, y: 0 };
+  }
+
+  const intensity = clamp((state.session?.contactFlashMs ?? 0) / HIT_SHAKE_DURATION_MS, 0, 1);
+  if (intensity <= 0) {
+    return { x: 0, y: 0 };
+  }
+
+  const phase = (state.session?.elapsedMs ?? 0) * 0.18;
+  return {
+    x: Math.sin(phase * 2.17) * HIT_SHAKE_MAX_OFFSET_PX * intensity,
+    y: Math.cos(phase * 2.89) * HIT_SHAKE_MAX_OFFSET_PX * intensity,
+  };
+}
+
 class GameRuntime {
   constructor({ canvas, materialEffects, screenEffects, content }) {
     this.canvas = canvas;
+    this.screenShakeElement = canvas.parentElement;
     this.materialEffects = materialEffects;
     this.screenEffects = screenEffects;
     this.content = content;
@@ -40,6 +60,7 @@ class GameRuntime {
   renderFrame(now) {
     if (this.destroyed) return;
 
+    this.applyScreenShake({ x: 0, y: 0 });
     const viewport = this.renderer.resize();
     updateViewport(this.state, viewport.width, viewport.height, viewport.visible);
 
@@ -48,6 +69,7 @@ class GameRuntime {
     updateGame(this.state, dtMs, this.content);
     this.updateAutoRestart(now, viewport);
     this.materialEffects?.emitEffects?.(this.state.frameEffects, this.state.viewport);
+    this.applyScreenShake(computeScreenShakeOffset(this.state));
     this.renderer.render(this.state);
     this.screenEffects?.render?.(this.state, now);
 
@@ -61,7 +83,15 @@ class GameRuntime {
       this.animationFrameId = 0;
     }
     this.input.destroy();
+    this.applyScreenShake({ x: 0, y: 0 });
     this.renderer.destroy();
+  }
+
+  applyScreenShake(offset) {
+    if (!this.screenShakeElement?.style) return;
+
+    this.screenShakeElement.style.setProperty('--screen-shake-x', `${offset.x.toFixed(2)}px`);
+    this.screenShakeElement.style.setProperty('--screen-shake-y', `${offset.y.toFixed(2)}px`);
   }
 
   updateAutoRestart(now, viewport) {
@@ -92,4 +122,8 @@ class GameRuntime {
     updateViewport(this.state, viewport.width, viewport.height, viewport.visible);
     this.gameOverStartedAt = null;
   }
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }
