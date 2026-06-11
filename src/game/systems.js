@@ -1,5 +1,6 @@
 import { GAME_CONTENT } from './content/index.js';
-import { circlesIntersect, clamp, distance, normalize } from './math.js';
+import { GAS_FLOW_CONFIG } from '../features/material-field/config.js';
+import { circlesIntersect, clamp, distance, hash01, normalize } from './math.js';
 import { createEnemyFromWave, hasEnemyReachedExit, updateEnemyPathPosition } from './enemyPaths.js';
 
 const PROJECTILE_DESPAWN_MARGIN = 96;
@@ -8,6 +9,10 @@ const DEFAULT_HAZARD_TICK_MS = 250;
 const DEFAULT_HAZARD_LIFETIME_MS = 1000;
 const DEFAULT_PROJECTILE_TRAIL_INTERVAL_MS = 50;
 const PLAYER_RECENTER_DURATION_MS = 180;
+const ITEM_MAX_WIND_SPEED = 18;
+const ITEM_MAX_NOISE_SPEED = 10;
+const ITEM_TRAIL_HISTORY_SPACING = 4;
+const ITEM_TRAIL_HISTORY_LIMIT = 180;
 
 export function updateGame(state, dtMs, content = GAME_CONTENT) {
   const dt = Math.max(dtMs, 0);
@@ -20,12 +25,15 @@ export function updateGame(state, dtMs, content = GAME_CONTENT) {
 
   syncRuntimeCollections(state, content);
   updatePlayer(state, dt);
+  updatePlayerTrailHistory(state);
   updateWaveSpawns(state, content);
   updateEnemies(state, dt);
+  updateItemDrops(state, dt, content);
   updateAutoSkills(state, dt, content);
   updateProjectiles(state, dt);
   resolveProjectileHits(state, content);
-  updateHazards(state, dt);
+  updateHazards(state, dt, content);
+  resolveItemPickups(state, content);
   resolvePlayerContacts(state);
   cleanupEntities(state);
 
@@ -36,8 +44,20 @@ export function syncRuntimeCollections(state, content = GAME_CONTENT) {
   if (!state.entities.hazards) {
     state.entities.hazards = [];
   }
+  if (!state.entities.itemDrops) {
+    state.entities.itemDrops = [];
+  }
   if (!state.session.nextHazardId) {
     state.session.nextHazardId = 1;
+  }
+  if (!state.session.nextItemDropId) {
+    state.session.nextItemDropId = 1;
+  }
+  if (!state.player.trailHistory) {
+    state.player.trailHistory = [];
+  }
+  if (!state.player.collectedItems) {
+    state.player.collectedItems = [];
   }
 
   for (const skillId of Object.keys(content.skills || {})) {
@@ -194,6 +214,25 @@ export function updatePlayer(state, dtMs) {
   );
 }
 
+export function updatePlayerTrailHistory(state) {
+  const player = state.player;
+  const history = player.trailHistory || [];
+  player.trailHistory = history;
+
+  const current = {
+    x: player.x,
+    y: player.y,
+  };
+  const newest = history[0];
+  if (!newest || distance(current, newest) >= ITEM_TRAIL_HISTORY_SPACING) {
+    history.unshift(current);
+  }
+
+  while (history.length > ITEM_TRAIL_HISTORY_LIMIT) {
+    history.pop();
+  }
+}
+
 export function updateWaveSpawns(state, content = GAME_CONTENT) {
   const waveDefinitions = content.waves || [];
   for (let index = 0; index < waveDefinitions.length; index += 1) {
@@ -327,6 +366,35 @@ export function updateProjectiles(state, dtMs) {
   }
 }
 
+export function updateItemDrops(state, dtMs, content = GAME_CONTENT) {
+  if (!state.entities.itemDrops?.length) return;
+
+  const dt = dtMs / 1000;
+  const flow = getItemFlowConfig(content);
+  const elapsedSeconds = state.session.elapsedMs / 1000;
+  const remainingDrops = [];
+
+  for (const drop of state.entities.itemDrops) {
+    drop.ageMs = (drop.ageMs || 0) + dtMs;
+    const drift = sampleItemDropDrift(drop, flow, elapsedSeconds);
+    drop.x += drift.x * dt;
+    drop.y += drift.y * dt;
+
+    if (isItemDropOutsideField(state, drop)) {
+      state.frameEvents.push({
+        type: 'ItemDropExpired',
+        itemDropId: drop.id,
+        itemId: drop.itemId,
+      });
+      continue;
+    }
+
+    remainingDrops.push(drop);
+  }
+
+  state.entities.itemDrops = remainingDrops;
+}
+
 export function resolveProjectileHits(state, content = GAME_CONTENT) {
   const remainingProjectiles = [];
 
@@ -354,7 +422,7 @@ export function resolveProjectileHits(state, content = GAME_CONTENT) {
         skillId: projectile.skillId,
         projectileId: projectile.id,
         enemyId: hitEnemy.id,
-      });
+      }, content);
     } else {
       state.frameEvents.push({
         type: 'ProjectileHit',
@@ -366,11 +434,11 @@ export function resolveProjectileHits(state, content = GAME_CONTENT) {
     }
 
     pushSkillEffects(state, skill, 'hit', hitEnemy);
-    resolveEnergyExplosion(state, projectile, skill, hitEnemy);
+    resolveEnergyExplosion(state, projectile, skill, hitEnemy, content);
     applyAreaDamage(state, hitEnemy, impact.areaDamage, {
       skillId: projectile.skillId,
       projectileId: projectile.id,
-    });
+    }, content);
     spawnHazardsFromImpact(state, skill, hitEnemy);
   }
 
@@ -378,7 +446,7 @@ export function resolveProjectileHits(state, content = GAME_CONTENT) {
   state.entities.enemies = state.entities.enemies.filter((enemy) => enemy.hp > 0);
 }
 
-export function updateHazards(state, dtMs) {
+export function updateHazards(state, dtMs, content = GAME_CONTENT) {
   if (!state.entities.hazards?.length) return;
 
   const remainingHazards = [];
@@ -392,7 +460,7 @@ export function updateHazards(state, dtMs) {
     const tickMs = hazard.tickMs ?? DEFAULT_HAZARD_TICK_MS;
     while (tickMs > 0 && hazard.tickAccumulatorMs >= tickMs) {
       hazard.tickAccumulatorMs -= tickMs;
-      applyHazardTick(state, hazard, tickMs);
+      applyHazardTick(state, hazard, tickMs, content);
     }
 
     if (hazard.ageMs < lifetimeMs) {
@@ -408,6 +476,34 @@ export function updateHazards(state, dtMs) {
 
   state.entities.hazards = remainingHazards;
   state.entities.enemies = state.entities.enemies.filter((enemy) => enemy.hp > 0);
+}
+
+export function resolveItemPickups(state, content = GAME_CONTENT) {
+  if (!state.entities.itemDrops?.length) return;
+
+  const remainingDrops = [];
+  for (const drop of state.entities.itemDrops) {
+    const pickupCircle = {
+      x: drop.x,
+      y: drop.y,
+      radius: drop.pickupRadius ?? drop.radius ?? 0,
+    };
+
+    if (!circlesIntersect(pickupCircle, state.player)) {
+      remainingDrops.push(drop);
+      continue;
+    }
+
+    collectPlayerItem(state, drop, content);
+    state.frameEvents.push({
+      type: 'ItemCollected',
+      itemDropId: drop.id,
+      itemId: drop.itemId,
+      quantity: drop.quantity ?? 1,
+    });
+  }
+
+  state.entities.itemDrops = remainingDrops;
 }
 
 export function resolvePlayerContacts(state) {
@@ -464,9 +560,23 @@ export function cleanupEntities(state) {
     projectile.y > -PROJECTILE_DESPAWN_MARGIN &&
     projectile.y < height + PROJECTILE_DESPAWN_MARGIN
   ));
+
+  if (state.entities.itemDrops?.length) {
+    state.entities.itemDrops = state.entities.itemDrops.filter((drop) => {
+      const keepDrop = !isItemDropOutsideField(state, drop);
+      if (!keepDrop) {
+        state.frameEvents.push({
+          type: 'ItemDropExpired',
+          itemDropId: drop.id,
+          itemId: drop.itemId,
+        });
+      }
+      return keepDrop;
+    });
+  }
 }
 
-function applyAreaDamage(state, source, areaDamage, eventBase) {
+function applyAreaDamage(state, source, areaDamage, eventBase, content = GAME_CONTENT) {
   if (!areaDamage) return;
 
   const radius = areaDamage.radius ?? 0;
@@ -483,7 +593,7 @@ function applyAreaDamage(state, source, areaDamage, eventBase) {
       projectileId: eventBase.projectileId,
       enemyId: enemy.id,
       radius,
-    });
+    }, content);
   }
 }
 
@@ -520,7 +630,7 @@ function updateProjectileEnergy(state, projectile, dtMs) {
   }
 }
 
-function resolveEnergyExplosion(state, projectile, skill, source) {
+function resolveEnergyExplosion(state, projectile, skill, source, content = GAME_CONTENT) {
   const explosion = projectile.energy?.explosion;
   if (!explosion) return;
 
@@ -542,7 +652,7 @@ function resolveEnergyExplosion(state, projectile, skill, source) {
   applyAreaDamage(state, source, { radius, damage }, {
     skillId: projectile.skillId,
     projectileId: projectile.id,
-  });
+  }, content);
   pushEnergyExplosionEffects(state, explosion.materialEffects || [], source, radius);
 }
 
@@ -597,7 +707,7 @@ function spawnHazardsFromImpact(state, skill, source) {
   }
 }
 
-function applyHazardTick(state, hazard, tickMs) {
+function applyHazardTick(state, hazard, tickMs, content = GAME_CONTENT) {
   const damage = (hazard.damagePerSecond || 0) * (tickMs / 1000);
   if (damage <= 0) {
     pushMaterialEffects(state, hazard.materialEffects.tick, hazard);
@@ -613,7 +723,7 @@ function applyHazardTick(state, hazard, tickMs) {
       skillId: hazard.skillId,
       hazardId: hazard.id,
       enemyId: enemy.id,
-    });
+    }, content);
   }
 
   if (hazard.affectsPlayer && circlesIntersect(hazard, state.player)) {
@@ -633,7 +743,7 @@ function applyHazardTick(state, hazard, tickMs) {
   pushMaterialEffects(state, hazard.materialEffects.tick, hazard);
 }
 
-function damageEnemy(state, enemy, damage, event) {
+function damageEnemy(state, enemy, damage, event, content = GAME_CONTENT) {
   if (!enemy || enemy.hp <= 0 || damage <= 0) return false;
 
   enemy.hp -= damage;
@@ -649,8 +759,116 @@ function damageEnemy(state, enemy, damage, event) {
   state.frameEvents.push({
     type: 'EnemyKilled',
     enemyId: enemy.id,
+    x: enemy.x,
+    y: enemy.y,
   });
+  rollEnemyLootDrops(state, enemy, content);
   return true;
+}
+
+export function spawnItemDrop(state, itemId, source, content = GAME_CONTENT, options = {}) {
+  const item = content.items?.[itemId];
+  if (!item) return null;
+
+  const drop = {
+    id: state.session.nextItemDropId,
+    itemId,
+    quantity: Math.max(1, options.quantity ?? 1),
+    x: source.x,
+    y: source.y,
+    radius: item.radius ?? 10,
+    pickupRadius: item.pickupRadius ?? item.radius ?? 10,
+    spriteUrl: item.spriteUrl,
+    spriteSize: item.spriteSize ?? 24,
+    visual: item.visual,
+    ageMs: 0,
+    driftSeed: hash01((state.session.nextItemDropId + 1) * 2654435761) * 1000,
+  };
+  state.session.nextItemDropId += 1;
+  state.entities.itemDrops.push(drop);
+  state.frameEvents.push({
+    type: 'ItemDropped',
+    enemyId: options.enemyId,
+    itemDropId: drop.id,
+    itemId,
+    quantity: drop.quantity,
+    x: drop.x,
+    y: drop.y,
+  });
+  return drop;
+}
+
+function rollEnemyLootDrops(state, enemy, content = GAME_CONTENT) {
+  const drops = content.loot?.enemyDrops || [];
+  for (const dropDefinition of drops) {
+    const chance = clamp(dropDefinition.chance ?? 0, 0, 1);
+    if (chance <= 0) continue;
+    if (chance < 1 && Math.random() >= chance) continue;
+
+    spawnItemDrop(state, dropDefinition.itemId, enemy, content, {
+      enemyId: enemy.id,
+      quantity: dropDefinition.quantity ?? 1,
+    });
+  }
+}
+
+function collectPlayerItem(state, drop, content = GAME_CONTENT) {
+  const item = content.items?.[drop.itemId] || {};
+  const quantity = Math.max(1, drop.quantity ?? 1);
+  const existing = state.player.collectedItems.find((entry) => entry.itemId === drop.itemId);
+  if (existing) {
+    existing.quantity += quantity;
+    return existing;
+  }
+
+  const entry = {
+    itemId: drop.itemId,
+    quantity,
+    name: item.name ?? drop.itemId,
+    spriteUrl: item.spriteUrl ?? drop.spriteUrl,
+    spriteSize: item.tailSize ?? item.spriteSize ?? drop.spriteSize ?? 24,
+    visual: item.visual ?? drop.visual,
+  };
+  state.player.collectedItems.push(entry);
+  return entry;
+}
+
+function getItemFlowConfig(content = GAME_CONTENT) {
+  const flow = content.environment?.gasFlow || content.gasFlow || GAS_FLOW_CONFIG;
+  return {
+    windX: clamp(flow.windX ?? GAS_FLOW_CONFIG.windX, -1, 1),
+    windY: clamp(flow.windY ?? GAS_FLOW_CONFIG.windY, -1, 1),
+    windStrength: clamp(flow.windStrength ?? GAS_FLOW_CONFIG.windStrength, 0, 255),
+    noiseStrength: clamp(flow.noiseStrength ?? GAS_FLOW_CONFIG.noiseStrength, 0, 255),
+    noiseScale: clamp(flow.noiseScale ?? GAS_FLOW_CONFIG.noiseScale, 1, 255),
+    noiseSpeed: clamp(flow.noiseSpeed ?? GAS_FLOW_CONFIG.noiseSpeed, 1, 255),
+  };
+}
+
+function sampleItemDropDrift(drop, flow, elapsedSeconds) {
+  const windRatio = flow.windStrength / 255;
+  const noiseRatio = flow.noiseStrength / 255;
+  const noiseTime = elapsedSeconds * flow.noiseSpeed * 0.22;
+  const seed = drop.driftSeed ?? drop.id ?? 1;
+  const angle = (
+    Math.sin((drop.x + seed * 17) / flow.noiseScale + noiseTime) +
+    Math.cos((drop.y - seed * 13) / flow.noiseScale - noiseTime * 0.8)
+  ) * Math.PI;
+
+  return {
+    x: flow.windX * ITEM_MAX_WIND_SPEED * windRatio + Math.cos(angle) * ITEM_MAX_NOISE_SPEED * noiseRatio,
+    y: flow.windY * ITEM_MAX_WIND_SPEED * windRatio + Math.sin(angle) * ITEM_MAX_NOISE_SPEED * noiseRatio,
+  };
+}
+
+function isItemDropOutsideField(state, drop) {
+  const radius = drop.radius ?? 0;
+  return (
+    drop.x < -radius ||
+    drop.x > state.viewport.width + radius ||
+    drop.y < -radius ||
+    drop.y > state.viewport.height + radius
+  );
 }
 
 function pushSkillEffects(state, skill, phase, source) {

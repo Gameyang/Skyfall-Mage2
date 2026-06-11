@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ENEMY_DEFINITIONS } from './content/enemies.js';
+import { GAME_CONTENT } from './content/index.js';
+import { ITEM_DEFINITIONS } from './content/items.js';
 import { SKILL_DEFINITIONS } from './content/skills.js';
 import { createEnemyFromWave, createSCurvePath, sampleSCurvePath } from './enemyPaths.js';
 import { createGameState } from './GameState.js';
@@ -10,6 +12,9 @@ function createTestContent(overrides = {}) {
     enemies: overrides.enemies ?? ENEMY_DEFINITIONS,
     skills: overrides.skills ?? {},
     waves: overrides.waves ?? [],
+    items: overrides.items ?? {},
+    loot: overrides.loot ?? { enemyDrops: [] },
+    environment: overrides.environment,
   };
 }
 
@@ -713,5 +718,239 @@ describe('combat resolution', () => {
     expect(state.player.hp).toBe(state.player.maxHp);
     expect(state.entities.enemies).toHaveLength(0);
     expect(state.frameEvents.some((event) => event.type === 'EnemyDespawned')).toBe(true);
+  });
+});
+
+describe('item drops', () => {
+  function createLootContent(overrides = {}) {
+    return createTestContent({
+      items: overrides.items ?? {
+        coin: ITEM_DEFINITIONS.coin,
+        gem: {
+          ...ITEM_DEFINITIONS.coin,
+          id: 'gem',
+          name: 'Gem',
+        },
+      },
+      loot: overrides.loot ?? {
+        enemyDrops: [
+          { itemId: 'coin', chance: 1, quantity: 1 },
+        ],
+      },
+      environment: overrides.environment ?? {
+        gasFlow: {
+          windX: 0,
+          windY: 0,
+          windStrength: 0,
+          noiseStrength: 0,
+          noiseScale: 18,
+          noiseSpeed: 10,
+        },
+      },
+    });
+  }
+
+  function pushKillableEnemyAndProjectile(state, damage = 20) {
+    state.entities.enemies.push({
+      id: 1,
+      hp: 10,
+      maxHp: 10,
+      x: 120,
+      y: 120,
+      radius: 18,
+      progress: 0,
+      travelDistance: 1000,
+      contactDamage: 12,
+    });
+    state.entities.projectiles.push({
+      id: 1,
+      skillId: 'fireball',
+      x: 120,
+      y: 120,
+      vx: 0,
+      vy: 0,
+      radius: 7,
+      damage,
+      lifetimeMs: 1000,
+      ageMs: 0,
+    });
+  }
+
+  it('defines coin as the default enemy drop at seventy percent chance', () => {
+    expect(GAME_CONTENT.loot.enemyDrops).toContainEqual(expect.objectContaining({
+      itemId: 'coin',
+      chance: 0.7,
+    }));
+  });
+
+  it('drops a coin at the enemy death position when the loot roll succeeds', () => {
+    const content = createLootContent();
+    const state = createGameState({ width: 800, height: 600, content });
+    pushKillableEnemyAndProjectile(state);
+
+    updateGame(state, 16, content);
+
+    expect(state.entities.itemDrops).toHaveLength(1);
+    expect(state.entities.itemDrops[0]).toMatchObject({
+      itemId: 'coin',
+      x: 120,
+      y: 120,
+      quantity: 1,
+    });
+    expect(state.frameEvents).toContainEqual(expect.objectContaining({
+      type: 'ItemDropped',
+      enemyId: 1,
+      itemId: 'coin',
+    }));
+  });
+
+  it('does not create a drop when the loot roll fails', () => {
+    const content = createLootContent({
+      loot: {
+        enemyDrops: [
+          { itemId: 'coin', chance: 0, quantity: 1 },
+        ],
+      },
+    });
+    const state = createGameState({ width: 800, height: 600, content });
+    pushKillableEnemyAndProjectile(state);
+
+    updateGame(state, 16, content);
+
+    expect(state.entities.itemDrops).toHaveLength(0);
+    expect(state.frameEvents).toContainEqual(expect.objectContaining({
+      type: 'EnemyKilled',
+      enemyId: 1,
+    }));
+  });
+
+  it('moves world drops slowly with the CPU wind flow', () => {
+    const content = createLootContent({
+      environment: {
+        gasFlow: {
+          windX: 1,
+          windY: 0,
+          windStrength: 255,
+          noiseStrength: 0,
+          noiseScale: 18,
+          noiseSpeed: 10,
+        },
+      },
+    });
+    const state = createGameState({ width: 800, height: 600, content });
+    state.entities.itemDrops.push({
+      id: 1,
+      itemId: 'coin',
+      quantity: 1,
+      x: 100,
+      y: 100,
+      radius: 11,
+      pickupRadius: 20,
+      ageMs: 0,
+      driftSeed: 1,
+    });
+
+    updateGame(state, 1000, content);
+
+    expect(state.entities.itemDrops[0].x).toBeGreaterThan(100);
+    expect(state.entities.itemDrops[0].x).toBeLessThan(125);
+    expect(state.entities.itemDrops[0].y).toBe(100);
+  });
+
+  it('expires drops outside the whole square field but keeps drops outside only the visible crop', () => {
+    const content = createLootContent();
+    const state = createGameState({ width: 800, height: 800, content });
+    updateViewport(state, 800, 800, {
+      x: 200,
+      y: 0,
+      width: 400,
+      height: 800,
+    });
+    state.player.recenter = null;
+    state.entities.itemDrops.push(
+      {
+        id: 1,
+        itemId: 'coin',
+        quantity: 1,
+        x: 100,
+        y: 400,
+        radius: 11,
+        pickupRadius: 20,
+        ageMs: 0,
+        driftSeed: 1,
+      },
+      {
+        id: 2,
+        itemId: 'coin',
+        quantity: 1,
+        x: 820,
+        y: 400,
+        radius: 11,
+        pickupRadius: 20,
+        ageMs: 0,
+        driftSeed: 2,
+      },
+    );
+
+    updateGame(state, 16, content);
+
+    expect(state.entities.itemDrops.map((drop) => drop.id)).toEqual([1]);
+    expect(state.frameEvents).toContainEqual(expect.objectContaining({
+      type: 'ItemDropExpired',
+      itemDropId: 2,
+    }));
+  });
+
+  it('collects colliding drops and stacks matching item quantities in tail order', () => {
+    const content = createLootContent();
+    const state = createGameState({ width: 800, height: 600, content });
+    state.player.x = 100;
+    state.player.y = 100;
+    state.entities.itemDrops.push(
+      {
+        id: 1,
+        itemId: 'coin',
+        quantity: 1,
+        x: 100,
+        y: 100,
+        radius: 11,
+        pickupRadius: 20,
+        ageMs: 0,
+        driftSeed: 1,
+      },
+      {
+        id: 2,
+        itemId: 'coin',
+        quantity: 2,
+        x: 100,
+        y: 100,
+        radius: 11,
+        pickupRadius: 20,
+        ageMs: 0,
+        driftSeed: 2,
+      },
+      {
+        id: 3,
+        itemId: 'gem',
+        quantity: 1,
+        x: 100,
+        y: 100,
+        radius: 11,
+        pickupRadius: 20,
+        ageMs: 0,
+        driftSeed: 3,
+      },
+    );
+
+    updateGame(state, 16, content);
+
+    expect(state.entities.itemDrops).toHaveLength(0);
+    expect(state.player.collectedItems.map((item) => ({
+      itemId: item.itemId,
+      quantity: item.quantity,
+    }))).toEqual([
+      { itemId: 'coin', quantity: 3 },
+      { itemId: 'gem', quantity: 1 },
+    ]);
   });
 });
