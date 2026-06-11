@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { CELL_COUNT } from './config.js';
+import { CELL_COUNT, EMITTER_PROFILE, EMITTER_WORDS, GAS_FLOW_CONFIG } from './config.js';
 import { seedInitialField } from './initialField.js';
+import { MaterialEmitterState } from './MaterialEmitterState.js';
 import { MATERIAL } from './materials.js';
+import materialFieldShaderSource from './shaders/noitaField.wgsl?raw';
 import { mapEffectToGrid } from './ViewportMapper.js';
 
 describe('seedInitialField', () => {
@@ -33,5 +35,48 @@ describe('mapEffectToGrid', () => {
 
     expect(mapped.x).toBe(79);
     expect(mapped.y).toBe(0);
+  });
+});
+
+describe('MaterialEmitterState', () => {
+  it('packs emitter profile and life into the reserved emitter word', () => {
+    const emitterState = new MaterialEmitterState();
+    emitterState.addEmitter({
+      material: MATERIAL.FIRE,
+      x: 10,
+      y: 12,
+      radius: 5,
+      profile: EMITTER_PROFILE.PROJECTILE_FIRE,
+      life: 44,
+    });
+
+    const payload = emitterState.buildEmitterBuffer();
+    const profileData = payload.words[EMITTER_WORDS - 1];
+
+    expect(payload.count).toBe(1);
+    expect(profileData & 0xff).toBe(EMITTER_PROFILE.PROJECTILE_FIRE);
+    expect((profileData >> 8) & 0xff).toBe(44);
+  });
+});
+
+describe('material field shader profiles', () => {
+  it('keeps projectile fire marked and stationary instead of using fire buoyancy', () => {
+    expect(materialFieldShaderSource).toContain('const AUX_PROJECTILE_FIRE');
+    expect(materialFieldShaderSource).toContain('fn isProjectileFire');
+    expect(materialFieldShaderSource).toContain('return pack(FIRE, age - 1u, AUX_PROJECTILE_FIRE)');
+    expect(materialFieldShaderSource).toContain('profile == EMITTER_PROFILE_PROJECTILE_FIRE');
+  });
+
+  it('uses global gas wind and noise when selecting gas movement targets', () => {
+    expect(GAS_FLOW_CONFIG).toEqual(expect.objectContaining({
+      windX: 1,
+      windY: 0,
+      noiseStrength: 64,
+    }));
+    expect(materialFieldShaderSource).toContain('gasWindX: u32');
+    expect(materialFieldShaderSource).toContain('gasNoiseStrength: u32');
+    expect(materialFieldShaderSource).toContain('fn gasFlowX');
+    expect(materialFieldShaderSource).toContain('let flowX = gasFlowX(x, y, 30u)');
+    expect(materialFieldShaderSource).toContain('let flowX = gasFlowX(x, y, 33u)');
   });
 });

@@ -3,7 +3,7 @@ import { ENEMY_DEFINITIONS } from './content/enemies.js';
 import { SKILL_DEFINITIONS } from './content/skills.js';
 import { createEnemyFromWave, createSCurvePath, sampleSCurvePath } from './enemyPaths.js';
 import { createGameState } from './GameState.js';
-import { selectProgressRiskTarget, updateGame } from './systems.js';
+import { selectProgressRiskTarget, updateGame, updateViewport } from './systems.js';
 
 function createTestContent(overrides = {}) {
   return {
@@ -70,6 +70,76 @@ describe('wave spawning', () => {
 
     expect(state.entities.enemies).toHaveLength(3);
     expect(state.entities.enemies.every((enemy) => enemy.spawnSide === 'left')).toBe(true);
+  });
+});
+
+describe('viewport sizing', () => {
+  it('keeps the combat field size separate from the cropped visible area', () => {
+    const state = createGameState({ width: 800, height: 800, content: createTestContent() });
+
+    updateViewport(state, 800, 800, {
+      x: 205,
+      y: 0,
+      width: 390,
+      height: 800,
+    });
+
+    expect(state.viewport.width).toBe(800);
+    expect(state.viewport.height).toBe(800);
+    expect(state.viewport.visible).toEqual({
+      x: 205,
+      y: 0,
+      width: 390,
+      height: 800,
+    });
+  });
+
+  it('limits player movement to the visible crop of the square combat field', () => {
+    const content = createTestContent();
+    const state = createGameState({ width: 844, height: 844, content });
+    updateViewport(state, 844, 844, {
+      x: 227,
+      y: 0,
+      width: 390,
+      height: 844,
+    });
+    state.player.recenter = null;
+    state.player.x = 422;
+    state.player.y = 422;
+
+    state.input.left = true;
+    updateGame(state, 2000, content);
+    expect(state.player.x).toBe(227);
+
+    state.input.left = false;
+    state.input.right = true;
+    updateGame(state, 2000, content);
+    expect(state.player.x).toBe(617);
+  });
+
+  it('recenters the player when the visible layout changes during play', () => {
+    const content = createTestContent();
+    const state = createGameState({ width: 800, height: 800, content });
+    updateViewport(state, 800, 800, {
+      x: 0,
+      y: 0,
+      width: 800,
+      height: 800,
+    });
+    state.player.x = 80;
+    state.player.y = 720;
+
+    updateViewport(state, 844, 844, {
+      x: 227,
+      y: 0,
+      width: 390,
+      height: 844,
+    });
+    updateGame(state, 180, content);
+
+    expect(state.player.x).toBeCloseTo(422);
+    expect(state.player.y).toBeCloseTo(422);
+    expect(state.player.recenter).toBeNull();
   });
 });
 
@@ -172,6 +242,92 @@ describe('fireball skill', () => {
     updateGame(state, 16, content);
 
     expect(state.entities.projectiles.map((projectile) => projectile.skillId).sort()).toEqual(['firebolt', 'sparkbolt']);
+  });
+
+  it('binds fire energy to the flying fireball entity and emits profiled fire from its moving position', () => {
+    const content = createTestContent({
+      skills: { fireball: SKILL_DEFINITIONS.fireball },
+    });
+    const state = createGameState({ width: 800, height: 600, content });
+    state.player.x = 400;
+    state.player.y = 300;
+    state.entities.enemies.push({
+      id: 1,
+      hp: 30,
+      x: 700,
+      y: 300,
+      radius: 18,
+      progress: 400,
+      travelDistance: 1000,
+      contactDamage: 12,
+    });
+
+    updateGame(state, 16, content);
+    expect(state.entities.projectiles[0].energy.current).toBe(96);
+    expect(state.frameEffects.some((effect) => effect.material === 'smoke')).toBe(false);
+
+    updateGame(state, 48, content);
+
+    const trailEffects = state.frameEffects.filter((effect) => effect.type === 'MaterialEmitter');
+    expect(trailEffects).toContainEqual(expect.objectContaining({
+      material: 'fire',
+      profile: 'projectileFire',
+      life: 44,
+    }));
+    expect(trailEffects.some((effect) => effect.material === 'smoke')).toBe(false);
+    expect(trailEffects.some((effect) => effect.material === 'spark')).toBe(false);
+  });
+
+  it('only emits fast smoke when fireball energy explodes on impact', () => {
+    const content = createTestContent({
+      skills: { fireball: SKILL_DEFINITIONS.fireball },
+    });
+    const state = createGameState({ width: 800, height: 600, content });
+    const energyDefinition = SKILL_DEFINITIONS.fireball.projectile.energy;
+    state.skills.fireball.cooldownRemainingMs = 9999;
+    state.entities.enemies.push({
+      id: 1,
+      hp: 50,
+      x: 120,
+      y: 120,
+      radius: 18,
+      progress: 0,
+      travelDistance: 1000,
+      contactDamage: 12,
+    });
+    state.entities.projectiles.push({
+      id: 1,
+      skillId: 'fireball',
+      x: 120,
+      y: 120,
+      vx: 0,
+      vy: 0,
+      radius: 7,
+      damage: 20,
+      lifetimeMs: 1000,
+      ageMs: 0,
+      energy: {
+        current: energyDefinition.initial,
+        max: energyDefinition.max,
+        trailAccumulatorMs: 0,
+        trailIntervalMs: energyDefinition.trailIntervalMs,
+        trailEffects: energyDefinition.trailEffects,
+        explosion: energyDefinition.explosion,
+      },
+    });
+
+    updateGame(state, 16, content);
+
+    expect(state.frameEvents).toContainEqual(expect.objectContaining({
+      type: 'EnergyExplosion',
+      skillId: 'fireball',
+    }));
+    expect(state.frameEffects).toContainEqual(expect.objectContaining({
+      material: 'smoke',
+      life: 10,
+      frames: 2,
+      explosion: true,
+    }));
   });
 });
 
@@ -303,6 +459,80 @@ describe('combat resolution', () => {
     expect(state.entities.enemies.find((enemy) => enemy.id === 3).hp).toBe(30);
   });
 
+  it('scales projectile explosion radius and damage from compressed fire energy on impact', () => {
+    const content = createTestContent({
+      skills: {
+        charge: {
+          id: 'charge',
+          targeting: { type: 'progress-risk' },
+          projectile: {
+            speed: 0,
+            damage: 0,
+            radius: 8,
+            lifetimeMs: 1000,
+          },
+          impact: {
+            damage: 0,
+          },
+        },
+      },
+    });
+    const state = createGameState({ width: 800, height: 600, content });
+    state.skills.charge.cooldownRemainingMs = 9999;
+    state.entities.enemies.push({
+      id: 1,
+      hp: 30,
+      x: 120,
+      y: 120,
+      radius: 18,
+      progress: 0,
+      travelDistance: 1000,
+      contactDamage: 12,
+    });
+    state.entities.projectiles.push({
+      id: 1,
+      skillId: 'charge',
+      x: 120,
+      y: 120,
+      vx: 0,
+      vy: 0,
+      radius: 8,
+      damage: 0,
+      lifetimeMs: 1000,
+      ageMs: 0,
+      energy: {
+        current: 50,
+        max: 100,
+        trailAccumulatorMs: 0,
+        trailIntervalMs: 1000,
+        trailEffects: [],
+        explosion: {
+          minRadius: 10,
+          maxRadius: 30,
+          minDamage: 5,
+          maxDamage: 15,
+          materialEffects: [
+            { material: 'fire', radiusScale: 1, strength: 255, frames: 3, explosion: true },
+          ],
+        },
+      },
+    });
+
+    updateGame(state, 16, content);
+
+    expect(state.entities.enemies[0].hp).toBe(20);
+    expect(state.frameEvents).toContainEqual(expect.objectContaining({
+      type: 'EnergyExplosion',
+      radius: 20,
+      damage: 10,
+    }));
+    expect(state.frameEffects).toContainEqual(expect.objectContaining({
+      material: 'fire',
+      radius: 20,
+      explosion: true,
+    }));
+  });
+
   it('ticks CPU hazards spawned by skill impact without reading back the GPU field', () => {
     const content = createTestContent({
       skills: {
@@ -361,6 +591,72 @@ describe('combat resolution', () => {
 
     expect(state.entities.enemies[0].hp).toBeCloseTo(27.5);
     expect(state.frameEvents.some((event) => event.type === 'HazardTick')).toBe(true);
+  });
+
+  it('allows visual-only hazards to keep emitting material simulation ticks', () => {
+    const content = createTestContent({
+      skills: {
+        steam: {
+          id: 'steam',
+          targeting: { type: 'progress-risk' },
+          projectile: {
+            speed: 0,
+            damage: 0,
+            radius: 8,
+            lifetimeMs: 1000,
+          },
+          impact: {
+            hazards: [
+              {
+                type: 'steam',
+                radius: 48,
+                damagePerSecond: 0,
+                lifetimeMs: 1000,
+                tickMs: 250,
+                materialEffects: {
+                  tick: [
+                    { material: 'steam', radius: 12, strength: 180, frames: 2 },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      },
+    });
+    const state = createGameState({ width: 800, height: 600, content });
+    state.skills.steam.cooldownRemainingMs = 9999;
+    state.entities.enemies.push({
+      id: 1,
+      hp: 30,
+      x: 120,
+      y: 120,
+      radius: 18,
+      progress: 0,
+      travelDistance: 1000,
+      contactDamage: 12,
+    });
+    state.entities.projectiles.push({
+      id: 1,
+      skillId: 'steam',
+      x: 120,
+      y: 120,
+      vx: 0,
+      vy: 0,
+      radius: 8,
+      damage: 0,
+      lifetimeMs: 1000,
+      ageMs: 0,
+    });
+
+    updateGame(state, 16, content);
+    updateGame(state, 250, content);
+
+    expect(state.frameEffects).toContainEqual(expect.objectContaining({
+      material: 'steam',
+      x: 120,
+      y: 120,
+    }));
   });
 
   it('applies contact damage to the player and removes the touching enemy', () => {

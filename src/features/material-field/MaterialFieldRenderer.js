@@ -6,6 +6,7 @@ import {
   CELL_COUNT,
   DPR_LIMIT,
   EMITTER_BYTES,
+  GAS_FLOW_CONFIG,
   GRID_HEIGHT,
   GRID_WIDTH,
   HDR_SCENE_FORMAT,
@@ -23,9 +24,10 @@ export async function createMaterialFieldRenderer(options) {
 }
 
 class MaterialFieldRenderer {
-  constructor({ canvas, onDeviceLost }) {
+  constructor({ canvas, onDeviceLost, gasFlow = GAS_FLOW_CONFIG }) {
     this.canvas = canvas;
     this.onDeviceLost = onDeviceLost;
+    this.gasFlow = normalizeGasFlow(gasFlow);
     this.state = null;
     this.emitterState = null;
     this.animationFrameId = 0;
@@ -217,6 +219,13 @@ class MaterialFieldRenderer {
     this.animationFrameId = requestAnimationFrame(this.renderFrame);
   }
 
+  setGasFlow(gasFlow) {
+    this.gasFlow = normalizeGasFlow({
+      ...this.gasFlow,
+      ...gasFlow,
+    });
+  }
+
   renderFrame() {
     if (this.destroyed || !this.state || !this.emitterState) return;
 
@@ -267,8 +276,11 @@ class MaterialFieldRenderer {
 
   resizeCanvas() {
     const dpr = Math.min(window.devicePixelRatio || 1, DPR_LIMIT);
-    const width = Math.max(1, Math.floor(window.innerWidth * dpr));
-    const height = Math.max(1, Math.floor(window.innerHeight * dpr));
+    const rect = this.canvas.getBoundingClientRect();
+    const cssWidth = Math.max(1, Math.floor(rect.width || window.innerWidth));
+    const cssHeight = Math.max(1, Math.floor(rect.height || window.innerHeight));
+    const width = Math.max(1, Math.floor(cssWidth * dpr));
+    const height = Math.max(1, Math.floor(cssHeight * dpr));
 
     if (this.canvas.width !== width || this.canvas.height !== height) {
       this.canvas.width = width;
@@ -304,6 +316,11 @@ class MaterialFieldRenderer {
     params[5] = this.canvas.height;
     params[6] = MAX_EMITTERS;
     params[7] = performance.now() >>> 0;
+    params[8] = this.gasFlow.windX >>> 0;
+    params[9] = this.gasFlow.windY >>> 0;
+    params[10] = this.gasFlow.noiseStrength;
+    params[11] = this.gasFlow.noiseScale;
+    params[12] = this.gasFlow.noiseSpeed;
 
     state.device.queue.writeBuffer(state.paramsBuffer, 0, params);
     state.device.queue.writeBuffer(state.emitterBuffer, 0, emitterPayload.words);
@@ -383,4 +400,19 @@ function createSceneTexture(device, format, width, height) {
     format,
     usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
   });
+}
+
+function normalizeGasFlow(gasFlow = GAS_FLOW_CONFIG) {
+  return {
+    windX: clampInteger(gasFlow.windX ?? GAS_FLOW_CONFIG.windX, -1, 1),
+    windY: clampInteger(gasFlow.windY ?? GAS_FLOW_CONFIG.windY, -1, 1),
+    noiseStrength: clampInteger(gasFlow.noiseStrength ?? GAS_FLOW_CONFIG.noiseStrength, 0, 255),
+    noiseScale: clampInteger(gasFlow.noiseScale ?? GAS_FLOW_CONFIG.noiseScale, 1, 255),
+    noiseSpeed: clampInteger(gasFlow.noiseSpeed ?? GAS_FLOW_CONFIG.noiseSpeed, 1, 255),
+  };
+}
+
+function clampInteger(value, min, max) {
+  const number = Number.isFinite(value) ? value : min;
+  return Math.min(max, Math.max(min, Math.trunc(number)));
 }

@@ -6,6 +6,8 @@ const PROJECTILE_DESPAWN_MARGIN = 96;
 const DEFAULT_SKILL_COOLDOWN_MS = 1000;
 const DEFAULT_HAZARD_TICK_MS = 250;
 const DEFAULT_HAZARD_LIFETIME_MS = 1000;
+const DEFAULT_PROJECTILE_TRAIL_INTERVAL_MS = 50;
+const PLAYER_RECENTER_DURATION_MS = 180;
 
 export function updateGame(state, dtMs, content = GAME_CONTENT) {
   const dt = Math.max(dtMs, 0);
@@ -54,30 +56,141 @@ export function syncRuntimeCollections(state, content = GAME_CONTENT) {
   }
 }
 
-export function updateViewport(state, width, height) {
-  state.viewport.width = Math.max(1, width);
-  state.viewport.height = Math.max(1, height);
-  state.player.x = clamp(state.player.x, state.player.radius, state.viewport.width - state.player.radius);
-  state.player.y = clamp(state.player.y, state.player.radius, state.viewport.height - state.player.radius);
+export function updateViewport(state, width, height, visible) {
+  const nextWidth = Math.max(1, width);
+  const nextHeight = Math.max(1, height);
+  const nextVisible = normalizeVisibleArea(visible, nextWidth, nextHeight);
+  const layoutChanged = hasViewportLayoutChanged(state.viewport, nextWidth, nextHeight, nextVisible);
+
+  state.viewport.width = nextWidth;
+  state.viewport.height = nextHeight;
+  state.viewport.visible = nextVisible;
+
+  if (layoutChanged) {
+    queuePlayerRecenter(state);
+  } else {
+    clampPlayerToVisibleArea(state);
+  }
+}
+
+function normalizeVisibleArea(visible, width, height) {
+  const visibleWidth = clamp(Math.floor(visible?.width ?? width), 1, width);
+  const visibleHeight = clamp(Math.floor(visible?.height ?? height), 1, height);
+  const x = clamp(Math.floor(visible?.x ?? 0), 0, Math.max(0, width - visibleWidth));
+  const y = clamp(Math.floor(visible?.y ?? 0), 0, Math.max(0, height - visibleHeight));
+
+  return {
+    x,
+    y,
+    width: visibleWidth,
+    height: visibleHeight,
+  };
+}
+
+function hasViewportLayoutChanged(viewport, width, height, visible) {
+  return (
+    viewport.width !== width ||
+    viewport.height !== height ||
+    viewport.visible?.x !== visible.x ||
+    viewport.visible?.y !== visible.y ||
+    viewport.visible?.width !== visible.width ||
+    viewport.visible?.height !== visible.height
+  );
+}
+
+function getVisibleCenter(viewport) {
+  const visible = viewport.visible || {
+    x: 0,
+    y: 0,
+    width: viewport.width,
+    height: viewport.height,
+  };
+
+  return {
+    x: visible.x + visible.width * 0.5,
+    y: visible.y + visible.height * 0.5,
+  };
+}
+
+function queuePlayerRecenter(state) {
+  const target = getVisibleCenter(state.viewport);
+  state.player.recenter = {
+    startX: state.player.x,
+    startY: state.player.y,
+    targetX: target.x,
+    targetY: target.y,
+    elapsedMs: 0,
+    durationMs: PLAYER_RECENTER_DURATION_MS,
+  };
+}
+
+function updatePlayerRecenter(state, dtMs) {
+  const recenter = state.player.recenter;
+  if (!recenter) return false;
+
+  recenter.elapsedMs += dtMs;
+  const ratio = clamp(recenter.elapsedMs / Math.max(1, recenter.durationMs), 0, 1);
+  const eased = easeOutCubic(ratio);
+  state.player.x = lerp(recenter.startX, recenter.targetX, eased);
+  state.player.y = lerp(recenter.startY, recenter.targetY, eased);
+  clampPlayerToVisibleArea(state);
+
+  if (ratio >= 1) {
+    state.player.recenter = null;
+  }
+
+  return true;
+}
+
+function clampPlayerToVisibleArea(state) {
+  const bounds = getPlayerMovementBounds(state);
+  state.player.x = clamp(state.player.x, bounds.minX, bounds.maxX);
+  state.player.y = clamp(state.player.y, bounds.minY, bounds.maxY);
+}
+
+function getPlayerMovementBounds(state) {
+  const visible = state.viewport.visible || {
+    x: 0,
+    y: 0,
+    width: state.viewport.width,
+    height: state.viewport.height,
+  };
+
+  return {
+    minX: visible.x,
+    maxX: visible.x + visible.width,
+    minY: visible.y,
+    maxY: visible.y + visible.height,
+  };
+}
+
+function easeOutCubic(ratio) {
+  return 1 - ((1 - ratio) ** 3);
 }
 
 export function updatePlayer(state, dtMs) {
+  if (updatePlayerRecenter(state, dtMs)) return;
+
   const inputX = Number(state.input.right) - Number(state.input.left);
   const inputY = Number(state.input.down) - Number(state.input.up);
   const moving = inputX !== 0 || inputY !== 0;
-  if (!moving) return;
+  if (!moving) {
+    clampPlayerToVisibleArea(state);
+    return;
+  }
 
   const direction = normalize(inputX, inputY);
   const distance = state.player.speed * (dtMs / 1000);
+  const bounds = getPlayerMovementBounds(state);
   state.player.x = clamp(
     state.player.x + direction.x * distance,
-    state.player.radius,
-    state.viewport.width - state.player.radius,
+    bounds.minX,
+    bounds.maxX,
   );
   state.player.y = clamp(
     state.player.y + direction.y * distance,
-    state.player.radius,
-    state.viewport.height - state.player.radius,
+    bounds.minY,
+    bounds.maxY,
   );
 }
 
@@ -134,7 +247,7 @@ export function updateAutoSkills(state, dtMs, content = GAME_CONTENT) {
     const target = selectTargetForSkill(state, skill);
     if (!target) continue;
 
-    const projectile = spawnProjectileFromSkill(state, skill, target);
+    const projectile = spawnProjectileFromSkill(state, skill, target, skillId);
     if (!projectile) continue;
 
     skillState.cooldownRemainingMs += skill.cooldownMs ?? DEFAULT_SKILL_COOLDOWN_MS;
@@ -171,14 +284,15 @@ export function scoreProgressRisk(enemy, player, viewport) {
   return progressRisk * 0.64 + proximityRisk * 0.36;
 }
 
-export function spawnProjectileFromSkill(state, skill, target) {
+export function spawnProjectileFromSkill(state, skill, target, skillId = skill.id) {
   if (!skill.projectile) return null;
 
   const direction = normalize(target.x - state.player.x, target.y - state.player.y);
   const projectileDefinition = skill.projectile;
   const projectile = {
     id: state.session.nextProjectileId,
-    skillId: skill.id,
+    skillId,
+    definitionId: skill.id,
     x: state.player.x,
     y: state.player.y,
     vx: direction.x * projectileDefinition.speed,
@@ -187,6 +301,7 @@ export function spawnProjectileFromSkill(state, skill, target) {
     damage: projectileDefinition.damage,
     lifetimeMs: projectileDefinition.lifetimeMs,
     ageMs: 0,
+    energy: createProjectileEnergyState(projectileDefinition.energy),
     visual: projectileDefinition.visual,
   };
   state.session.nextProjectileId += 1;
@@ -208,6 +323,7 @@ export function updateProjectiles(state, dtMs) {
     projectile.x += projectile.vx * dt;
     projectile.y += projectile.vy * dt;
     projectile.ageMs += dtMs;
+    updateProjectileEnergy(state, projectile, dtMs);
   }
 }
 
@@ -229,7 +345,7 @@ export function resolveProjectileHits(state, content = GAME_CONTENT) {
       continue;
     }
 
-    const skill = content.skills?.[projectile.skillId];
+    const skill = getSkillForProjectile(content, projectile);
     const impact = skill?.impact || {};
     const directDamage = impact.damage ?? projectile.damage ?? 0;
     if (directDamage > 0) {
@@ -250,6 +366,7 @@ export function resolveProjectileHits(state, content = GAME_CONTENT) {
     }
 
     pushSkillEffects(state, skill, 'hit', hitEnemy);
+    resolveEnergyExplosion(state, projectile, skill, hitEnemy);
     applyAreaDamage(state, hitEnemy, impact.areaDamage, {
       skillId: projectile.skillId,
       projectileId: projectile.id,
@@ -370,6 +487,77 @@ function applyAreaDamage(state, source, areaDamage, eventBase) {
   }
 }
 
+function createProjectileEnergyState(energyDefinition) {
+  if (!energyDefinition) return null;
+
+  const initial = Math.max(0, energyDefinition.initial ?? energyDefinition.max ?? 0);
+  const max = Math.max(initial, energyDefinition.max ?? initial, 1);
+  return {
+    current: initial,
+    max,
+    trailAccumulatorMs: 0,
+    trailIntervalMs: energyDefinition.trailIntervalMs ?? DEFAULT_PROJECTILE_TRAIL_INTERVAL_MS,
+    trailLeakPerSecond: energyDefinition.trailLeakPerSecond ?? 0,
+    trailEffects: energyDefinition.trailEffects || [],
+    explosion: energyDefinition.explosion || null,
+  };
+}
+
+function updateProjectileEnergy(state, projectile, dtMs) {
+  const energy = projectile.energy;
+  if (!energy) return;
+
+  energy.max = Math.max(1, energy.max ?? energy.current ?? 0);
+  energy.current = Math.max(0, (energy.current ?? energy.max) - (energy.trailLeakPerSecond || 0) * (dtMs / 1000));
+  energy.trailAccumulatorMs = (energy.trailAccumulatorMs || 0) + dtMs;
+
+  const intervalMs = Math.max(1, energy.trailIntervalMs || DEFAULT_PROJECTILE_TRAIL_INTERVAL_MS);
+  let emitted = 0;
+  while (energy.trailAccumulatorMs >= intervalMs && emitted < 3) {
+    energy.trailAccumulatorMs -= intervalMs;
+    emitted += 1;
+    pushMaterialEffects(state, energy.trailEffects || [], projectile);
+  }
+}
+
+function resolveEnergyExplosion(state, projectile, skill, source) {
+  const explosion = projectile.energy?.explosion;
+  if (!explosion) return;
+
+  const energy = projectile.energy;
+  const ratio = clamp(energy.current / Math.max(1, energy.max), 0, 1);
+  const radius = lerp(explosion.minRadius ?? 16, explosion.maxRadius ?? 48, ratio);
+  const damage = lerp(explosion.minDamage ?? 0, explosion.maxDamage ?? 0, ratio);
+
+  state.frameEvents.push({
+    type: 'EnergyExplosion',
+    skillId: projectile.skillId,
+    projectileId: projectile.id,
+    enemyId: source.id,
+    energy: energy.current,
+    radius,
+    damage,
+  });
+
+  applyAreaDamage(state, source, { radius, damage }, {
+    skillId: projectile.skillId,
+    projectileId: projectile.id,
+  });
+  pushEnergyExplosionEffects(state, explosion.materialEffects || [], source, radius);
+}
+
+function pushEnergyExplosionEffects(state, effects = [], source, explosionRadius) {
+  for (const effect of effects) {
+    const radius = effect.radius ?? explosionRadius * (effect.radiusScale ?? 1);
+    pushMaterialEffect(state, {
+      ...effect,
+      x: source.x,
+      y: source.y,
+      radius,
+    });
+  }
+}
+
 function spawnHazardsFromImpact(state, skill, source) {
   if (!skill) return;
 
@@ -411,7 +599,10 @@ function spawnHazardsFromImpact(state, skill, source) {
 
 function applyHazardTick(state, hazard, tickMs) {
   const damage = (hazard.damagePerSecond || 0) * (tickMs / 1000);
-  if (damage <= 0) return;
+  if (damage <= 0) {
+    pushMaterialEffects(state, hazard.materialEffects.tick, hazard);
+    return;
+  }
 
   for (const enemy of state.entities.enemies) {
     if (enemy.hp <= 0) continue;
@@ -470,6 +661,16 @@ function getSkillMaterialEffects(skill, phase) {
   return skill?.materialEffects?.[phase] || skill?.effects?.[phase] || [];
 }
 
+function getSkillForProjectile(content, projectile) {
+  const skills = content.skills || {};
+  if (skills[projectile.skillId]) return skills[projectile.skillId];
+  return Object.values(skills).find((skill) => skill.id === projectile.skillId) || null;
+}
+
+function lerp(min, max, ratio) {
+  return min + (max - min) * ratio;
+}
+
 function pushMaterialEffects(state, effects = [], source) {
   for (const effect of effects) {
     pushMaterialEffect(state, {
@@ -490,5 +691,8 @@ function pushMaterialEffect(state, effect) {
     strength: effect.strength,
     frames: effect.frames,
     flags: effect.flags || 0,
+    explosion: Boolean(effect.explosion),
+    profile: effect.profile,
+    life: effect.life || 0,
   });
 }

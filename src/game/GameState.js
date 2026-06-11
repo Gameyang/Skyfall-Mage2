@@ -5,6 +5,12 @@ export function createGameState({ width = 1280, height = 720, content = GAME_CON
     viewport: {
       width,
       height,
+      visible: {
+        x: 0,
+        y: 0,
+        width,
+        height,
+      },
     },
     session: {
       elapsedMs: 0,
@@ -28,6 +34,7 @@ export function createGameState({ width = 1280, height = 720, content = GAME_CON
       speed: 260,
       hp: 100,
       maxHp: 100,
+      recenter: null,
     },
     entities: {
       enemies: [],

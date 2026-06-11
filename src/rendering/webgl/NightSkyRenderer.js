@@ -46,8 +46,11 @@ class NightSkyRenderer {
 
   resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const width = Math.max(1, Math.floor(window.innerWidth * dpr));
-    const height = Math.max(1, Math.floor(window.innerHeight * dpr));
+    const rect = this.canvas.getBoundingClientRect();
+    const cssWidth = Math.max(1, Math.floor(rect.width || window.innerWidth));
+    const cssHeight = Math.max(1, Math.floor(rect.height || window.innerHeight));
+    const width = Math.max(1, Math.floor(cssWidth * dpr));
+    const height = Math.max(1, Math.floor(cssHeight * dpr));
 
     if (this.canvas.width !== width || this.canvas.height !== height) {
       this.canvas.width = width;

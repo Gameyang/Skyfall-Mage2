@@ -29,6 +29,7 @@ class GameCanvasRenderer {
       width: cssWidth,
       height: cssHeight,
       dpr,
+      visible: getVisibleCanvasArea(this.canvas, rect, cssWidth, cssHeight),
     };
   }
 
@@ -55,25 +56,29 @@ class GameCanvasRenderer {
 function drawProjectiles(ctx, state) {
   for (const projectile of state.entities.projectiles) {
     const visual = projectile.visual || {};
+    const energyRatio = projectile.energy
+      ? Math.max(0, Math.min(1, projectile.energy.current / Math.max(1, projectile.energy.max)))
+      : 1;
+    const corePulse = 1 + energyRatio * 0.28;
     ctx.save();
     ctx.translate(projectile.x, projectile.y);
 
-    const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, projectile.radius * 5.2);
+    const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, projectile.radius * (4.8 + energyRatio * 2.2));
     glow.addColorStop(0, visual.glowColor || 'rgba(255, 110, 28, 0.75)');
     glow.addColorStop(1, 'rgba(255, 110, 28, 0)');
     ctx.fillStyle = glow;
     ctx.beginPath();
-    ctx.arc(0, 0, projectile.radius * 5.2, 0, Math.PI * 2);
+    ctx.arc(0, 0, projectile.radius * (4.8 + energyRatio * 2.2), 0, Math.PI * 2);
     ctx.fill();
 
     ctx.fillStyle = visual.color || '#ff8a2a';
     ctx.beginPath();
-    ctx.arc(0, 0, projectile.radius * 1.35, 0, Math.PI * 2);
+    ctx.arc(0, 0, projectile.radius * 1.35 * corePulse, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.fillStyle = visual.coreColor || '#fff0a6';
     ctx.beginPath();
-    ctx.arc(-projectile.vx * 0.002, -projectile.vy * 0.002, projectile.radius * 0.58, 0, Math.PI * 2);
+    ctx.arc(-projectile.vx * 0.002, -projectile.vy * 0.002, projectile.radius * 0.58 * corePulse, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
@@ -159,16 +164,24 @@ function drawPlayer(ctx, state) {
 }
 
 function drawHud(ctx, state) {
+  const visible = state.viewport.visible || {
+    x: 0,
+    y: 0,
+    width: state.viewport.width,
+    height: state.viewport.height,
+  };
   const pad = 16;
-  const barWidth = Math.min(260, Math.max(160, state.viewport.width * 0.24));
-  drawSmallBar(ctx, pad, pad, barWidth, 12, state.player.hp / state.player.maxHp, '#38d996', 'rgba(3, 9, 12, 0.72)');
+  const x = visible.x + pad;
+  const y = visible.y + pad;
+  const barWidth = Math.min(260, Math.max(160, visible.width * 0.34));
+  drawSmallBar(ctx, x, y, barWidth, 12, state.player.hp / state.player.maxHp, '#38d996', 'rgba(3, 9, 12, 0.72)');
 
   ctx.font = '600 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
   ctx.fillStyle = 'rgba(236, 246, 255, 0.92)';
   ctx.textBaseline = 'top';
-  ctx.fillText(`HP ${Math.ceil(state.player.hp)}/${state.player.maxHp}`, pad, pad + 18);
-  ctx.fillText(`Kills ${state.session.score}`, pad, pad + 38);
-  ctx.fillText(`Threats ${state.entities.enemies.length}`, pad, pad + 58);
+  ctx.fillText(`HP ${Math.ceil(state.player.hp)}/${state.player.maxHp}`, x, y + 18);
+  ctx.fillText(`Kills ${state.session.score}`, x, y + 38);
+  ctx.fillText(`Threats ${state.entities.enemies.length}`, x, y + 58);
 }
 
 function drawSmallBar(ctx, x, y, width, height, ratio, color, background = 'rgba(0, 0, 0, 0.46)') {
@@ -194,4 +207,28 @@ function drawGameOver(ctx, width, height) {
   ctx.fillStyle = 'rgba(244, 251, 255, 0.78)';
   ctx.fillText('Refresh to restart', width * 0.5, height * 0.5 + 26);
   ctx.textAlign = 'start';
+}
+
+function getVisibleCanvasArea(canvas, rect, width, height) {
+  const clipRect = canvas.parentElement?.getBoundingClientRect();
+  const clipLeft = clipRect?.left ?? 0;
+  const clipTop = clipRect?.top ?? 0;
+  const clipRight = clipRect?.right ?? window.innerWidth;
+  const clipBottom = clipRect?.bottom ?? window.innerHeight;
+
+  const left = clamp(clipLeft - rect.left, 0, width);
+  const top = clamp(clipTop - rect.top, 0, height);
+  const right = clamp(clipRight - rect.left, left, width);
+  const bottom = clamp(clipBottom - rect.top, top, height);
+
+  return {
+    x: Math.floor(left),
+    y: Math.floor(top),
+    width: Math.max(1, Math.ceil(right - left)),
+    height: Math.max(1, Math.ceil(bottom - top)),
+  };
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }

@@ -1,5 +1,5 @@
 import { createMaterialInputController } from './input/createMaterialInputController.js';
-import { EMITTER_FLAG_EXPLOSION } from './config.js';
+import { EMITTER_FLAG_EXPLOSION, EMITTER_PROFILE } from './config.js';
 import { MaterialEmitterState } from './MaterialEmitterState.js';
 import { createMaterialFieldRenderer } from './MaterialFieldRenderer.js';
 import { mapEffectToGrid } from './ViewportMapper.js';
@@ -16,6 +16,12 @@ const EFFECT_MATERIALS = Object.freeze({
   wetSand: MATERIAL.WET_SAND,
 });
 
+const EFFECT_PROFILES = Object.freeze({
+  default: EMITTER_PROFILE.DEFAULT,
+  pure: EMITTER_PROFILE.PURE,
+  projectileFire: EMITTER_PROFILE.PROJECTILE_FIRE,
+});
+
 function showFatal(fatal, title, detail) {
   if (!fatal) return;
   fatal.classList.add('is-visible');
@@ -23,7 +29,7 @@ function showFatal(fatal, title, detail) {
   fatal.querySelector('span').textContent = detail;
 }
 
-export function createMaterialFieldApp({ canvas, fatal = null, materialHub = null, enableDemoInput = false }) {
+export function createMaterialFieldApp({ canvas, fatal = null, materialHub = null, enableDemoInput = false, gasFlow }) {
   const emitterState = new MaterialEmitterState();
   const hub = materialHub ? createMaterialHub({ container: materialHub, emitterState }) : null;
   const input = enableDemoInput ? createMaterialInputController({ canvas, emitterState }) : null;
@@ -37,6 +43,7 @@ export function createMaterialFieldApp({ canvas, fatal = null, materialHub = nul
 
       startPromise = createMaterialFieldRenderer({
         canvas,
+        gasFlow,
         onDeviceLost(info) {
           disabled = true;
           canvas.hidden = true;
@@ -64,6 +71,9 @@ export function createMaterialFieldApp({ canvas, fatal = null, materialHub = nul
         addEffectEmitter(emitterState, effect, viewport);
       }
     },
+    setGasFlow(nextGasFlow) {
+      renderer?.setGasFlow(nextGasFlow);
+    },
     destroy() {
       renderer?.destroy();
       input?.destroy();
@@ -90,5 +100,12 @@ function addEffectEmitter(emitterState, effect, viewport) {
     strength: effect.strength,
     frames: effect.frames,
     flags: effect.flags || (effect.explosion ? EMITTER_FLAG_EXPLOSION : 0),
+    profile: resolveEffectProfile(effect.profile),
+    life: effect.life || 0,
   });
+}
+
+function resolveEffectProfile(profile) {
+  if (typeof profile === 'number') return profile;
+  return EFFECT_PROFILES[profile] ?? EMITTER_PROFILE.DEFAULT;
 }

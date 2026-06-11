@@ -8,6 +8,10 @@ const SPARK: u32 = 6u;
 const STEAM: u32 = 7u;
 const WET_SAND: u32 = 8u;
 const EMITTER_FLAG_EXPLOSION: u32 = 1u;
+const EMITTER_PROFILE_DEFAULT: u32 = 0u;
+const EMITTER_PROFILE_PURE: u32 = 1u;
+const EMITTER_PROFILE_PROJECTILE_FIRE: u32 = 2u;
+const AUX_PROJECTILE_FIRE: u32 = 251u;
 
 struct SimParams {
   width: u32,
@@ -18,11 +22,11 @@ struct SimParams {
   canvasHeight: u32,
   maxEmitters: u32,
   timeMs: u32,
-  pad0: u32,
-  pad1: u32,
-  pad2: u32,
-  pad3: u32,
-  pad4: u32,
+  gasWindX: u32,
+  gasWindY: u32,
+  gasNoiseStrength: u32,
+  gasNoiseScale: u32,
+  gasNoiseSpeed: u32,
   pad5: u32,
   pad6: u32,
   pad7: u32,
@@ -36,7 +40,7 @@ struct Emitter {
   strength: u32,
   seed: u32,
   flags: u32,
-  pad0: u32,
+  profileData: u32,
 };
 
 @group(0) @binding(0) var<storage, read> src: array<u32>;
@@ -58,6 +62,22 @@ fn life(cell: u32) -> u32 {
 
 fn aux(cell: u32) -> u32 {
   return (cell >> 16u) & 255u;
+}
+
+fn emitterProfile(emitter: Emitter) -> u32 {
+  return emitter.profileData & 255u;
+}
+
+fn emitterLife(emitter: Emitter, fallback: u32) -> u32 {
+  let configured = (emitter.profileData >> 8u) & 255u;
+  if (configured > 0u) {
+    return configured;
+  }
+  return fallback;
+}
+
+fn isProjectileFire(cell: u32) -> bool {
+  return material(cell) == FIRE && aux(cell) == AUX_PROJECTILE_FIRE;
 }
 
 fn indexOf(x: u32, y: u32) -> u32 {
@@ -90,6 +110,54 @@ fn randByte(x: i32, y: i32, salt: u32) -> u32 {
 
 fn randByteWithSeed(x: i32, y: i32, salt: u32, seed: u32) -> u32 {
   return hash(u32(max(x, 0)), u32(max(y, 0)), params.frame + salt + seed) & 255u;
+}
+
+fn signedParam(value: u32) -> i32 {
+  return bitcast<i32>(value);
+}
+
+fn gasWindX() -> i32 {
+  return clamp(signedParam(params.gasWindX), -1, 1);
+}
+
+fn gasWindY() -> i32 {
+  return clamp(signedParam(params.gasWindY), -1, 1);
+}
+
+fn gasNoiseValue(x: i32, y: i32, salt: u32) -> u32 {
+  let scale = max(params.gasNoiseScale, 1u);
+  let speed = max(params.gasNoiseSpeed, 1u);
+  let sampleX = u32(max(x, 0)) / scale;
+  let sampleY = u32(max(y, 0)) / scale;
+  return hash(sampleX, sampleY, salt + params.frame / speed);
+}
+
+fn gasNoiseX(x: i32, y: i32, salt: u32) -> i32 {
+  let strength = min(params.gasNoiseStrength, 255u);
+  if (strength == 0u || (gasNoiseValue(x, y, salt) & 255u) >= strength) {
+    return 0;
+  }
+
+  let direction = (gasNoiseValue(x, y, salt + 1u) >> 8u) & 3u;
+  if (direction == 0u) {
+    return -1;
+  }
+  if (direction == 1u) {
+    return 1;
+  }
+  return 0;
+}
+
+fn gasFlowX(x: i32, y: i32, salt: u32) -> i32 {
+  return clamp(gasWindX() + gasNoiseX(x, y, salt), -1, 1);
+}
+
+fn gasVerticalPause(x: i32, y: i32, salt: u32) -> bool {
+  let windY = gasWindY();
+  if (windY <= 0) {
+    return false;
+  }
+  return randByte(x, y, salt) < u32(windY) * 64u;
 }
 
 fn materialDensity(mat: u32) -> u32 {
@@ -366,6 +434,18 @@ fn waterTarget(x: i32, y: i32) -> vec2<i32> {
 }
 
 fn smokeTarget(x: i32, y: i32) -> vec2<i32> {
+  if (gasVerticalPause(x, y, 29u)) {
+    return vec2<i32>(x, y);
+  }
+
+  let flowX = gasFlowX(x, y, 30u);
+  if (flowX != 0) {
+    let flowMat = material(getCell(x + flowX, y - 1));
+    if (canSmokeEnter(flowMat)) {
+      return vec2<i32>(x + flowX, y - 1);
+    }
+  }
+
   let up = material(getCell(x, y - 1));
   if (canSmokeEnter(up)) {
     return vec2<i32>(x, y - 1);
@@ -373,7 +453,13 @@ fn smokeTarget(x: i32, y: i32) -> vec2<i32> {
 
   var first = -1;
   var second = 1;
-  if (randBit(x, y, 31u)) {
+  if (flowX < 0) {
+    first = -1;
+    second = 1;
+  } else if (flowX > 0) {
+    first = 1;
+    second = -1;
+  } else if (randBit(x, y, 31u)) {
     first = 1;
     second = -1;
   }
@@ -392,8 +478,24 @@ fn smokeTarget(x: i32, y: i32) -> vec2<i32> {
 }
 
 fn fireTarget(x: i32, y: i32) -> vec2<i32> {
-  if (randByte(x, y, 32u) < 64u) {
+  var stayThreshold = 64u;
+  let verticalWind = gasWindY();
+  if (verticalWind < 0) {
+    stayThreshold = 28u;
+  } else if (verticalWind > 0) {
+    stayThreshold = 112u;
+  }
+
+  if (randByte(x, y, 32u) < stayThreshold) {
     return vec2<i32>(x, y);
+  }
+
+  let flowX = gasFlowX(x, y, 33u);
+  if (flowX != 0) {
+    let flowMat = material(getCell(x + flowX, y - 1));
+    if (canFireEnter(flowMat)) {
+      return vec2<i32>(x + flowX, y - 1);
+    }
   }
 
   let up = material(getCell(x, y - 1));
@@ -403,7 +505,13 @@ fn fireTarget(x: i32, y: i32) -> vec2<i32> {
 
   var first = -1;
   var second = 1;
-  if (randBit(x, y, 33u)) {
+  if (flowX < 0) {
+    first = -1;
+    second = 1;
+  } else if (flowX > 0) {
+    first = 1;
+    second = -1;
+  } else if (randBit(x, y, 34u)) {
     first = 1;
     second = -1;
   }
@@ -504,6 +612,14 @@ fn applyCurrentOutgoing(cell: u32, x: i32, y: i32) -> u32 {
   }
 
   if (mat == FIRE) {
+    if (isProjectileFire(cell)) {
+      let age = life(cell);
+      if (age <= 1u) {
+        return pack(EMPTY, 0u, 0u);
+      }
+      return pack(FIRE, age - 1u, AUX_PROJECTILE_FIRE);
+    }
+
     if (isWetNear(x, y)) {
       return pack(STEAM, 52u + (randByte(x, y, 41u) & 31u), randByte(x, y, 45u));
     }
@@ -619,17 +735,17 @@ fn applyIncoming(outCell: u32, x: i32, y: i32) -> u32 {
     }
 
     let fireBelow = getCell(x, y + 1);
-    if (material(fireBelow) == FIRE && life(fireBelow) > 1u && targetMatches(fireTarget(x, y + 1), x, y)) {
+    if (material(fireBelow) == FIRE && !isProjectileFire(fireBelow) && life(fireBelow) > 1u && targetMatches(fireTarget(x, y + 1), x, y)) {
       out = pack(FIRE, max(life(fireBelow), 24u) - 1u, randByte(x, y, 73u));
     }
 
     let fireBelowLeft = getCell(x - 1, y + 1);
-    if (material(fireBelowLeft) == FIRE && life(fireBelowLeft) > 1u && targetMatches(fireTarget(x - 1, y + 1), x, y)) {
+    if (material(fireBelowLeft) == FIRE && !isProjectileFire(fireBelowLeft) && life(fireBelowLeft) > 1u && targetMatches(fireTarget(x - 1, y + 1), x, y)) {
       out = pack(FIRE, max(life(fireBelowLeft), 20u) - 1u, randByte(x, y, 74u));
     }
 
     let fireBelowRight = getCell(x + 1, y + 1);
-    if (material(fireBelowRight) == FIRE && life(fireBelowRight) > 1u && targetMatches(fireTarget(x + 1, y + 1), x, y)) {
+    if (material(fireBelowRight) == FIRE && !isProjectileFire(fireBelowRight) && life(fireBelowRight) > 1u && targetMatches(fireTarget(x + 1, y + 1), x, y)) {
       out = pack(FIRE, max(life(fireBelowRight), 20u) - 1u, randByte(x, y, 75u));
     }
   }
@@ -674,13 +790,21 @@ fn applyBrushEmitter(cell: u32, emitter: Emitter, x: i32, y: i32) -> u32 {
     return pack(WET_SAND, 0u, roll);
   }
   if (emitter.material == SMOKE) {
-    return pack(SMOKE, 42u + (roll & 47u), roll);
+    return pack(SMOKE, emitterLife(emitter, 42u + (roll & 47u)), roll);
   }
   if (emitter.material == STEAM) {
-    return pack(STEAM, 42u + (roll & 47u), roll);
+    return pack(STEAM, emitterLife(emitter, 42u + (roll & 47u)), roll);
   }
   if (emitter.material == SPARK) {
-    return pack(SPARK, 16u + (roll & 23u), roll);
+    return pack(SPARK, emitterLife(emitter, 16u + (roll & 23u)), roll);
+  }
+
+  let profile = emitterProfile(emitter);
+  if (profile == EMITTER_PROFILE_PROJECTILE_FIRE) {
+    return pack(FIRE, emitterLife(emitter, 36u + (roll & 31u)), AUX_PROJECTILE_FIRE);
+  }
+  if (profile == EMITTER_PROFILE_PURE) {
+    return pack(FIRE, emitterLife(emitter, 36u + (roll & 31u)), roll);
   }
 
   if (roll < 58u) {

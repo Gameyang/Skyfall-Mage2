@@ -11,6 +11,26 @@ export const SKILL_DEFINITIONS = Object.freeze({
       radius: 7,
       lifetimeMs: 2600,
       homing: 'none',
+      energy: Object.freeze({
+        initial: 96,
+        max: 96,
+        trailIntervalMs: 48,
+        trailLeakPerSecond: 0,
+        trailEffects: Object.freeze([
+          Object.freeze({ material: 'fire', profile: 'projectileFire', life: 44, radius: 4, strength: 190, frames: 1 }),
+        ]),
+        explosion: Object.freeze({
+          minRadius: 24,
+          maxRadius: 58,
+          minDamage: 8,
+          maxDamage: 22,
+          materialEffects: Object.freeze([
+            Object.freeze({ material: 'fire', radiusScale: 0.58, strength: 255, frames: 6, explosion: true }),
+            Object.freeze({ material: 'spark', radiusScale: 0.42, strength: 235, frames: 4, explosion: true }),
+            Object.freeze({ material: 'smoke', life: 10, radiusScale: 0.62, strength: 145, frames: 2, explosion: true }),
+          ]),
+        }),
+      }),
       visual: Object.freeze({
         color: '#ff8a2a',
         coreColor: '#fff0a6',
@@ -18,18 +38,13 @@ export const SKILL_DEFINITIONS = Object.freeze({
       }),
     }),
     impact: Object.freeze({
-      damage: 20,
+      damage: 8,
     }),
     materialEffects: Object.freeze({
       cast: Object.freeze([
-        Object.freeze({ material: 'fire', radius: 5, strength: 185, frames: 2 }),
-        Object.freeze({ material: 'spark', radius: 3, strength: 150, frames: 2 }),
+        Object.freeze({ material: 'fire', profile: 'projectileFire', life: 48, radius: 5, strength: 210, frames: 2 }),
       ]),
-      hit: Object.freeze([
-        Object.freeze({ material: 'fire', radius: 10, strength: 245, frames: 4 }),
-        Object.freeze({ material: 'spark', radius: 8, strength: 230, frames: 3 }),
-        Object.freeze({ material: 'smoke', radius: 13, strength: 165, frames: 5 }),
-      ]),
+      hit: Object.freeze([]),
     }),
   }),
 });

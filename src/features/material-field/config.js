@@ -1,5 +1,5 @@
-export const GRID_WIDTH = 256;
-export const GRID_HEIGHT = 144;
+export const GRID_WIDTH = 192;
+export const GRID_HEIGHT = 192;
 export const WORKGROUP_SIZE = 8;
 export const CELL_COUNT = GRID_WIDTH * GRID_HEIGHT;
 export const CELL_BYTES = Uint32Array.BYTES_PER_ELEMENT;
@@ -8,7 +8,19 @@ export const PARAM_WORDS = 16;
 export const MAX_EMITTERS = 32;
 export const EMITTER_WORDS = 8;
 export const EMITTER_FLAG_EXPLOSION = 1;
+export const EMITTER_PROFILE = Object.freeze({
+  DEFAULT: 0,
+  PURE: 1,
+  PROJECTILE_FIRE: 2,
+});
 export const EMITTER_BYTES = MAX_EMITTERS * EMITTER_WORDS * Uint32Array.BYTES_PER_ELEMENT;
+export const GAS_FLOW_CONFIG = Object.freeze({
+  windX: 1,
+  windY: 0,
+  noiseStrength: 64,
+  noiseScale: 18,
+  noiseSpeed: 10,
+});
 
 export const BRUSH_RADIUS = 5;
 export const TOUCH_WATER_RADIUS = 6;

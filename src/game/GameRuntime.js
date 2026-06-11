@@ -1,6 +1,6 @@
 import { GAME_CONTENT } from './content/index.js';
 import { createGameState } from './GameState.js';
-import { createKeyboardInput } from './input/createKeyboardInput.js';
+import { createGameInput } from './input/createGameInput.js';
 import { createGameCanvasRenderer } from './render/GameCanvasRenderer.js';
 import { updateGame, updateViewport } from './systems.js';
 
@@ -17,7 +17,7 @@ class GameRuntime {
     const initialWidth = Math.max(1, Math.floor(canvas.getBoundingClientRect().width || window.innerWidth));
     const initialHeight = Math.max(1, Math.floor(canvas.getBoundingClientRect().height || window.innerHeight));
     this.state = createGameState({ width: initialWidth, height: initialHeight, content });
-    this.input = createKeyboardInput({ state: this.state });
+    this.input = createGameInput({ canvas, state: this.state });
     this.animationFrameId = 0;
     this.lastFrameTime = 0;
     this.destroyed = false;
@@ -28,7 +28,7 @@ class GameRuntime {
     if (this.animationFrameId) return;
 
     const viewport = this.renderer.resize();
-    updateViewport(this.state, viewport.width, viewport.height);
+    updateViewport(this.state, viewport.width, viewport.height, viewport.visible);
     this.lastFrameTime = performance.now();
     this.animationFrameId = requestAnimationFrame(this.renderFrame);
   }
@@ -37,7 +37,7 @@ class GameRuntime {
     if (this.destroyed) return;
 
     const viewport = this.renderer.resize();
-    updateViewport(this.state, viewport.width, viewport.height);
+    updateViewport(this.state, viewport.width, viewport.height, viewport.visible);
 
     const dtMs = Math.min(100, Math.max(0, now - this.lastFrameTime));
     this.lastFrameTime = now;

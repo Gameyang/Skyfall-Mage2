@@ -1,6 +1,7 @@
 import {
   BRUSH_RADIUS,
   EMITTER_FLAG_EXPLOSION,
+  EMITTER_PROFILE,
   EMITTER_WORDS,
   EXPLOSION_FRAMES,
   EXPLOSION_RADIUS,
@@ -96,7 +97,7 @@ export class MaterialEmitterState {
     });
   }
 
-  addEmitter({ material, x, y, radius, strength = 220, flags = 0, frames = 3 }) {
+  addEmitter({ material, x, y, radius, strength = 220, flags = 0, frames = 3, profile = EMITTER_PROFILE.DEFAULT, life = 0 }) {
     this.burstEmitters.push({
       material,
       x,
@@ -106,6 +107,8 @@ export class MaterialEmitterState {
       seed: randomSeed(),
       flags,
       frames,
+      profile,
+      life,
     });
 
     while (this.burstEmitters.length > MAX_EMITTERS) {
@@ -130,6 +133,8 @@ export class MaterialEmitterState {
         strength: waterBrush || hardBrush ? 255 : 222,
         seed: pointer.seed,
         flags: 0,
+        profile: EMITTER_PROFILE.DEFAULT,
+        life: 0,
       });
     }
 
@@ -142,6 +147,8 @@ export class MaterialEmitterState {
         strength: burst.strength,
         seed: burst.seed,
         flags: burst.flags,
+        profile: burst.profile,
+        life: burst.life,
       });
     }
 
@@ -196,7 +203,11 @@ function pushEmitter(words, count, emitter) {
   words[offset + 4] = clamp(emitter.strength, 0, 255) >>> 0;
   words[offset + 5] = emitter.seed >>> 0;
   words[offset + 6] = emitter.flags >>> 0;
-  words[offset + 7] = 0;
+  words[offset + 7] = packEmitterProfileData(emitter.profile, emitter.life);
 
   return count + 1;
+}
+
+function packEmitterProfileData(profile = EMITTER_PROFILE.DEFAULT, life = 0) {
+  return (clamp(profile, 0, 255) | (clamp(life, 0, 255) << 8)) >>> 0;
 }
