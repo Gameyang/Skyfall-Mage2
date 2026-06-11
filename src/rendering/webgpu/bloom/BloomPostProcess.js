@@ -1,3 +1,5 @@
+import bloomShaderSource from './bloomPostProcess.wgsl?raw';
+
 const DEFAULT_OPTIONS = {
   enabled: true,
   threshold: 0.72,
@@ -44,15 +46,10 @@ function createFullscreenPipeline(device, shaderModule, layout, targetFormat, en
   });
 }
 
-async function loadShaderModule(device) {
-  const response = await fetch('./bloomPostProcess.wgsl');
-  if (!response.ok) {
-    throw new Error(`Failed to load bloom shader: HTTP ${response.status}`);
-  }
-
+function loadShaderModule(device) {
   return device.createShaderModule({
     label: 'bloom-postprocess-shader',
-    code: await response.text(),
+    code: bloomShaderSource,
   });
 }
 

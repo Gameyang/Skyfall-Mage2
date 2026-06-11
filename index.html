@@ -2,36 +2,12 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Skyfall Mage2</title>
-    <meta http-equiv="refresh" content="0; url=./tech-tests/noita-webgpu/" />
-    <style>
-      html,
-      body {
-        height: 100%;
-        margin: 0;
-        background: #050507;
-        color: #d7e4ff;
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      }
-
-      body {
-        display: grid;
-        place-items: center;
-      }
-
-      a {
-        color: #8ab4ff;
-      }
-    </style>
+    <link rel="icon" href="data:," />
   </head>
   <body>
-    <main>
-      <p>WebGPU 테스트 페이지로 이동 중입니다.</p>
-      <p><a href="./tech-tests/noita-webgpu/">직접 열기</a></p>
-    </main>
-    <script>
-      window.location.replace('./tech-tests/noita-webgpu/');
-    </script>
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
   </body>
 </html>

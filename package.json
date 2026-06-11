@@ -1,0 +1,18 @@
+{
+  "name": "skyfall-mage2",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "finish": "node scripts/finish-work.mjs",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vite": "^8.0.14",
+    "vitest": "^4.1.7"
+  }
+}
