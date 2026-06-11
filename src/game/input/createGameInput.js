@@ -17,13 +17,25 @@ const KEY_TO_INPUT = Object.freeze({
 export function createGameInput({ canvas, state }) {
   const keyboardInput = createInputSnapshot();
   const touchInput = createInputSnapshot();
+  const touchJoystick = createTouchJoystick(canvas);
   let activeTouchId = null;
   let touchOrigin = null;
 
   const syncInput = () => {
+    const keyboardVector = getDigitalMovementVector(keyboardInput);
+    keyboardInput.vectorX = keyboardVector.x;
+    keyboardInput.vectorY = keyboardVector.y;
+
+    const inputVector = clampMovementVector({
+      x: keyboardInput.vectorX + touchInput.vectorX,
+      y: keyboardInput.vectorY + touchInput.vectorY,
+    });
+
     for (const input of MOVEMENT_INPUTS) {
       state.input[input] = keyboardInput[input] || touchInput[input];
     }
+    state.input.vectorX = inputVector.x;
+    state.input.vectorY = inputVector.y;
   };
 
   const setKeyboardInput = (event, isPressed) => {
@@ -39,13 +51,16 @@ export function createGameInput({ canvas, state }) {
     activeTouchId = null;
     touchOrigin = null;
     clearInputSnapshot(touchInput);
+    touchJoystick.hide();
     syncInput();
   };
 
   const updateTouchInput = (event) => {
     if (!touchOrigin) return;
 
-    copyInputSnapshot(touchInput, getTouchMovementSnapshot(getTouchDelta(event)));
+    const touchDelta = getTouchDelta(event);
+    copyInputSnapshot(touchInput, getTouchMovementSnapshot(touchDelta));
+    touchJoystick.update(touchOrigin, touchDelta);
     syncInput();
   };
 
@@ -129,13 +144,18 @@ export function createGameInput({ canvas, state }) {
       canvas.removeEventListener('lostpointercapture', onPointerEnd);
       clearInputSnapshot(keyboardInput);
       resetTouchInput();
+      touchJoystick.destroy();
     },
   };
 }
 
 export function getTouchMovementSnapshot(
   { deltaX, deltaY },
-  { deadzonePx = TOUCH_DEADZONE_PX, axisThreshold = TOUCH_AXIS_THRESHOLD } = {},
+  {
+    deadzonePx = TOUCH_DEADZONE_PX,
+    axisThreshold = TOUCH_AXIS_THRESHOLD,
+    radiusPx = TOUCH_FOLLOW_RADIUS_PX,
+  } = {},
 ) {
   const movement = createInputSnapshot();
   const distance = Math.hypot(deltaX, deltaY);
@@ -143,16 +163,25 @@ export function getTouchMovementSnapshot(
 
   const normalizedX = deltaX / distance;
   const normalizedY = deltaY / distance;
+  const effectiveRadiusPx = Math.max(deadzonePx + 1, radiusPx);
+  const magnitude = clamp(
+    (Math.min(distance, effectiveRadiusPx) - deadzonePx) / (effectiveRadiusPx - deadzonePx),
+    0,
+    1,
+  );
 
-  if (normalizedX <= -axisThreshold) {
+  movement.vectorX = normalizedX * magnitude;
+  movement.vectorY = normalizedY * magnitude;
+
+  if (movement.vectorX <= -axisThreshold) {
     movement.left = true;
-  } else if (normalizedX >= axisThreshold) {
+  } else if (movement.vectorX >= axisThreshold) {
     movement.right = true;
   }
 
-  if (normalizedY <= -axisThreshold) {
+  if (movement.vectorY <= -axisThreshold) {
     movement.up = true;
-  } else if (normalizedY >= axisThreshold) {
+  } else if (movement.vectorY >= axisThreshold) {
     movement.down = true;
   }
 
@@ -165,6 +194,8 @@ function createInputSnapshot() {
     down: false,
     left: false,
     right: false,
+    vectorX: 0,
+    vectorY: 0,
   };
 }
 
@@ -172,10 +203,72 @@ function clearInputSnapshot(input) {
   for (const key of MOVEMENT_INPUTS) {
     input[key] = false;
   }
+  input.vectorX = 0;
+  input.vectorY = 0;
 }
 
 function copyInputSnapshot(target, source) {
   for (const key of MOVEMENT_INPUTS) {
     target[key] = Boolean(source[key]);
   }
+  target.vectorX = Number.isFinite(source.vectorX) ? source.vectorX : 0;
+  target.vectorY = Number.isFinite(source.vectorY) ? source.vectorY : 0;
+}
+
+function getDigitalMovementVector(input) {
+  const vector = {
+    x: Number(input.right) - Number(input.left),
+    y: Number(input.down) - Number(input.up),
+  };
+
+  return clampMovementVector(vector);
+}
+
+function clampMovementVector({ x, y }) {
+  const vectorX = Number.isFinite(x) ? x : 0;
+  const vectorY = Number.isFinite(y) ? y : 0;
+  const magnitude = Math.hypot(vectorX, vectorY);
+
+  if (magnitude <= 1) {
+    return { x: vectorX, y: vectorY };
+  }
+
+  return {
+    x: vectorX / magnitude,
+    y: vectorY / magnitude,
+  };
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function createTouchJoystick(canvas) {
+  const parent = canvas.parentElement;
+  const element = document.createElement('div');
+  const thumb = document.createElement('span');
+
+  element.className = 'virtual-joystick';
+  thumb.className = 'virtual-joystick-thumb';
+  element.setAttribute('aria-hidden', 'true');
+  element.append(thumb);
+  parent?.append(element);
+
+  return {
+    update(origin, { deltaX, deltaY }) {
+      element.classList.add('is-active');
+      element.style.setProperty('--joystick-x', `${origin.x}px`);
+      element.style.setProperty('--joystick-y', `${origin.y}px`);
+      element.style.setProperty('--joystick-thumb-x', `${deltaX}px`);
+      element.style.setProperty('--joystick-thumb-y', `${deltaY}px`);
+    },
+    hide() {
+      element.classList.remove('is-active');
+      element.style.setProperty('--joystick-thumb-x', '0px');
+      element.style.setProperty('--joystick-thumb-y', '0px');
+    },
+    destroy() {
+      element.remove();
+    },
+  };
 }

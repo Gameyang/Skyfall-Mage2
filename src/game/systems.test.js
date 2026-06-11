@@ -5,7 +5,7 @@ import { ITEM_DEFINITIONS } from './content/items.js';
 import { SKILL_DEFINITIONS } from './content/skills.js';
 import { createEnemyFromWave, createSCurvePath, sampleSCurvePath } from './enemyPaths.js';
 import { createGameState } from './GameState.js';
-import { losePlayerRibbonItems, selectProgressRiskTarget, updateGame, updateViewport } from './systems.js';
+import { losePlayerRibbonItems, selectProgressRiskTarget, updateGame, updatePlayer, updateViewport } from './systems.js';
 
 function createTestContent(overrides = {}) {
   return {
@@ -120,6 +120,21 @@ describe('viewport sizing', () => {
     state.input.right = true;
     updateGame(state, 2000, content);
     expect(state.player.x).toBe(617);
+  });
+
+  it('moves the player with analog input vectors for free-angle mobile control', () => {
+    const content = createTestContent();
+    const state = createGameState({ width: 1000, height: 1000, content });
+    state.player.recenter = null;
+    state.player.x = 500;
+    state.player.y = 500;
+    state.input.vectorX = 0.6;
+    state.input.vectorY = 0.8;
+
+    updatePlayer(state, 1000);
+
+    expect(state.player.x).toBeCloseTo(656);
+    expect(state.player.y).toBeCloseTo(708);
   });
 
   it('recenters the player when the visible layout changes during play', () => {

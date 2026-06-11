@@ -31,6 +31,8 @@ export function createGameState({ width = 1280, height = 720, content = GAME_CON
       down: false,
       left: false,
       right: false,
+      vectorX: 0,
+      vectorY: 0,
     },
     player: {
       x: width * 0.5,

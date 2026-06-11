@@ -209,27 +209,50 @@ function easeOutCubic(ratio) {
 export function updatePlayer(state, dtMs) {
   if (updatePlayerRecenter(state, dtMs)) return;
 
-  const inputX = Number(state.input.right) - Number(state.input.left);
-  const inputY = Number(state.input.down) - Number(state.input.up);
+  const { x: inputX, y: inputY } = getMovementInputVector(state.input);
   const moving = inputX !== 0 || inputY !== 0;
   if (!moving) {
     clampPlayerToVisibleArea(state);
     return;
   }
 
-  const direction = normalize(inputX, inputY);
   const distance = state.player.speed * (dtMs / 1000);
   const bounds = getPlayerMovementBounds(state);
   state.player.x = clamp(
-    state.player.x + direction.x * distance,
+    state.player.x + inputX * distance,
     bounds.minX,
     bounds.maxX,
   );
   state.player.y = clamp(
-    state.player.y + direction.y * distance,
+    state.player.y + inputY * distance,
     bounds.minY,
     bounds.maxY,
   );
+}
+
+function getMovementInputVector(input) {
+  const vectorX = Number.isFinite(input.vectorX) ? input.vectorX : 0;
+  const vectorY = Number.isFinite(input.vectorY) ? input.vectorY : 0;
+  const vectorMagnitude = Math.hypot(vectorX, vectorY);
+
+  if (vectorMagnitude > 0) {
+    if (vectorMagnitude <= 1) {
+      return { x: vectorX, y: vectorY };
+    }
+
+    return {
+      x: vectorX / vectorMagnitude,
+      y: vectorY / vectorMagnitude,
+    };
+  }
+
+  const digitalX = Number(input.right) - Number(input.left);
+  const digitalY = Number(input.down) - Number(input.up);
+  if (digitalX === 0 && digitalY === 0) {
+    return { x: 0, y: 0 };
+  }
+
+  return normalize(digitalX, digitalY);
 }
 
 export function updatePlayerTrailHistory(state) {
