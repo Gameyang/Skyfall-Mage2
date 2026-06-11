@@ -17,6 +17,7 @@ export function createGameState({ width = 1280, height = 720, content = GAME_CON
     session: {
       elapsedMs: 0,
       gameOver: false,
+      autoRestartRemainingMs: null,
       score: 0,
       nextEnemyId: 1,
       nextProjectileId: 1,

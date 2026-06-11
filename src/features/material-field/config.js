@@ -12,6 +12,7 @@ export const EMITTER_PROFILE = Object.freeze({
   DEFAULT: 0,
   PURE: 1,
   PROJECTILE_FIRE: 2,
+  SKILL_EXPLOSION_FIRE: 3,
 });
 export const EMITTER_BYTES = MAX_EMITTERS * EMITTER_WORDS * Uint32Array.BYTES_PER_ELEMENT;
 export const GAS_FLOW_CONFIG = Object.freeze({

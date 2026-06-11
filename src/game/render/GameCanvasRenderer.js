@@ -45,7 +45,7 @@ class GameCanvasRenderer {
     drawHud(ctx, state);
 
     if (state.session.gameOver) {
-      drawGameOver(ctx, width, height);
+      drawGameOver(ctx, width, height, state);
     }
   }
 
@@ -237,9 +237,12 @@ function drawSmallBar(ctx, x, y, width, height, ratio, color, background = 'rgba
   ctx.strokeRect(x + 0.5, y + 0.5, width - 1, height - 1);
 }
 
-function drawGameOver(ctx, width, height) {
+function drawGameOver(ctx, width, height, state) {
   ctx.fillStyle = 'rgba(0, 0, 0, 0.58)';
   ctx.fillRect(0, 0, width, height);
+
+  const remainingMs = Math.max(0, state.session.autoRestartRemainingMs ?? 3000);
+  const remainingSeconds = Math.max(1, Math.ceil(remainingMs / 1000));
 
   ctx.fillStyle = '#f4fbff';
   ctx.textAlign = 'center';
@@ -248,7 +251,7 @@ function drawGameOver(ctx, width, height) {
   ctx.fillText('Game Over', width * 0.5, height * 0.5 - 12);
   ctx.font = '500 15px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
   ctx.fillStyle = 'rgba(244, 251, 255, 0.78)';
-  ctx.fillText('Refresh to restart', width * 0.5, height * 0.5 + 26);
+  ctx.fillText(`Restarting in ${remainingSeconds}`, width * 0.5, height * 0.5 + 26);
   ctx.textAlign = 'start';
 }
 

@@ -20,6 +20,7 @@ const EFFECT_PROFILES = Object.freeze({
   default: EMITTER_PROFILE.DEFAULT,
   pure: EMITTER_PROFILE.PURE,
   projectileFire: EMITTER_PROFILE.PROJECTILE_FIRE,
+  skillExplosionFire: EMITTER_PROFILE.SKILL_EXPLOSION_FIRE,
 });
 
 function showFatal(fatal, title, detail) {

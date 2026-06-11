@@ -20,12 +20,12 @@ export const SKILL_DEFINITIONS = Object.freeze({
           Object.freeze({ material: 'fire', profile: 'projectileFire', life: 10, radius: 4, strength: 100, frames: 1 }),
         ]),
         explosion: Object.freeze({
-          minRadius: 24,
-          maxRadius: 58,
-          minDamage: 8,
-          maxDamage: 22,
+          minRadius: 28,
+          maxRadius: 68,
+          minDamage: 10,
+          maxDamage: 28,
           materialEffects: Object.freeze([
-            Object.freeze({ material: 'fire', radiusScale: 0.58, strength: 255, frames: 6, explosion: true }),
+            Object.freeze({ material: 'fire', profile: 'skillExplosionFire', life: 14, radiusScale: 0.76, strength: 255, frames: 4, explosion: true }),
             Object.freeze({ material: 'spark', radiusScale: 0.42, strength: 235, frames: 4, explosion: true }),
             Object.freeze({ material: 'smoke', life: 10, radiusScale: 0.62, strength: 145, frames: 2, explosion: true }),
           ]),

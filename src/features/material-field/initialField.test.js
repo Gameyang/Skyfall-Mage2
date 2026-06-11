@@ -70,6 +70,16 @@ describe('material field shader profiles', () => {
     expect(materialFieldShaderSource).toContain('profile == EMITTER_PROFILE_PROJECTILE_FIRE');
   });
 
+  it('keeps skill explosion fire separate from normal fire so it can burn hotter and clear faster', () => {
+    expect(EMITTER_PROFILE.SKILL_EXPLOSION_FIRE).toBe(3);
+    expect(materialFieldShaderSource).toContain('const EMITTER_PROFILE_SKILL_EXPLOSION_FIRE');
+    expect(materialFieldShaderSource).toContain('const AUX_SKILL_EXPLOSION_FIRE');
+    expect(materialFieldShaderSource).toContain('const SKILL_EXPLOSION_FIRE_DECAY_PER_STEP');
+    expect(materialFieldShaderSource).toContain('fn isSkillExplosionFire');
+    expect(materialFieldShaderSource).toContain('fn decaySkillExplosionFireAge');
+    expect(materialFieldShaderSource).toContain('emitterProfile(emitter) == EMITTER_PROFILE_SKILL_EXPLOSION_FIRE');
+  });
+
   it('uses global gas wind and noise when selecting gas movement targets', () => {
     expect(GAS_FLOW_CONFIG).toEqual(expect.objectContaining({
       windX: 1,

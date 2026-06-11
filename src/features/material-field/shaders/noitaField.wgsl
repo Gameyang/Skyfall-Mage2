@@ -11,8 +11,11 @@ const EMITTER_FLAG_EXPLOSION: u32 = 1u;
 const EMITTER_PROFILE_DEFAULT: u32 = 0u;
 const EMITTER_PROFILE_PURE: u32 = 1u;
 const EMITTER_PROFILE_PROJECTILE_FIRE: u32 = 2u;
+const EMITTER_PROFILE_SKILL_EXPLOSION_FIRE: u32 = 3u;
 const AUX_PROJECTILE_FIRE: u32 = 251u;
+const AUX_SKILL_EXPLOSION_FIRE: u32 = 252u;
 const PROJECTILE_FIRE_DECAY_PER_STEP: u32 = 3u;
+const SKILL_EXPLOSION_FIRE_DECAY_PER_STEP: u32 = 5u;
 
 struct SimParams {
   width: u32,
@@ -79,6 +82,10 @@ fn emitterLife(emitter: Emitter, fallback: u32) -> u32 {
 
 fn isProjectileFire(cell: u32) -> bool {
   return material(cell) == FIRE && aux(cell) == AUX_PROJECTILE_FIRE;
+}
+
+fn isSkillExplosionFire(cell: u32) -> bool {
+  return material(cell) == FIRE && aux(cell) == AUX_SKILL_EXPLOSION_FIRE;
 }
 
 fn indexOf(x: u32, y: u32) -> u32 {
@@ -543,6 +550,13 @@ fn decayProjectileFireAge(age: u32) -> u32 {
   return age - PROJECTILE_FIRE_DECAY_PER_STEP;
 }
 
+fn decaySkillExplosionFireAge(age: u32) -> u32 {
+  if (age <= SKILL_EXPLOSION_FIRE_DECAY_PER_STEP) {
+    return 0u;
+  }
+  return age - SKILL_EXPLOSION_FIRE_DECAY_PER_STEP;
+}
+
 fn projectileFireTarget(x: i32, y: i32) -> vec2<i32> {
   if (gasVerticalPause(x, y, 35u)) {
     return vec2<i32>(x, y);
@@ -674,6 +688,24 @@ fn applyCurrentOutgoing(cell: u32, x: i32, y: i32) -> u32 {
   }
 
   if (mat == FIRE) {
+    if (isSkillExplosionFire(cell)) {
+      if (isWetNear(x, y)) {
+        return pack(STEAM, 12u + (randByte(x, y, 39u) & 15u), randByte(x, y, 40u));
+      }
+
+      let nextAge = decaySkillExplosionFireAge(life(cell));
+      if (nextAge == 0u) {
+        return pack(EMPTY, 0u, 0u);
+      }
+
+      let moveTo = fireTarget(x, y);
+      if (!targetMatches(moveTo, x, y)) {
+        return pack(EMPTY, 0u, 0u);
+      }
+
+      return pack(FIRE, nextAge, AUX_SKILL_EXPLOSION_FIRE);
+    }
+
     if (isProjectileFire(cell)) {
       let nextAge = decayProjectileFireAge(life(cell));
       if (nextAge == 0u) {
@@ -801,7 +833,12 @@ fn applyIncoming(outCell: u32, x: i32, y: i32) -> u32 {
     }
 
     let fireBelow = getCell(x, y + 1);
-    if (isProjectileFire(fireBelow) && targetMatches(projectileFireTarget(x, y + 1), x, y)) {
+    if (isSkillExplosionFire(fireBelow) && targetMatches(fireTarget(x, y + 1), x, y)) {
+      let nextAge = decaySkillExplosionFireAge(life(fireBelow));
+      if (nextAge > 0u) {
+        out = pack(FIRE, nextAge, AUX_SKILL_EXPLOSION_FIRE);
+      }
+    } else if (isProjectileFire(fireBelow) && targetMatches(projectileFireTarget(x, y + 1), x, y)) {
       let nextAge = decayProjectileFireAge(life(fireBelow));
       if (nextAge > 0u) {
         out = pack(FIRE, nextAge, AUX_PROJECTILE_FIRE);
@@ -811,7 +848,12 @@ fn applyIncoming(outCell: u32, x: i32, y: i32) -> u32 {
     }
 
     let fireBelowLeft = getCell(x - 1, y + 1);
-    if (isProjectileFire(fireBelowLeft) && targetMatches(projectileFireTarget(x - 1, y + 1), x, y)) {
+    if (isSkillExplosionFire(fireBelowLeft) && targetMatches(fireTarget(x - 1, y + 1), x, y)) {
+      let nextAge = decaySkillExplosionFireAge(life(fireBelowLeft));
+      if (nextAge > 0u) {
+        out = pack(FIRE, nextAge, AUX_SKILL_EXPLOSION_FIRE);
+      }
+    } else if (isProjectileFire(fireBelowLeft) && targetMatches(projectileFireTarget(x - 1, y + 1), x, y)) {
       let nextAge = decayProjectileFireAge(life(fireBelowLeft));
       if (nextAge > 0u) {
         out = pack(FIRE, nextAge, AUX_PROJECTILE_FIRE);
@@ -821,7 +863,12 @@ fn applyIncoming(outCell: u32, x: i32, y: i32) -> u32 {
     }
 
     let fireBelowRight = getCell(x + 1, y + 1);
-    if (isProjectileFire(fireBelowRight) && targetMatches(projectileFireTarget(x + 1, y + 1), x, y)) {
+    if (isSkillExplosionFire(fireBelowRight) && targetMatches(fireTarget(x + 1, y + 1), x, y)) {
+      let nextAge = decaySkillExplosionFireAge(life(fireBelowRight));
+      if (nextAge > 0u) {
+        out = pack(FIRE, nextAge, AUX_SKILL_EXPLOSION_FIRE);
+      }
+    } else if (isProjectileFire(fireBelowRight) && targetMatches(projectileFireTarget(x + 1, y + 1), x, y)) {
       let nextAge = decayProjectileFireAge(life(fireBelowRight));
       if (nextAge > 0u) {
         out = pack(FIRE, nextAge, AUX_PROJECTILE_FIRE);
@@ -907,6 +954,26 @@ fn applyExplosionEmitter(cell: u32, emitter: Emitter, x: i32, y: i32, dist2: i32
 
   let roll = randByteWithSeed(x, y, 101u, emitter.seed);
   if (roll > emitter.strength && dist2 > radius2 / 6) {
+    return cell;
+  }
+
+  if (emitterProfile(emitter) == EMITTER_PROFILE_SKILL_EXPLOSION_FIRE) {
+    let fireLife = emitterLife(emitter, 14u + (roll & 15u));
+    if (dist2 < radius2 / 5) {
+      if (roll < 56u) {
+        return pack(EMPTY, 0u, 0u);
+      }
+      return pack(FIRE, min(255u, fireLife + 4u), AUX_SKILL_EXPLOSION_FIRE);
+    }
+    if (roll < 194u) {
+      return pack(FIRE, fireLife, AUX_SKILL_EXPLOSION_FIRE);
+    }
+    if (roll < 224u) {
+      return pack(SPARK, 8u + (roll & 15u), roll);
+    }
+    if (roll < 242u) {
+      return pack(SMOKE, 8u + (roll & 15u), roll);
+    }
     return cell;
   }
 

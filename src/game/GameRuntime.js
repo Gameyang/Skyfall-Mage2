@@ -4,6 +4,8 @@ import { createGameInput } from './input/createGameInput.js';
 import { createGameCanvasRenderer } from './render/GameCanvasRenderer.js';
 import { updateGame, updateViewport } from './systems.js';
 
+const GAME_OVER_RESTART_DELAY_MS = 3000;
+
 export function createGameRuntime({ canvas, materialEffects, screenEffects = null, content = GAME_CONTENT }) {
   return new GameRuntime({ canvas, materialEffects, screenEffects, content });
 }
@@ -21,6 +23,7 @@ class GameRuntime {
     this.input = createGameInput({ canvas, state: this.state });
     this.animationFrameId = 0;
     this.lastFrameTime = 0;
+    this.gameOverStartedAt = null;
     this.destroyed = false;
     this.renderFrame = this.renderFrame.bind(this);
   }
@@ -43,6 +46,7 @@ class GameRuntime {
     const dtMs = Math.min(100, Math.max(0, now - this.lastFrameTime));
     this.lastFrameTime = now;
     updateGame(this.state, dtMs, this.content);
+    this.updateAutoRestart(now, viewport);
     this.materialEffects?.emitEffects?.(this.state.frameEffects, this.state.viewport);
     this.renderer.render(this.state);
     this.screenEffects?.render?.(this.state, now);
@@ -58,5 +62,34 @@ class GameRuntime {
     }
     this.input.destroy();
     this.renderer.destroy();
+  }
+
+  updateAutoRestart(now, viewport) {
+    if (!this.state.session.gameOver) {
+      this.gameOverStartedAt = null;
+      this.state.session.autoRestartRemainingMs = null;
+      return;
+    }
+
+    if (this.gameOverStartedAt === null) {
+      this.gameOverStartedAt = now;
+    }
+
+    const remainingMs = Math.max(0, GAME_OVER_RESTART_DELAY_MS - (now - this.gameOverStartedAt));
+    this.state.session.autoRestartRemainingMs = remainingMs;
+    if (remainingMs > 0) return;
+
+    this.restart(viewport);
+  }
+
+  restart(viewport) {
+    const nextState = createGameState({
+      width: viewport.width,
+      height: viewport.height,
+      content: this.content,
+    });
+    Object.assign(this.state, nextState);
+    updateViewport(this.state, viewport.width, viewport.height, viewport.visible);
+    this.gameOverStartedAt = null;
   }
 }
