@@ -32,7 +32,7 @@ describe('game runtime screen shake', () => {
 });
 
 describe('run skill loadouts', () => {
-  it('equips the four base elemental weapons for a normal run', () => {
+  it('equips one random base elemental weapon for a normal run', () => {
     const content = {
       skills: SKILL_DEFINITIONS,
       waves: [],
@@ -41,12 +41,12 @@ describe('run skill loadouts', () => {
 
     const runContent = createRunContent(content, { runSeed: 'loadout-alpha' });
 
-    expect(runContent.equippedSkillIds).toHaveLength(4);
-    expect([...runContent.equippedSkillIds].sort()).toEqual([...BASE_ELEMENT_WEAPON_IDS].sort());
+    expect(runContent.equippedSkillIds).toHaveLength(1);
+    expect(BASE_ELEMENT_WEAPON_IDS).toContain(runContent.equippedSkillIds[0]);
     expect(Object.keys(runContent.skills)).toEqual([...runContent.equippedSkillIds]);
   });
 
-  it('keeps loadout order stable for the same run seed', () => {
+  it('keeps the selected base weapon stable for the same run seed', () => {
     const content = {
       skills: SKILL_DEFINITIONS,
       waves: [],
@@ -55,6 +55,25 @@ describe('run skill loadouts', () => {
 
     expect(createRunContent(content, { runSeed: 'same-seed' }).equippedSkillIds)
       .toEqual(createRunContent(content, { runSeed: 'same-seed' }).equippedSkillIds);
+  });
+
+  it('can select different base weapons across different run seeds', () => {
+    const content = {
+      skills: SKILL_DEFINITIONS,
+      waves: [],
+      createSkillLoadout: createBaseElementSkillLoadout,
+    };
+
+    const selectedSkillIds = new Set(
+      Array.from({ length: 16 }, (_, index) => createRunContent(content, {
+        runSeed: `loadout-${index}`,
+      }).equippedSkillIds[0]),
+    );
+
+    expect(selectedSkillIds.size).toBeGreaterThan(1);
+    for (const skillId of selectedSkillIds) {
+      expect(BASE_ELEMENT_WEAPON_IDS).toContain(skillId);
+    }
   });
 
   it('honors skill loadout overrides for focused skill testing', () => {

@@ -397,7 +397,7 @@ export function createBaseElementSkillLoadout({ seed = 'default' } = {}) {
     [ids[index], ids[swapIndex]] = [ids[swapIndex], ids[index]];
   }
 
-  return Object.freeze(ids);
+  return Object.freeze([ids[0]]);
 }
 
 function createSeededRandom(seed) {
