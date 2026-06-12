@@ -274,13 +274,11 @@ describe('material field shader profiles', () => {
 
   it('preserves electric movement from every direction it can target', () => {
     expect(materialFieldShaderSource).toContain('fn electricTarget');
-    expect(materialFieldShaderSource).toContain('const AUX_ELECTRIC_RESIDUAL_SPARK: u32 = 250u');
-    expect(materialFieldShaderSource).toContain('fn isElectricResidualSpark');
     expect(materialFieldShaderSource).toContain('targetMatches(electricTarget(x - 1, y), x, y)');
     expect(materialFieldShaderSource).toContain('targetMatches(electricTarget(x + 1, y), x, y)');
     expect(materialFieldShaderSource).toContain('targetMatches(electricTarget(x, y + 1), x, y)');
-    expect(materialFieldShaderSource).toContain('return pack(SPARK, 6u + (randByte(x, y, 56u) & 7u), AUX_ELECTRIC_RESIDUAL_SPARK)');
-    expect(materialFieldShaderSource).toContain('if (isElectricResidualSpark(cell))');
+    expect(materialFieldShaderSource).not.toContain('AUX_ELECTRIC_RESIDUAL_SPARK');
+    expect(materialFieldShaderSource).not.toContain('return pack(SPARK, 6u + (randByte(x, y, 56u) & 7u)');
     expect(materialFieldShaderSource).toContain('return pack(SPARK, life(sparkAbove) - 1u, aux(sparkAbove))');
   });
 });

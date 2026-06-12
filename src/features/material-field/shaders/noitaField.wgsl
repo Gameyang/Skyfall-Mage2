@@ -29,7 +29,6 @@ const EMITTER_PROFILE_DEFAULT: u32 = 0u;
 const EMITTER_PROFILE_PURE: u32 = 1u;
 const EMITTER_PROFILE_PROJECTILE_FIRE: u32 = 2u;
 const EMITTER_PROFILE_SKILL_EXPLOSION_FIRE: u32 = 3u;
-const AUX_ELECTRIC_RESIDUAL_SPARK: u32 = 250u;
 const AUX_PROJECTILE_FIRE: u32 = 251u;
 const AUX_SKILL_EXPLOSION_FIRE: u32 = 252u;
 const PROJECTILE_FIRE_DECAY_PER_STEP: u32 = 3u;
@@ -104,10 +103,6 @@ fn isProjectileFire(cell: u32) -> bool {
 
 fn isSkillExplosionFire(cell: u32) -> bool {
   return material(cell) == FIRE && aux(cell) == AUX_SKILL_EXPLOSION_FIRE;
-}
-
-fn isElectricResidualSpark(cell: u32) -> bool {
-  return material(cell) == SPARK && aux(cell) == AUX_ELECTRIC_RESIDUAL_SPARK;
 }
 
 fn isSecondaryMaterial(mat: u32) -> bool {
@@ -1155,9 +1150,6 @@ fn applyCurrentOutgoing(cell: u32, x: i32, y: i32) -> u32 {
       if (mat == ELECTRIC) {
         return pack(EMPTY, 0u, 0u);
       }
-      if (isElectricResidualSpark(cell)) {
-        return pack(EMPTY, 0u, 0u);
-      }
       return pack(FIRE, 10u + (randByte(x, y, 53u) & 15u), randByte(x, y, 54u));
     }
     var moveTo = sparkTarget(x, y);
@@ -1166,12 +1158,6 @@ fn applyCurrentOutgoing(cell: u32, x: i32, y: i32) -> u32 {
     }
     if (!targetMatches(moveTo, x, y)) {
       if (mat == ELECTRIC) {
-        if (randByte(x, y, 55u) < 96u) {
-          return pack(SPARK, 6u + (randByte(x, y, 56u) & 7u), AUX_ELECTRIC_RESIDUAL_SPARK);
-        }
-        return pack(EMPTY, 0u, 0u);
-      }
-      if (isElectricResidualSpark(cell)) {
         return pack(EMPTY, 0u, 0u);
       }
       if (randByte(x, y, 55u) < 72u) {
@@ -1701,10 +1687,6 @@ fn materialColor(cell: u32, x: u32, y: u32) -> vec4<f32> {
     return vec4<f32>(a + n * 0.06, a + n * 0.05, a + n * 0.04, 1.0);
   }
   if (mat == SPARK) {
-    if (isElectricResidualSpark(cell)) {
-      let charge = clamp(0.78 + l * 0.9 + n * 0.24, 0.0, 1.8);
-      return vec4<f32>(0.58 + charge * 0.7, 1.65 + charge * 1.25, 3.0 + charge * 1.7, 1.0);
-    }
     let heat = clamp(0.8 + l * 0.8 + n * 0.25, 0.0, 1.8);
     return vec4<f32>(2.8 + heat * 1.45, 1.85 + heat * 1.05, 0.55 + heat * 0.45, 1.0);
   }
