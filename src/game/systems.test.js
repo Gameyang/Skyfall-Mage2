@@ -397,7 +397,14 @@ describe('fireball skill', () => {
       expect(skill.projectile.pattern).toBeUndefined();
       expect(skill.impact.damage).toBeGreaterThan(0);
       expect(collectSkillMaterials(skill)).toEqual(expect.arrayContaining([skill.element]));
+      expect(collectSkillMaterials(skill)).not.toContain('fire');
     }
+
+    expect(SKILL_DEFINITIONS.electric_bolt.projectile.visual).toEqual(expect.objectContaining({
+      shape: 'bolt',
+      color: '#8be8ff',
+    }));
+    expect(SKILL_DEFINITIONS.electric_bolt.projectile.visual.coreColor).not.toBe('#fff0a6');
   });
 
   it('spawns sand barrage as a fan of five base sand projectiles', () => {

@@ -204,9 +204,10 @@ const ELECTRIC_BOLT_SKILL = freezeSkill({
       trailEffects: materialTrail('electric', { radius: 4, strength: 230, frames: 1, life: 14 }),
     }),
     visual: Object.freeze({
+      shape: 'bolt',
       color: '#8be8ff',
-      coreColor: '#fff8b8',
-      glowColor: 'rgba(111, 231, 255, 0.64)',
+      coreColor: '#effcff',
+      glowColor: 'rgba(111, 231, 255, 0.48)',
     }),
   }),
   impact: Object.freeze({

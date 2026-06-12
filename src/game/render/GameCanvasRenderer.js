@@ -114,29 +114,77 @@ function drawProjectiles(ctx, state) {
     const energyRatio = projectile.energy
       ? Math.max(0, Math.min(1, projectile.energy.current / Math.max(1, projectile.energy.max)))
       : 1;
-    const corePulse = 1 + energyRatio * 0.28;
     ctx.save();
     ctx.translate(projectile.x, projectile.y);
 
-    const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, projectile.radius * (4.8 + energyRatio * 2.2));
-    glow.addColorStop(0, visual.glowColor || 'rgba(255, 110, 28, 0.75)');
-    glow.addColorStop(1, 'rgba(255, 110, 28, 0)');
-    ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.arc(0, 0, projectile.radius * (4.8 + energyRatio * 2.2), 0, Math.PI * 2);
-    ctx.fill();
+    if (visual.shape === 'bolt') {
+      drawLightningProjectile(ctx, projectile, visual, energyRatio, state.session.elapsedMs);
+    } else {
+      drawOrbProjectile(ctx, projectile, visual, energyRatio);
+    }
 
-    ctx.fillStyle = visual.color || '#ff8a2a';
-    ctx.beginPath();
-    ctx.arc(0, 0, projectile.radius * 1.35 * corePulse, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = visual.coreColor || '#fff0a6';
-    ctx.beginPath();
-    ctx.arc(-projectile.vx * 0.002, -projectile.vy * 0.002, projectile.radius * 0.58 * corePulse, 0, Math.PI * 2);
-    ctx.fill();
     ctx.restore();
   }
+}
+
+function drawOrbProjectile(ctx, projectile, visual, energyRatio) {
+  const corePulse = 1 + energyRatio * 0.28;
+  const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, projectile.radius * (4.8 + energyRatio * 2.2));
+  glow.addColorStop(0, visual.glowColor || 'rgba(255, 110, 28, 0.75)');
+  glow.addColorStop(1, visual.fadeColor || 'rgba(255, 110, 28, 0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(0, 0, projectile.radius * (4.8 + energyRatio * 2.2), 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = visual.color || '#ff8a2a';
+  ctx.beginPath();
+  ctx.arc(0, 0, projectile.radius * 1.35 * corePulse, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = visual.coreColor || '#fff0a6';
+  ctx.beginPath();
+  ctx.arc(-projectile.vx * 0.002, -projectile.vy * 0.002, projectile.radius * 0.58 * corePulse, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawLightningProjectile(ctx, projectile, visual, energyRatio, elapsedMs) {
+  const angle = Math.atan2(projectile.vy, projectile.vx);
+  const length = Math.max(projectile.radius * 5.5, Math.hypot(projectile.vx, projectile.vy) * 0.024);
+  const width = Math.max(2, projectile.radius * (0.62 + energyRatio * 0.28));
+  const phase = (elapsedMs * 0.018 + projectile.id * 1.37) % 6.283;
+
+  ctx.rotate(angle);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.shadowBlur = projectile.radius * 2.8;
+  ctx.shadowColor = visual.glowColor || 'rgba(111, 231, 255, 0.52)';
+  ctx.strokeStyle = visual.glowColor || 'rgba(111, 231, 255, 0.48)';
+  ctx.lineWidth = width * 3.2;
+  strokeLightningPath(ctx, length, projectile.radius, phase);
+
+  ctx.shadowBlur = projectile.radius * 1.1;
+  ctx.strokeStyle = visual.color || '#8be8ff';
+  ctx.lineWidth = width;
+  strokeLightningPath(ctx, length, projectile.radius, phase + 1.9);
+
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = visual.coreColor || '#effcff';
+  ctx.lineWidth = Math.max(1, width * 0.42);
+  strokeLightningPath(ctx, length * 0.86, projectile.radius * 0.62, phase + 3.1);
+}
+
+function strokeLightningPath(ctx, length, radius, phase) {
+  const half = length * 0.5;
+  ctx.beginPath();
+  ctx.moveTo(-half, 0);
+  for (let index = 1; index <= 4; index += 1) {
+    const t = index / 4;
+    const x = -half + length * t;
+    const jitter = Math.sin(phase + index * 2.13) * radius * 0.8;
+    ctx.lineTo(x, jitter);
+  }
+  ctx.stroke();
 }
 
 function drawEnemies(ctx, state, renderer) {
