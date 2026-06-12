@@ -13,6 +13,18 @@ export const MATERIAL = Object.freeze({
   ICE: 11,
   DUST: 12,
   FIXED_ZONE: 13,
+  CHAIN_ARC: 14,
+  CHAIN_EXPLOSION: 15,
+  LASER_ARC: 16,
+  PINBALL_ROCK: 17,
+  LIGHTNING_ROCK: 18,
+  ICE_BURST: 19,
+  BLIZZARD: 20,
+  FIRE_DUST: 21,
+  CHARGED_DUST: 22,
+  AMPLIFY_ZONE: 23,
+  SLOW_ZONE: 24,
+  GRAVITY_ZONE: 25,
 });
 
 export const MATERIAL_OPTIONS = Object.freeze([

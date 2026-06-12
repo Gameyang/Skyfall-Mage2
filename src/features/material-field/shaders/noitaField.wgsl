@@ -12,6 +12,18 @@ const ROCK: u32 = 10u;
 const ICE: u32 = 11u;
 const DUST: u32 = 12u;
 const FIXED_ZONE: u32 = 13u;
+const CHAIN_ARC: u32 = 14u;
+const CHAIN_EXPLOSION: u32 = 15u;
+const LASER_ARC: u32 = 16u;
+const PINBALL_ROCK: u32 = 17u;
+const LIGHTNING_ROCK: u32 = 18u;
+const ICE_BURST: u32 = 19u;
+const BLIZZARD: u32 = 20u;
+const FIRE_DUST: u32 = 21u;
+const CHARGED_DUST: u32 = 22u;
+const AMPLIFY_ZONE: u32 = 23u;
+const SLOW_ZONE: u32 = 24u;
+const GRAVITY_ZONE: u32 = 25u;
 const EMITTER_FLAG_EXPLOSION: u32 = 1u;
 const EMITTER_PROFILE_DEFAULT: u32 = 0u;
 const EMITTER_PROFILE_PURE: u32 = 1u;
@@ -91,6 +103,55 @@ fn isProjectileFire(cell: u32) -> bool {
 
 fn isSkillExplosionFire(cell: u32) -> bool {
   return material(cell) == FIRE && aux(cell) == AUX_SKILL_EXPLOSION_FIRE;
+}
+
+fn isSecondaryMaterial(mat: u32) -> bool {
+  return mat == CHAIN_ARC ||
+    mat == CHAIN_EXPLOSION ||
+    mat == LASER_ARC ||
+    mat == PINBALL_ROCK ||
+    mat == LIGHTNING_ROCK ||
+    mat == ICE_BURST ||
+    mat == BLIZZARD ||
+    mat == FIRE_DUST ||
+    mat == CHARGED_DUST ||
+    mat == AMPLIFY_ZONE ||
+    mat == SLOW_ZONE ||
+    mat == GRAVITY_ZONE;
+}
+
+fn isElectricCarrier(mat: u32) -> bool {
+  return mat == ELECTRIC ||
+    mat == CHAIN_ARC ||
+    mat == LASER_ARC ||
+    mat == LIGHTNING_ROCK ||
+    mat == CHARGED_DUST;
+}
+
+fn isSparkCarrier(mat: u32) -> bool {
+  return mat == SPARK || mat == CHAIN_EXPLOSION;
+}
+
+fn isHotMaterial(mat: u32) -> bool {
+  return mat == FIRE ||
+    mat == SPARK ||
+    mat == CHAIN_EXPLOSION ||
+    mat == FIRE_DUST ||
+    mat == ICE_BURST;
+}
+
+fn isHeavyFallingMaterial(mat: u32) -> bool {
+  return mat == SAND ||
+    mat == WET_SAND ||
+    mat == ROCK ||
+    mat == ICE ||
+    mat == PINBALL_ROCK ||
+    mat == LIGHTNING_ROCK ||
+    mat == ICE_BURST;
+}
+
+fn isPassableSecondaryMaterial(mat: u32) -> bool {
+  return isSecondaryMaterial(mat) && !isHeavyFallingMaterial(mat);
 }
 
 fn indexOf(x: u32, y: u32) -> u32 {
@@ -183,8 +244,17 @@ fn materialDensity(mat: u32) -> u32 {
   if (mat == SOLID) {
     return 255u;
   }
+  if (mat == LIGHTNING_ROCK) {
+    return 112u;
+  }
+  if (mat == PINBALL_ROCK) {
+    return 104u;
+  }
   if (mat == ROCK) {
     return 94u;
+  }
+  if (mat == ICE_BURST) {
+    return 86u;
   }
   if (mat == ICE) {
     return 82u;
@@ -201,13 +271,16 @@ fn materialDensity(mat: u32) -> u32 {
   if (mat == SPARK) {
     return 24u;
   }
-  if (mat == ELECTRIC) {
+  if (isElectricCarrier(mat)) {
     return 16u;
+  }
+  if (mat == BLIZZARD || mat == FIRE_DUST || mat == CHARGED_DUST) {
+    return 12u;
   }
   if (mat == DUST) {
     return 10u;
   }
-  if (mat == FIXED_ZONE) {
+  if (mat == FIXED_ZONE || mat == AMPLIFY_ZONE || mat == SLOW_ZONE || mat == GRAVITY_ZONE) {
     return 6u;
   }
   if (mat == FIRE || mat == SMOKE || mat == STEAM) {
@@ -217,55 +290,86 @@ fn materialDensity(mat: u32) -> u32 {
 }
 
 fn canPowderEnter(moverMat: u32, targetMat: u32) -> bool {
-  if (targetMat == SOLID || targetMat == SAND || targetMat == WET_SAND || targetMat == ROCK || targetMat == ICE) {
+  if (targetMat == SOLID ||
+    targetMat == SAND ||
+    targetMat == WET_SAND ||
+    targetMat == ROCK ||
+    targetMat == ICE ||
+    targetMat == PINBALL_ROCK ||
+    targetMat == LIGHTNING_ROCK ||
+    targetMat == ICE_BURST) {
     return false;
   }
   return materialDensity(moverMat) > materialDensity(targetMat);
 }
 
 fn canFluidEnter(mat: u32) -> bool {
-  return mat != SOLID && mat != ROCK && mat != ICE && materialDensity(WATER) > materialDensity(mat);
+  return mat != SOLID &&
+    mat != ROCK &&
+    mat != ICE &&
+    mat != PINBALL_ROCK &&
+    mat != LIGHTNING_ROCK &&
+    mat != ICE_BURST &&
+    materialDensity(WATER) > materialDensity(mat);
 }
 
 fn canSupportWater(mat: u32) -> bool {
-  return mat == SOLID || mat == SAND || mat == WET_SAND || mat == ROCK || mat == ICE || mat == WATER;
+  return mat == SOLID ||
+    mat == SAND ||
+    mat == WET_SAND ||
+    mat == ROCK ||
+    mat == ICE ||
+    mat == PINBALL_ROCK ||
+    mat == LIGHTNING_ROCK ||
+    mat == ICE_BURST ||
+    mat == WATER;
 }
 
 fn canSmokeEnter(mat: u32) -> bool {
-  return mat == EMPTY || mat == FIRE || mat == ELECTRIC || mat == DUST || mat == FIXED_ZONE;
+  return mat == EMPTY || mat == FIRE || mat == ELECTRIC || mat == DUST || mat == FIXED_ZONE || isPassableSecondaryMaterial(mat);
 }
 
 fn canFireEnter(mat: u32) -> bool {
-  return mat == EMPTY || mat == SMOKE || mat == STEAM || mat == FIRE || mat == ELECTRIC || mat == DUST || mat == FIXED_ZONE;
+  return mat == EMPTY ||
+    mat == SMOKE ||
+    mat == STEAM ||
+    mat == FIRE ||
+    mat == ELECTRIC ||
+    mat == DUST ||
+    mat == FIXED_ZONE ||
+    isPassableSecondaryMaterial(mat);
 }
 
 fn isFireNear(x: i32, y: i32) -> bool {
-  return material(getCell(x - 1, y)) == FIRE ||
-    material(getCell(x + 1, y)) == FIRE ||
-    material(getCell(x, y - 1)) == FIRE ||
-    material(getCell(x, y + 1)) == FIRE;
+  return isHotMaterial(material(getCell(x - 1, y))) ||
+    isHotMaterial(material(getCell(x + 1, y))) ||
+    isHotMaterial(material(getCell(x, y - 1))) ||
+    isHotMaterial(material(getCell(x, y + 1)));
 }
 
 fn isHeatNear(x: i32, y: i32) -> bool {
-  return material(getCell(x - 1, y)) == FIRE ||
-    material(getCell(x + 1, y)) == FIRE ||
-    material(getCell(x, y - 1)) == FIRE ||
-    material(getCell(x, y + 1)) == FIRE ||
-    material(getCell(x - 1, y)) == SPARK ||
-    material(getCell(x + 1, y)) == SPARK ||
-    material(getCell(x, y - 1)) == SPARK ||
-    material(getCell(x, y + 1)) == SPARK;
+  return isHotMaterial(material(getCell(x - 1, y))) ||
+    isHotMaterial(material(getCell(x + 1, y))) ||
+    isHotMaterial(material(getCell(x, y - 1))) ||
+    isHotMaterial(material(getCell(x, y + 1)));
+}
+
+fn isDirectElectricNear(x: i32, y: i32) -> bool {
+  return isElectricCarrier(material(getCell(x - 1, y))) ||
+    isElectricCarrier(material(getCell(x + 1, y))) ||
+    isElectricCarrier(material(getCell(x, y - 1))) ||
+    isElectricCarrier(material(getCell(x, y + 1)));
+}
+
+fn isSparkNear(x: i32, y: i32) -> bool {
+  return isSparkCarrier(material(getCell(x - 1, y))) ||
+    isSparkCarrier(material(getCell(x + 1, y))) ||
+    isSparkCarrier(material(getCell(x, y - 1))) ||
+    isSparkCarrier(material(getCell(x, y + 1)));
 }
 
 fn isElectricNear(x: i32, y: i32) -> bool {
-  return material(getCell(x - 1, y)) == ELECTRIC ||
-    material(getCell(x + 1, y)) == ELECTRIC ||
-    material(getCell(x, y - 1)) == ELECTRIC ||
-    material(getCell(x, y + 1)) == ELECTRIC ||
-    material(getCell(x - 1, y)) == SPARK ||
-    material(getCell(x + 1, y)) == SPARK ||
-    material(getCell(x, y - 1)) == SPARK ||
-    material(getCell(x, y + 1)) == SPARK;
+  return isDirectElectricNear(x, y) || isSparkNear(x, y);
 }
 
 fn isSandNear(x: i32, y: i32) -> bool {
@@ -296,8 +400,8 @@ fn sandTarget(x: i32, y: i32, moverMat: u32) -> vec2<i32> {
     return vec2<i32>(x, y + 1);
   }
 
-  var first = -1;
-  var second = 1;
+  var first: i32 = -1;
+  var second: i32 = 1;
   if (randBit(x, y, 11u)) {
     first = 1;
     second = -1;
@@ -321,8 +425,8 @@ fn settledSandAbsorbTarget(x: i32, y: i32) -> vec2<i32> {
     return vec2<i32>(x, y);
   }
 
-  var first = -1;
-  var second = 1;
+  var first: i32 = -1;
+  var second: i32 = 1;
   if (randBit(x, y, 15u)) {
     first = 1;
     second = -1;
@@ -442,8 +546,8 @@ fn waterTarget(x: i32, y: i32) -> vec2<i32> {
     return vec2<i32>(x, y + 1);
   }
 
-  var first = -1;
-  var second = 1;
+  var first: i32 = -1;
+  var second: i32 = 1;
   if (randBit(x, y, 21u)) {
     first = 1;
     second = -1;
@@ -507,8 +611,8 @@ fn smokeTarget(x: i32, y: i32) -> vec2<i32> {
     return vec2<i32>(x, y - 1);
   }
 
-  var first = -1;
-  var second = 1;
+  var first: i32 = -1;
+  var second: i32 = 1;
   if (flowX < 0) {
     first = -1;
     second = 1;
@@ -559,8 +663,8 @@ fn fireTarget(x: i32, y: i32) -> vec2<i32> {
     return vec2<i32>(x, y - 1);
   }
 
-  var first = -1;
-  var second = 1;
+  var first: i32 = -1;
+  var second: i32 = 1;
   if (flowX < 0) {
     first = -1;
     second = 1;
@@ -621,8 +725,8 @@ fn projectileFireTarget(x: i32, y: i32) -> vec2<i32> {
     return vec2<i32>(x, y - 1);
   }
 
-  var first = -1;
-  var second = 1;
+  var first: i32 = -1;
+  var second: i32 = 1;
   if (flowX < 0) {
     first = -1;
     second = 1;
@@ -691,6 +795,94 @@ fn dustTarget(x: i32, y: i32) -> vec2<i32> {
   return vec2<i32>(x, y);
 }
 
+fn chainArcTarget(x: i32, y: i32) -> vec2<i32> {
+  var first: i32 = -1;
+  var second: i32 = 1;
+  if (randBit(x, y, 66u)) {
+    first = 1;
+    second = -1;
+  }
+
+  if (material(getCell(x + first, y)) == EMPTY) {
+    return vec2<i32>(x + first, y);
+  }
+  if (material(getCell(x + second, y)) == EMPTY) {
+    return vec2<i32>(x + second, y);
+  }
+  if (randBit(x, y, 67u) && material(getCell(x, y - 1)) == EMPTY) {
+    return vec2<i32>(x, y - 1);
+  }
+  if (material(getCell(x, y + 1)) == EMPTY) {
+    return vec2<i32>(x, y + 1);
+  }
+  return vec2<i32>(x, y);
+}
+
+fn laserArcTarget(x: i32, y: i32) -> vec2<i32> {
+  var direction: i32 = -1;
+  if (randBit(x, y, 68u)) {
+    direction = 1;
+  }
+  if (material(getCell(x + direction, y - 1)) == EMPTY) {
+    return vec2<i32>(x + direction, y - 1);
+  }
+  if (material(getCell(x + direction, y)) == EMPTY) {
+    return vec2<i32>(x + direction, y);
+  }
+  return vec2<i32>(x, y);
+}
+
+fn pinballRockTarget(x: i32, y: i32) -> vec2<i32> {
+  var direction: i32 = -1;
+  if (randBit(x, y, 69u)) {
+    direction = 1;
+  }
+  if (randByte(x, y, 70u) < 92u && material(getCell(x + direction, y - 1)) == EMPTY) {
+    return vec2<i32>(x + direction, y - 1);
+  }
+  return sandTarget(x, y, PINBALL_ROCK);
+}
+
+fn lightningRockTarget(x: i32, y: i32) -> vec2<i32> {
+  if (material(getCell(x, y + 1)) == EMPTY || material(getCell(x, y + 1)) == ELECTRIC || material(getCell(x, y + 1)) == SPARK) {
+    return vec2<i32>(x, y + 1);
+  }
+  return sandTarget(x, y, LIGHTNING_ROCK);
+}
+
+fn iceBurstTarget(x: i32, y: i32) -> vec2<i32> {
+  var direction: i32 = -1;
+  if (randBit(x, y, 71u)) {
+    direction = 1;
+  }
+  if (material(getCell(x + direction, y - 1)) == EMPTY) {
+    return vec2<i32>(x + direction, y - 1);
+  }
+  return sandTarget(x, y, ICE_BURST);
+}
+
+fn secondaryTarget(sourceMat: u32, x: i32, y: i32) -> vec2<i32> {
+  if (sourceMat == CHAIN_ARC) {
+    return chainArcTarget(x, y);
+  }
+  if (sourceMat == LASER_ARC) {
+    return laserArcTarget(x, y);
+  }
+  if (sourceMat == PINBALL_ROCK) {
+    return pinballRockTarget(x, y);
+  }
+  if (sourceMat == LIGHTNING_ROCK) {
+    return lightningRockTarget(x, y);
+  }
+  if (sourceMat == ICE_BURST) {
+    return iceBurstTarget(x, y);
+  }
+  if (sourceMat == BLIZZARD || sourceMat == FIRE_DUST || sourceMat == CHARGED_DUST) {
+    return dustTarget(x, y);
+  }
+  return vec2<i32>(x, y);
+}
+
 fn targetMatches(moveTo: vec2<i32>, x: i32, y: i32) -> bool {
   return moveTo.x == x && moveTo.y == y;
 }
@@ -706,8 +898,63 @@ fn powderIncomingCell(sourceCell: u32, targetMat: u32, x: i32, y: i32, salt: u32
 fn applyCurrentOutgoing(cell: u32, x: i32, y: i32) -> u32 {
   let mat = material(cell);
 
+  if (isSecondaryMaterial(mat)) {
+    let age = life(cell);
+    if (age <= 1u) {
+      if (mat == PINBALL_ROCK || mat == LIGHTNING_ROCK) {
+        return pack(ROCK, 0u, aux(cell));
+      }
+      if (mat == ICE_BURST) {
+        return pack(ICE, 0u, aux(cell));
+      }
+      return pack(EMPTY, 0u, 0u);
+    }
+
+    var moveTo = vec2<i32>(x, y);
+    if (mat == CHAIN_ARC) {
+      moveTo = chainArcTarget(x, y);
+    } else if (mat == LASER_ARC) {
+      moveTo = laserArcTarget(x, y);
+    } else if (mat == PINBALL_ROCK) {
+      moveTo = pinballRockTarget(x, y);
+    } else if (mat == LIGHTNING_ROCK) {
+      moveTo = lightningRockTarget(x, y);
+    } else if (mat == ICE_BURST) {
+      moveTo = iceBurstTarget(x, y);
+    } else if (mat == BLIZZARD || mat == FIRE_DUST || mat == CHARGED_DUST) {
+      moveTo = dustTarget(x, y);
+    }
+
+    if (!targetMatches(moveTo, x, y)) {
+      if (mat == LIGHTNING_ROCK && randByte(x, y, 73u) < 124u) {
+        return pack(CHAIN_ARC, 8u + (randByte(x, y, 74u) & 7u), randByte(x, y, 75u));
+      }
+      if (mat == CHAIN_ARC || mat == LASER_ARC || mat == CHARGED_DUST) {
+        return pack(SPARK, 4u + (randByte(x, y, 76u) & 7u), randByte(x, y, 77u));
+      }
+      return pack(EMPTY, 0u, 0u);
+    }
+
+    return pack(mat, age - 1u, aux(cell));
+  }
+
   if (mat == SAND || mat == WET_SAND || mat == ROCK || mat == ICE) {
-    if (mat == SAND && isElectricNear(x, y) && randByte(x, y, 12u) < 126u) {
+    if (mat == SAND && isSparkNear(x, y) && randByte(x, y, 11u) < 156u) {
+      return pack(CHAIN_EXPLOSION, 12u + (randByte(x, y, 12u) & 15u), randByte(x, y, 13u));
+    }
+    if (mat == ROCK && isWetNear(x, y) && randByte(x, y, 10u) < 108u) {
+      return pack(PINBALL_ROCK, 42u + (randByte(x, y, 11u) & 31u), randByte(x, y, 12u));
+    }
+    if (mat == ROCK && isDirectElectricNear(x, y) && randByte(x, y, 12u) < 148u) {
+      return pack(LIGHTNING_ROCK, 28u + (randByte(x, y, 13u) & 31u), randByte(x, y, 14u));
+    }
+    if (mat == ICE && isHeatNear(x, y) && randByte(x, y, 20u) < 148u) {
+      return pack(ICE_BURST, 18u + (randByte(x, y, 21u) & 15u), randByte(x, y, 22u));
+    }
+    if (mat == ICE && isSandNear(x, y) && randByte(x, y, 22u) < 112u) {
+      return pack(BLIZZARD, 34u + (randByte(x, y, 23u) & 31u), randByte(x, y, 24u));
+    }
+    if (mat == SAND && isDirectElectricNear(x, y) && randByte(x, y, 12u) < 126u) {
       return pack(FIXED_ZONE, 36u + (randByte(x, y, 13u) & 31u), randByte(x, y, 14u));
     }
     if (mat == SAND && isFireNear(x, y) && randByte(x, y, 15u) < 112u) {
@@ -715,9 +962,6 @@ fn applyCurrentOutgoing(cell: u32, x: i32, y: i32) -> u32 {
     }
     if (mat == SAND && isWetNear(x, y) && randByte(x, y, 17u) < 58u) {
       return pack(DUST, 34u + (randByte(x, y, 18u) & 31u), randByte(x, y, 19u));
-    }
-    if (mat == ICE && isHeatNear(x, y) && randByte(x, y, 20u) < 148u) {
-      return pack(WATER, 0u, randByte(x, y, 21u));
     }
     if (mat == WET_SAND && isHeatNear(x, y) && randByte(x, y, 17u) < 34u) {
       return pack(SAND, 0u, randByte(x, y, 18u));
@@ -744,7 +988,10 @@ fn applyCurrentOutgoing(cell: u32, x: i32, y: i32) -> u32 {
   }
 
   if (mat == WATER) {
-    if (isElectricNear(x, y) && randByte(x, y, 30u) < 154u) {
+    if (isSparkNear(x, y) && randByte(x, y, 29u) < 162u) {
+      return pack(LASER_ARC, 12u + (randByte(x, y, 30u) & 15u), randByte(x, y, 31u));
+    }
+    if (isDirectElectricNear(x, y) && randByte(x, y, 30u) < 154u) {
       return pack(ICE, 0u, randByte(x, y, 31u));
     }
     if (isSandNear(x, y) && randByte(x, y, 32u) < 76u) {
@@ -775,15 +1022,34 @@ fn applyCurrentOutgoing(cell: u32, x: i32, y: i32) -> u32 {
     }
 
     if (mat == FIXED_ZONE) {
+      if (isFireNear(x, y) && randByte(x, y, 38u) < 132u) {
+        return pack(AMPLIFY_ZONE, 34u + (randByte(x, y, 39u) & 31u), randByte(x, y, 40u));
+      }
+      if (isWetNear(x, y) && randByte(x, y, 41u) < 124u) {
+        return pack(SLOW_ZONE, 40u + (randByte(x, y, 42u) & 31u), randByte(x, y, 43u));
+      }
+      if (isSandNear(x, y) && randByte(x, y, 44u) < 116u) {
+        return pack(GRAVITY_ZONE, 40u + (randByte(x, y, 45u) & 31u), randByte(x, y, 46u));
+      }
       return pack(FIXED_ZONE, age - 1u, aux(cell));
     }
 
     if (mat == DUST) {
+      if (isFireNear(x, y) && randByte(x, y, 38u) < 140u) {
+        return pack(FIRE_DUST, 26u + (randByte(x, y, 39u) & 23u), randByte(x, y, 40u));
+      }
+      if (isDirectElectricNear(x, y) && randByte(x, y, 41u) < 148u) {
+        return pack(CHARGED_DUST, 30u + (randByte(x, y, 42u) & 31u), randByte(x, y, 43u));
+      }
       let moveTo = dustTarget(x, y);
       if (!targetMatches(moveTo, x, y)) {
         return pack(EMPTY, 0u, 0u);
       }
       return pack(DUST, age - 1u, aux(cell));
+    }
+
+    if (mat == STEAM && isDirectElectricNear(x, y) && randByte(x, y, 38u) < 172u) {
+      return pack(CHAIN_ARC, 18u + (randByte(x, y, 39u) & 15u), randByte(x, y, 40u));
     }
 
     let moveTo = smokeTarget(x, y);
@@ -831,7 +1097,7 @@ fn applyCurrentOutgoing(cell: u32, x: i32, y: i32) -> u32 {
       return pack(FIRE, nextAge, AUX_PROJECTILE_FIRE);
     }
 
-    if (isElectricNear(x, y) && randByte(x, y, 40u) < 176u) {
+    if (isDirectElectricNear(x, y) && randByte(x, y, 40u) < 176u) {
       return pack(SPARK, 18u + (randByte(x, y, 41u) & 23u), randByte(x, y, 42u));
     }
     if (isSandNear(x, y) && randByte(x, y, 43u) < 116u) {
@@ -859,6 +1125,12 @@ fn applyCurrentOutgoing(cell: u32, x: i32, y: i32) -> u32 {
 
   if (mat == SPARK || mat == ELECTRIC) {
     let age = life(cell);
+    if (mat == SPARK && isSandNear(x, y) && randByte(x, y, 48u) < 172u) {
+      return pack(CHAIN_EXPLOSION, 12u + (randByte(x, y, 49u) & 15u), randByte(x, y, 50u));
+    }
+    if (mat == SPARK && isWetNear(x, y) && randByte(x, y, 50u) < 172u) {
+      return pack(LASER_ARC, 12u + (randByte(x, y, 51u) & 15u), randByte(x, y, 52u));
+    }
     if (mat == ELECTRIC && isSandNear(x, y) && randByte(x, y, 49u) < 148u) {
       return pack(FIXED_ZONE, 36u + (randByte(x, y, 50u) & 31u), randByte(x, y, 51u));
     }
@@ -885,6 +1157,12 @@ fn applyCurrentOutgoing(cell: u32, x: i32, y: i32) -> u32 {
       moveTo = electricTarget(x, y);
     }
     if (!targetMatches(moveTo, x, y)) {
+      if (mat == ELECTRIC) {
+        if (randByte(x, y, 55u) < 96u) {
+          return pack(SPARK, 6u + (randByte(x, y, 56u) & 7u), randByte(x, y, 57u));
+        }
+        return pack(EMPTY, 0u, 0u);
+      }
       if (randByte(x, y, 55u) < 72u) {
         return pack(FIRE, 5u + (randByte(x, y, 56u) & 11u), randByte(x, y, 57u));
       }
@@ -900,7 +1178,7 @@ fn applyIncoming(outCell: u32, x: i32, y: i32) -> u32 {
   var out = outCell;
   let outMat = material(out);
 
-  if (outMat == EMPTY || outMat == SMOKE || outMat == WATER || outMat == FIRE || outMat == STEAM || outMat == ELECTRIC || outMat == DUST || outMat == FIXED_ZONE) {
+  if (outMat == EMPTY || outMat == SMOKE || outMat == WATER || outMat == FIRE || outMat == STEAM || outMat == ELECTRIC || outMat == DUST || outMat == FIXED_ZONE || isPassableSecondaryMaterial(outMat)) {
     let above = getCell(x, y - 1);
     if ((material(above) == SAND || material(above) == WET_SAND || material(above) == ROCK || material(above) == ICE) && targetMatches(sandTarget(x, y - 1, material(above)), x, y)) {
       return powderIncomingCell(above, outMat, x, y, 61u);
@@ -939,9 +1217,54 @@ fn applyIncoming(outCell: u32, x: i32, y: i32) -> u32 {
     if (material(sparkAboveRight) == ELECTRIC && life(sparkAboveRight) > 1u && targetMatches(electricTarget(x + 1, y - 1), x, y)) {
       return pack(ELECTRIC, life(sparkAboveRight) - 1u, randByte(x, y, 63u));
     }
+
+    let electricLeft = getCell(x - 1, y);
+    if (material(electricLeft) == ELECTRIC && life(electricLeft) > 1u && targetMatches(electricTarget(x - 1, y), x, y)) {
+      return pack(ELECTRIC, life(electricLeft) - 1u, randByte(x, y, 64u));
+    }
+
+    let electricRight = getCell(x + 1, y);
+    if (material(electricRight) == ELECTRIC && life(electricRight) > 1u && targetMatches(electricTarget(x + 1, y), x, y)) {
+      return pack(ELECTRIC, life(electricRight) - 1u, randByte(x, y, 65u));
+    }
+
+    let electricBelow = getCell(x, y + 1);
+    if (material(electricBelow) == ELECTRIC && life(electricBelow) > 1u && targetMatches(electricTarget(x, y + 1), x, y)) {
+      return pack(ELECTRIC, life(electricBelow) - 1u, randByte(x, y, 66u));
+    }
+
+    let secondaryAbove = getCell(x, y - 1);
+    if (isSecondaryMaterial(material(secondaryAbove)) && life(secondaryAbove) > 1u && targetMatches(secondaryTarget(material(secondaryAbove), x, y - 1), x, y)) {
+      return pack(material(secondaryAbove), life(secondaryAbove) - 1u, aux(secondaryAbove));
+    }
+
+    let secondaryAboveLeft = getCell(x - 1, y - 1);
+    if (isSecondaryMaterial(material(secondaryAboveLeft)) && life(secondaryAboveLeft) > 1u && targetMatches(secondaryTarget(material(secondaryAboveLeft), x - 1, y - 1), x, y)) {
+      return pack(material(secondaryAboveLeft), life(secondaryAboveLeft) - 1u, aux(secondaryAboveLeft));
+    }
+
+    let secondaryAboveRight = getCell(x + 1, y - 1);
+    if (isSecondaryMaterial(material(secondaryAboveRight)) && life(secondaryAboveRight) > 1u && targetMatches(secondaryTarget(material(secondaryAboveRight), x + 1, y - 1), x, y)) {
+      return pack(material(secondaryAboveRight), life(secondaryAboveRight) - 1u, aux(secondaryAboveRight));
+    }
+
+    let secondaryLeft = getCell(x - 1, y);
+    if (isSecondaryMaterial(material(secondaryLeft)) && life(secondaryLeft) > 1u && targetMatches(secondaryTarget(material(secondaryLeft), x - 1, y), x, y)) {
+      return pack(material(secondaryLeft), life(secondaryLeft) - 1u, aux(secondaryLeft));
+    }
+
+    let secondaryRight = getCell(x + 1, y);
+    if (isSecondaryMaterial(material(secondaryRight)) && life(secondaryRight) > 1u && targetMatches(secondaryTarget(material(secondaryRight), x + 1, y), x, y)) {
+      return pack(material(secondaryRight), life(secondaryRight) - 1u, aux(secondaryRight));
+    }
+
+    let secondaryBelow = getCell(x, y + 1);
+    if (isSecondaryMaterial(material(secondaryBelow)) && life(secondaryBelow) > 1u && targetMatches(secondaryTarget(material(secondaryBelow), x, y + 1), x, y)) {
+      return pack(material(secondaryBelow), life(secondaryBelow) - 1u, aux(secondaryBelow));
+    }
   }
 
-  if (outMat == EMPTY || outMat == SMOKE || outMat == FIRE || outMat == STEAM || outMat == ELECTRIC || outMat == DUST || outMat == FIXED_ZONE) {
+  if (outMat == EMPTY || outMat == SMOKE || outMat == FIRE || outMat == STEAM || outMat == ELECTRIC || outMat == DUST || outMat == FIXED_ZONE || isPassableSecondaryMaterial(outMat)) {
     let waterAbove = getCell(x, y - 1);
     if (material(waterAbove) == WATER && targetMatches(waterTarget(x, y - 1), x, y)) {
       out = pack(WATER, 0u, aux(waterAbove));
@@ -968,7 +1291,7 @@ fn applyIncoming(outCell: u32, x: i32, y: i32) -> u32 {
     }
   }
 
-  if (material(out) == EMPTY || material(out) == FIRE || material(out) == SMOKE || material(out) == STEAM || material(out) == ELECTRIC || material(out) == DUST || material(out) == FIXED_ZONE) {
+  if (material(out) == EMPTY || material(out) == FIRE || material(out) == SMOKE || material(out) == STEAM || material(out) == ELECTRIC || material(out) == DUST || material(out) == FIXED_ZONE || isPassableSecondaryMaterial(material(out))) {
     let gasBelow = getCell(x, y + 1);
     let gasBelowMat = material(gasBelow);
     if ((gasBelowMat == SMOKE || gasBelowMat == STEAM) && targetMatches(smokeTarget(x, y + 1), x, y)) {
@@ -1052,7 +1375,10 @@ fn applyBrushEmitter(cell: u32, emitter: Emitter, x: i32, y: i32) -> u32 {
     if (cellMat == WET_SAND) {
       return cell;
     }
-    if (cellMat == ELECTRIC || cellMat == SPARK) {
+    if (isSparkCarrier(cellMat)) {
+      return pack(LASER_ARC, emitterLife(emitter, 12u + (roll & 15u)), roll);
+    }
+    if (isElectricCarrier(cellMat)) {
       return pack(ICE, 0u, roll);
     }
     return pack(WATER, 0u, roll);
@@ -1064,7 +1390,10 @@ fn applyBrushEmitter(cell: u32, emitter: Emitter, x: i32, y: i32) -> u32 {
     if (cellMat == FIRE) {
       return pack(ROCK, 0u, roll);
     }
-    if (cellMat == ELECTRIC || cellMat == SPARK) {
+    if (isSparkCarrier(cellMat)) {
+      return pack(CHAIN_EXPLOSION, emitterLife(emitter, 12u + (roll & 15u)), roll);
+    }
+    if (isElectricCarrier(cellMat)) {
       return pack(FIXED_ZONE, 36u + (roll & 31u), roll);
     }
     return pack(SAND, 0u, roll);
@@ -1076,8 +1405,17 @@ fn applyBrushEmitter(cell: u32, emitter: Emitter, x: i32, y: i32) -> u32 {
     if (cellMat == WATER) {
       return pack(ICE, 0u, roll);
     }
+    if (cellMat == STEAM) {
+      return pack(CHAIN_ARC, emitterLife(emitter, 18u + (roll & 15u)), roll);
+    }
     if (cellMat == SAND || cellMat == WET_SAND) {
       return pack(FIXED_ZONE, emitterLife(emitter, 36u + (roll & 31u)), roll);
+    }
+    if (cellMat == ROCK || cellMat == PINBALL_ROCK) {
+      return pack(LIGHTNING_ROCK, emitterLife(emitter, 28u + (roll & 31u)), roll);
+    }
+    if (cellMat == DUST || cellMat == FIRE_DUST) {
+      return pack(CHARGED_DUST, emitterLife(emitter, 30u + (roll & 31u)), roll);
     }
     if (cellMat == FIRE) {
       return pack(SPARK, emitterLife(emitter, 18u + (roll & 23u)), roll);
@@ -1107,6 +1445,26 @@ fn applyBrushEmitter(cell: u32, emitter: Emitter, x: i32, y: i32) -> u32 {
   }
 
   let profile = emitterProfile(emitter);
+  if (emitter.material == FIRE) {
+    if (cellMat == WATER || cellMat == WET_SAND || cellMat == SLOW_ZONE) {
+      return pack(STEAM, emitterLife(emitter, 36u + (roll & 31u)), roll);
+    }
+    if (cellMat == SAND) {
+      return pack(ROCK, 0u, roll);
+    }
+    if (isElectricCarrier(cellMat)) {
+      return pack(SPARK, emitterLife(emitter, 18u + (roll & 23u)), roll);
+    }
+    if (cellMat == ICE) {
+      return pack(ICE_BURST, emitterLife(emitter, 18u + (roll & 15u)), roll);
+    }
+    if (cellMat == DUST || cellMat == CHARGED_DUST) {
+      return pack(FIRE_DUST, emitterLife(emitter, 26u + (roll & 23u)), roll);
+    }
+    if (cellMat == FIXED_ZONE || cellMat == GRAVITY_ZONE) {
+      return pack(AMPLIFY_ZONE, emitterLife(emitter, 34u + (roll & 31u)), roll);
+    }
+  }
   if (profile == EMITTER_PROFILE_PROJECTILE_FIRE) {
     return pack(FIRE, emitterLife(emitter, 36u + (roll & 31u)), AUX_PROJECTILE_FIRE);
   }
@@ -1278,6 +1636,54 @@ fn materialColor(cell: u32, x: u32, y: u32) -> vec4<f32> {
   if (mat == FIXED_ZONE) {
     let pulse = 0.44 + l * 0.62 + n * 0.18;
     return vec4<f32>(0.55 + pulse * 0.4, 0.95 + pulse * 0.9, 1.3 + pulse * 1.2, 1.0);
+  }
+  if (mat == CHAIN_ARC) {
+    let pulse = 0.85 + l * 1.15 + n * 0.45;
+    return vec4<f32>(0.72 + pulse * 0.95, 1.9 + pulse * 1.45, 3.2 + pulse * 2.0, 1.0);
+  }
+  if (mat == CHAIN_EXPLOSION) {
+    let heat = 0.9 + l * 1.2 + n * 0.35;
+    return vec4<f32>(3.1 + heat * 1.4, 1.35 + heat * 0.95, 0.35 + heat * 0.45, 1.0);
+  }
+  if (mat == LASER_ARC) {
+    let beam = 0.92 + l * 1.0 + n * 0.28;
+    return vec4<f32>(0.75 + beam * 0.8, 2.25 + beam * 1.55, 3.4 + beam * 1.75, 1.0);
+  }
+  if (mat == PINBALL_ROCK) {
+    let shine = 0.32 + n * 0.22;
+    return vec4<f32>(0.36 + shine * 0.38, 0.42 + shine * 0.34, 0.50 + shine * 0.46, 1.0);
+  }
+  if (mat == LIGHTNING_ROCK) {
+    let charge = 0.5 + l * 0.9 + n * 0.28;
+    return vec4<f32>(0.45 + charge * 0.55, 0.85 + charge * 1.1, 1.35 + charge * 1.45, 1.0);
+  }
+  if (mat == ICE_BURST) {
+    let shard = 0.58 + l * 0.72 + n * 0.24;
+    return vec4<f32>(0.74 + shard * 0.38, 1.1 + shard * 0.42, 1.8 + shard * 0.76, 1.0);
+  }
+  if (mat == BLIZZARD) {
+    let frost = 0.38 + l * 0.46 + n * 0.2;
+    return vec4<f32>(0.62 + frost * 0.22, 0.82 + frost * 0.32, 1.18 + frost * 0.58, 1.0);
+  }
+  if (mat == FIRE_DUST) {
+    let ember = 0.55 + l * 0.62 + n * 0.22;
+    return vec4<f32>(1.8 + ember * 1.2, 0.72 + ember * 0.58, 0.24 + ember * 0.18, 1.0);
+  }
+  if (mat == CHARGED_DUST) {
+    let charge = 0.42 + l * 0.68 + n * 0.26;
+    return vec4<f32>(0.56 + charge * 0.4, 1.2 + charge * 0.9, 1.65 + charge * 1.2, 1.0);
+  }
+  if (mat == AMPLIFY_ZONE) {
+    let pulse = 0.5 + l * 0.72 + n * 0.24;
+    return vec4<f32>(1.7 + pulse * 0.95, 0.72 + pulse * 0.54, 0.28 + pulse * 0.22, 1.0);
+  }
+  if (mat == SLOW_ZONE) {
+    let pulse = 0.42 + l * 0.48 + n * 0.18;
+    return vec4<f32>(0.42 + pulse * 0.28, 0.78 + pulse * 0.46, 1.08 + pulse * 0.72, 1.0);
+  }
+  if (mat == GRAVITY_ZONE) {
+    let pull = 0.42 + l * 0.5 + n * 0.2;
+    return vec4<f32>(0.62 + pull * 0.35, 0.50 + pull * 0.26, 0.78 + pull * 0.48, 1.0);
   }
   if (mat == SMOKE) {
     let a = 0.22 + l * 0.48;

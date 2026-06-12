@@ -19,6 +19,18 @@ const EFFECT_MATERIALS = Object.freeze({
   ice: MATERIAL.ICE,
   dust: MATERIAL.DUST,
   fixedZone: MATERIAL.FIXED_ZONE,
+  chainArc: MATERIAL.CHAIN_ARC,
+  chainExplosion: MATERIAL.CHAIN_EXPLOSION,
+  laserArc: MATERIAL.LASER_ARC,
+  pinballRock: MATERIAL.PINBALL_ROCK,
+  lightningRock: MATERIAL.LIGHTNING_ROCK,
+  iceBurst: MATERIAL.ICE_BURST,
+  blizzard: MATERIAL.BLIZZARD,
+  fireDust: MATERIAL.FIRE_DUST,
+  chargedDust: MATERIAL.CHARGED_DUST,
+  amplifyZone: MATERIAL.AMPLIFY_ZONE,
+  slowZone: MATERIAL.SLOW_ZONE,
+  gravityZone: MATERIAL.GRAVITY_ZONE,
 });
 
 const EFFECT_PROFILES = Object.freeze({

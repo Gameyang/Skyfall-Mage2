@@ -9,6 +9,7 @@ import { DamageFeedbackBuffer } from './DamageFeedbackBuffer.js';
 import {
   compileGpuReactionRules,
   getReactionOutput,
+  GPU_REACTION_RULES,
   PRIMARY_GPU_REACTION_RULES,
   SECONDARY_GPU_REACTION_RULES,
 } from './gpuReactionRules.js';
@@ -99,6 +100,18 @@ describe('elemental material reactions', () => {
       ICE: 11,
       DUST: 12,
       FIXED_ZONE: 13,
+      CHAIN_ARC: 14,
+      CHAIN_EXPLOSION: 15,
+      LASER_ARC: 16,
+      PINBALL_ROCK: 17,
+      LIGHTNING_ROCK: 18,
+      ICE_BURST: 19,
+      BLIZZARD: 20,
+      FIRE_DUST: 21,
+      CHARGED_DUST: 22,
+      AMPLIFY_ZONE: 23,
+      SLOW_ZONE: 24,
+      GRAVITY_ZONE: 25,
     }));
   });
 
@@ -117,7 +130,7 @@ describe('elemental material reactions', () => {
   });
 
   it('compiles reaction metadata into numeric shader-friendly rows', () => {
-    const rows = compileGpuReactionRules(PRIMARY_GPU_REACTION_RULES, {
+    const materialIds = {
       fire: MATERIAL.FIRE,
       water: MATERIAL.WATER,
       electric: MATERIAL.ELECTRIC,
@@ -128,7 +141,20 @@ describe('elemental material reactions', () => {
       ice: MATERIAL.ICE,
       dust: MATERIAL.DUST,
       fixedZone: MATERIAL.FIXED_ZONE,
-    });
+      chainArc: MATERIAL.CHAIN_ARC,
+      chainExplosion: MATERIAL.CHAIN_EXPLOSION,
+      laserArc: MATERIAL.LASER_ARC,
+      pinballRock: MATERIAL.PINBALL_ROCK,
+      lightningRock: MATERIAL.LIGHTNING_ROCK,
+      iceBurst: MATERIAL.ICE_BURST,
+      blizzard: MATERIAL.BLIZZARD,
+      fireDust: MATERIAL.FIRE_DUST,
+      chargedDust: MATERIAL.CHARGED_DUST,
+      amplifyZone: MATERIAL.AMPLIFY_ZONE,
+      slowZone: MATERIAL.SLOW_ZONE,
+      gravityZone: MATERIAL.GRAVITY_ZONE,
+    };
+    const rows = compileGpuReactionRules(PRIMARY_GPU_REACTION_RULES, materialIds);
 
     expect(rows).toContainEqual(expect.objectContaining({
       inputA: MATERIAL.FIRE,
@@ -137,6 +163,8 @@ describe('elemental material reactions', () => {
       priority: 10,
     }));
     expect(rows.every((row) => row.inputA >= 0 && row.inputB >= 0 && row.output >= 0)).toBe(true);
+    expect(compileGpuReactionRules(GPU_REACTION_RULES, materialIds)
+      .every((row) => row.inputA >= 0 && row.inputB >= 0 && row.output >= 0)).toBe(true);
   });
 
   it('uses damage feedback only for selected secondary reactions', () => {
@@ -218,5 +246,37 @@ describe('material field shader profiles', () => {
     expect(materialFieldShaderSource).toContain('return pack(ICE');
     expect(materialFieldShaderSource).toContain('return pack(DUST');
     expect(materialFieldShaderSource).toContain('return pack(FIXED_ZONE');
+  });
+
+  it('contains secondary reaction material constants and priority branches', () => {
+    expect(materialFieldShaderSource).toContain('const CHAIN_ARC: u32 = 14u');
+    expect(materialFieldShaderSource).toContain('const CHAIN_EXPLOSION: u32 = 15u');
+    expect(materialFieldShaderSource).toContain('const LASER_ARC: u32 = 16u');
+    expect(materialFieldShaderSource).toContain('const LIGHTNING_ROCK: u32 = 18u');
+    expect(materialFieldShaderSource).toContain('const GRAVITY_ZONE: u32 = 25u');
+    expect(materialFieldShaderSource).toContain('return pack(CHAIN_ARC');
+    expect(materialFieldShaderSource).toContain('return pack(CHAIN_EXPLOSION');
+    expect(materialFieldShaderSource).toContain('return pack(LASER_ARC');
+    expect(materialFieldShaderSource).toContain('return pack(PINBALL_ROCK');
+    expect(materialFieldShaderSource).toContain('return pack(LIGHTNING_ROCK');
+    expect(materialFieldShaderSource).toContain('return pack(ICE_BURST');
+    expect(materialFieldShaderSource).toContain('return pack(BLIZZARD');
+    expect(materialFieldShaderSource).toContain('return pack(FIRE_DUST');
+    expect(materialFieldShaderSource).toContain('return pack(CHARGED_DUST');
+    expect(materialFieldShaderSource).toContain('return pack(AMPLIFY_ZONE');
+    expect(materialFieldShaderSource).toContain('return pack(SLOW_ZONE');
+    expect(materialFieldShaderSource).toContain('return pack(GRAVITY_ZONE');
+    expect(materialFieldShaderSource).toContain('fn isPassableSecondaryMaterial');
+    expect(materialFieldShaderSource).toContain('!isHeavyFallingMaterial(mat)');
+    expect(materialFieldShaderSource.indexOf('mat == SPARK && isSandNear'))
+      .toBeLessThan(materialFieldShaderSource.indexOf('mat == ELECTRIC && isSandNear'));
+  });
+
+  it('preserves electric movement from every direction it can target', () => {
+    expect(materialFieldShaderSource).toContain('fn electricTarget');
+    expect(materialFieldShaderSource).toContain('targetMatches(electricTarget(x - 1, y), x, y)');
+    expect(materialFieldShaderSource).toContain('targetMatches(electricTarget(x + 1, y), x, y)');
+    expect(materialFieldShaderSource).toContain('targetMatches(electricTarget(x, y + 1), x, y)');
+    expect(materialFieldShaderSource).toContain('return pack(SPARK, 6u + (randByte(x, y, 56u) & 7u)');
   });
 });
