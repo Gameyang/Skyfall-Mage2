@@ -33,6 +33,7 @@ export function createGameState({ width = 1280, height = 720, content = DEFAULT_
       nextItemDropId: 1,
       nextLostItemId: 1,
       contactFlashMs: 0,
+      equippedSkillIds: Object.freeze([...(content.equippedSkillIds || Object.keys(content.skills || {}))]),
     },
     input: {
       up: false,

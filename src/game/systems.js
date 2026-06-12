@@ -314,8 +314,8 @@ export function updateAutoSkills(state, dtMs, content = DEFAULT_SYSTEM_CONTENT) 
     const target = selectTargetForSkill(state, skill);
     if (!target) continue;
 
-    const projectile = spawnProjectileFromSkill(state, skill, target, skillId);
-    if (!projectile) continue;
+    const projectiles = spawnProjectilesFromSkill(state, skill, target, skillId);
+    if (!projectiles.length) continue;
 
     skillState.cooldownRemainingMs += skill.cooldownMs ?? DEFAULT_SKILL_COOLDOWN_MS;
   }
@@ -352,16 +352,70 @@ export function scoreProgressRisk(enemy, player, viewport) {
 }
 
 export function spawnProjectileFromSkill(state, skill, target, skillId = skill.id) {
-  if (!skill.projectile) return null;
+  return spawnProjectilesFromSkill(state, skill, target, skillId)[0] || null;
+}
 
-  const direction = normalize(target.x - state.player.x, target.y - state.player.y);
+export function spawnProjectilesFromSkill(state, skill, target, skillId = skill.id) {
+  if (!skill.projectile) return [];
+
   const projectileDefinition = skill.projectile;
+  const pattern = projectileDefinition.pattern || {};
+  if (pattern.type === 'fallingRain') {
+    return spawnFallingRainProjectiles(state, skill, target, skillId, projectileDefinition, pattern);
+  }
+
+  const baseDirection = normalize(target.x - state.player.x, target.y - state.player.y);
+  const count = Math.max(1, Math.round(pattern.count ?? 1));
+  const spreadRadians = Math.max(0, Number(pattern.spreadRadians) || 0);
+  const projectiles = [];
+
+  for (let index = 0; index < count; index += 1) {
+    const ratio = count <= 1 ? 0 : index / (count - 1) - 0.5;
+    const angle = ratio * spreadRadians;
+    const direction = rotateVector(baseDirection, angle);
+    projectiles.push(spawnProjectileEntity(state, skill, target, skillId, projectileDefinition, {
+      x: state.player.x,
+      y: state.player.y,
+      direction,
+      patternIndex: index,
+    }));
+  }
+
+  return projectiles;
+}
+
+function spawnFallingRainProjectiles(state, skill, target, skillId, projectileDefinition, pattern) {
+  const count = Math.max(1, Math.round(pattern.count ?? 1));
+  const width = Math.max(0, Number(pattern.width) || 0);
+  const offsetY = Number(pattern.offsetY) || 0;
+  const jitterY = Math.max(0, Number(pattern.jitterY) || 0);
+  const projectiles = [];
+  const direction = { x: 0, y: 1 };
+
+  for (let index = 0; index < count; index += 1) {
+    const ratio = count <= 1 ? 0.5 : index / (count - 1);
+    const x = target.x - width * 0.5 + width * ratio;
+    const jitter = (hash01((state.session.nextProjectileId + index + 1) * 2654435761) - 0.5) * jitterY;
+    const y = target.y + offsetY + jitter;
+    projectiles.push(spawnProjectileEntity(state, skill, target, skillId, projectileDefinition, {
+      x,
+      y,
+      direction,
+      patternIndex: index,
+    }));
+  }
+
+  return projectiles;
+}
+
+function spawnProjectileEntity(state, skill, target, skillId, projectileDefinition, spawn) {
+  const direction = spawn.direction || normalize(target.x - spawn.x, target.y - spawn.y);
   const projectile = {
     id: state.session.nextProjectileId,
     skillId,
     definitionId: skill.id,
-    x: state.player.x,
-    y: state.player.y,
+    x: spawn.x,
+    y: spawn.y,
     vx: direction.x * projectileDefinition.speed,
     vy: direction.y * projectileDefinition.speed,
     radius: projectileDefinition.radius,
@@ -370,6 +424,7 @@ export function spawnProjectileFromSkill(state, skill, target, skillId = skill.i
     ageMs: 0,
     energy: createProjectileEnergyState(projectileDefinition.energy),
     visual: projectileDefinition.visual,
+    patternIndex: spawn.patternIndex ?? 0,
   };
   state.session.nextProjectileId += 1;
   state.entities.projectiles.push(projectile);
@@ -382,6 +437,17 @@ export function spawnProjectileFromSkill(state, skill, target, skillId = skill.i
   });
   pushSkillEffects(state, skill, 'cast', projectile);
   return projectile;
+}
+
+function rotateVector(vector, angle) {
+  if (angle === 0) return vector;
+
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return {
+    x: vector.x * cos - vector.y * sin,
+    y: vector.x * sin + vector.y * cos,
+  };
 }
 
 export function updateProjectiles(state, dtMs) {
@@ -813,6 +879,44 @@ function applyHazardTick(state, hazard, tickMs, content = DEFAULT_SYSTEM_CONTENT
   }
 
   pushMaterialEffects(state, hazard.materialEffects.tick, hazard);
+}
+
+export function applyGpuDamageFeedback(state, feedbackRecords = [], content = DEFAULT_SYSTEM_CONTENT) {
+  let hitCount = 0;
+
+  for (const record of feedbackRecords || []) {
+    if (!record || !Number.isFinite(record.x) || !Number.isFinite(record.y)) continue;
+
+    const radius = Math.max(0, Number(record.radius) || 0);
+    const damage = Math.max(0, Number(record.damage) || 0);
+    if (radius <= 0 || damage <= 0) continue;
+
+    state.frameEvents.push({
+      type: 'GpuDamageFeedback',
+      feedbackType: record.type || record.damageType || 'gpuReaction',
+      sourceMaterial: record.sourceMaterial || null,
+      x: record.x,
+      y: record.y,
+      radius,
+      damage,
+    });
+
+    for (const enemy of state.entities.enemies) {
+      if (enemy.hp <= 0) continue;
+      if (distance(record, enemy) > radius + enemy.radius) continue;
+
+      damageEnemy(state, enemy, damage, {
+        type: 'GpuDamageFeedbackHit',
+        feedbackType: record.type || record.damageType || 'gpuReaction',
+        enemyId: enemy.id,
+        radius,
+      }, content);
+      hitCount += 1;
+    }
+  }
+
+  state.entities.enemies = state.entities.enemies.filter((enemy) => enemy.hp > 0);
+  return hitCount;
 }
 
 function damageEnemy(state, enemy, damage, event, content = DEFAULT_SYSTEM_CONTENT) {

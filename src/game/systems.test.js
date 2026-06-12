@@ -5,7 +5,14 @@ import { ITEM_DEFINITIONS } from './content/items.js';
 import { SKILL_DEFINITIONS } from './content/skills.js';
 import { createEnemyFromWave, createSCurvePath, sampleSCurvePath } from './enemyPaths.js';
 import { createGameState } from './GameState.js';
-import { losePlayerRibbonItems, selectProgressRiskTarget, updateGame, updatePlayer, updateViewport } from './systems.js';
+import {
+  applyGpuDamageFeedback,
+  losePlayerRibbonItems,
+  selectProgressRiskTarget,
+  updateGame,
+  updatePlayer,
+  updateViewport,
+} from './systems.js';
 
 function createTestContent(overrides = {}) {
   return {
@@ -298,7 +305,7 @@ describe('fireball skill', () => {
     expect(trailEffects.some((effect) => effect.material === 'spark')).toBe(false);
   });
 
-  it('only emits fast smoke when fireball energy explodes on impact', () => {
+  it('keeps fireball explosion emitters limited to direct fire input', () => {
     const content = createTestContent({
       skills: { fireball: SKILL_DEFINITIONS.fireball },
     });
@@ -353,14 +360,111 @@ describe('fireball skill', () => {
       expansionFrames: 5,
       explosion: true,
     }));
+    expect(state.frameEffects.every((effect) => ['fire'].includes(effect.material))).toBe(true);
+  });
+
+  it('defines the MVP elemental skills with only base material emitters', () => {
+    const skillIds = Object.keys(SKILL_DEFINITIONS).sort();
+    expect(skillIds).toEqual([
+      'electric_bolt',
+      'fireball',
+      'rain_fall',
+      'sand_barrage',
+      'sand_bolt',
+      'water_bolt',
+      'water_burst',
+    ]);
+
+    for (const skill of Object.values(SKILL_DEFINITIONS)) {
+      expect(skill).toEqual(expect.objectContaining({
+        element: expect.any(String),
+        tags: expect.arrayContaining([skill.element, 'base-element', 'gpu-reaction-input']),
+        cooldownMs: expect.any(Number),
+        targeting: expect.objectContaining({ type: 'progress-risk' }),
+        gpuReactionRole: 'base-input-only',
+      }));
+      expect(collectSkillMaterials(skill).every((material) => (
+        ['fire', 'water', 'electric', 'sand'].includes(material)
+      ))).toBe(true);
+    }
+  });
+
+  it('defines the three non-fire base weapons as single projectile bolts', () => {
+    for (const skillId of ['water_bolt', 'electric_bolt', 'sand_bolt']) {
+      const skill = SKILL_DEFINITIONS[skillId];
+
+      expect(skill.tags).toEqual(expect.arrayContaining(['weapon', 'single-target', 'projectile']));
+      expect(skill.projectile.pattern).toBeUndefined();
+      expect(skill.impact.damage).toBeGreaterThan(0);
+      expect(collectSkillMaterials(skill)).toEqual(expect.arrayContaining([skill.element]));
+    }
+  });
+
+  it('spawns sand barrage as a fan of five base sand projectiles', () => {
+    const content = createTestContent({
+      skills: { sand_barrage: SKILL_DEFINITIONS.sand_barrage },
+    });
+    const state = createGameState({ width: 800, height: 600, content });
+    state.player.x = 400;
+    state.player.y = 300;
+    state.entities.enemies.push({
+      id: 1,
+      hp: 100,
+      x: 700,
+      y: 300,
+      radius: 18,
+      progress: 400,
+      travelDistance: 1000,
+      contactDamage: 12,
+    });
+
+    updateGame(state, 16, content);
+
+    expect(state.entities.projectiles).toHaveLength(5);
+    expect(state.entities.projectiles.every((projectile) => projectile.skillId === 'sand_barrage')).toBe(true);
     expect(state.frameEffects).toContainEqual(expect.objectContaining({
-      material: 'smoke',
-      life: 10,
-      frames: 2,
-      explosion: true,
+      material: 'sand',
     }));
   });
+
+  it('spawns rain fall above the target as downward water projectiles', () => {
+    const content = createTestContent({
+      skills: { rain_fall: SKILL_DEFINITIONS.rain_fall },
+    });
+    const state = createGameState({ width: 800, height: 600, content });
+    state.entities.enemies.push({
+      id: 1,
+      hp: 100,
+      x: 500,
+      y: 300,
+      radius: 18,
+      progress: 400,
+      travelDistance: 1000,
+      contactDamage: 12,
+    });
+
+    updateGame(state, 16, content);
+
+    expect(state.entities.projectiles).toHaveLength(9);
+    expect(state.entities.projectiles.every((projectile) => projectile.vy > 0)).toBe(true);
+    expect(state.entities.projectiles.every((projectile) => projectile.y < 300)).toBe(true);
+  });
 });
+
+function collectSkillMaterials(skill) {
+  const materials = [];
+  const collect = (effects = []) => {
+    for (const effect of effects || []) {
+      if (effect?.material) materials.push(effect.material);
+    }
+  };
+
+  collect(skill.materialEffects?.cast);
+  collect(skill.materialEffects?.hit);
+  collect(skill.projectile?.energy?.trailEffects);
+  collect(skill.projectile?.energy?.explosion?.materialEffects);
+  return materials;
+}
 
 describe('combat resolution', () => {
   it('clears stale frame effects even after game over', () => {
@@ -687,6 +791,51 @@ describe('combat resolution', () => {
       material: 'steam',
       x: 120,
       y: 120,
+    }));
+  });
+
+  it('applies GPU damage feedback records through the normal enemy damage path', () => {
+    const content = createTestContent();
+    const state = createGameState({ width: 800, height: 600, content });
+    state.entities.enemies.push(
+      {
+        id: 1,
+        hp: 30,
+        x: 120,
+        y: 120,
+        radius: 18,
+        progress: 0,
+        travelDistance: 1000,
+        contactDamage: 12,
+      },
+      {
+        id: 2,
+        hp: 30,
+        x: 220,
+        y: 120,
+        radius: 18,
+        progress: 0,
+        travelDistance: 1000,
+        contactDamage: 12,
+      },
+    );
+
+    const hitCount = applyGpuDamageFeedback(state, [
+      { type: 'chainArc', sourceMaterial: 'chainArc', x: 120, y: 120, radius: 34, damage: 5 },
+    ], content);
+
+    expect(hitCount).toBe(1);
+    expect(state.entities.enemies.find((enemy) => enemy.id === 1).hp).toBe(25);
+    expect(state.entities.enemies.find((enemy) => enemy.id === 2).hp).toBe(30);
+    expect(state.frameEvents).toContainEqual(expect.objectContaining({
+      type: 'GpuDamageFeedback',
+      feedbackType: 'chainArc',
+    }));
+    expect(state.frameEvents).toContainEqual(expect.objectContaining({
+      type: 'GpuDamageFeedbackHit',
+      feedbackType: 'chainArc',
+      enemyId: 1,
+      damage: 5,
     }));
   });
 

@@ -5,6 +5,13 @@ import { MaterialEmitterState } from './MaterialEmitterState.js';
 import { MATERIAL } from './materials.js';
 import materialFieldShaderSource from './shaders/noitaField.wgsl?raw';
 import { mapEffectToGrid } from './ViewportMapper.js';
+import { DamageFeedbackBuffer } from './DamageFeedbackBuffer.js';
+import {
+  compileGpuReactionRules,
+  getReactionOutput,
+  PRIMARY_GPU_REACTION_RULES,
+  SECONDARY_GPU_REACTION_RULES,
+} from './gpuReactionRules.js';
 
 describe('seedInitialField', () => {
   it('starts combat in an empty sky field without terrain or obstacles', () => {
@@ -79,6 +86,88 @@ describe('MaterialEmitterState', () => {
   });
 });
 
+describe('elemental material reactions', () => {
+  it('defines the four direct elements and six primary derived materials', () => {
+    expect(MATERIAL).toEqual(expect.objectContaining({
+      FIRE: 4,
+      WATER: 3,
+      ELECTRIC: 9,
+      SAND: 2,
+      STEAM: 7,
+      SPARK: 6,
+      ROCK: 10,
+      ICE: 11,
+      DUST: 12,
+      FIXED_ZONE: 13,
+    }));
+  });
+
+  it('keeps primary GPU reaction rules out of skill definitions', () => {
+    expect(PRIMARY_GPU_REACTION_RULES).toEqual(expect.arrayContaining([
+      expect.objectContaining({ inputA: 'fire', inputB: 'water', output: 'steam' }),
+      expect.objectContaining({ inputA: 'fire', inputB: 'electric', output: 'spark' }),
+      expect.objectContaining({ inputA: 'fire', inputB: 'sand', output: 'rock' }),
+      expect.objectContaining({ inputA: 'water', inputB: 'electric', output: 'ice' }),
+      expect.objectContaining({ inputA: 'water', inputB: 'sand', output: 'dust' }),
+      expect.objectContaining({ inputA: 'electric', inputB: 'sand', output: 'fixedZone' }),
+    ]));
+    expect(getReactionOutput('electric', 'fire')).toEqual(expect.objectContaining({
+      output: 'spark',
+    }));
+  });
+
+  it('compiles reaction metadata into numeric shader-friendly rows', () => {
+    const rows = compileGpuReactionRules(PRIMARY_GPU_REACTION_RULES, {
+      fire: MATERIAL.FIRE,
+      water: MATERIAL.WATER,
+      electric: MATERIAL.ELECTRIC,
+      sand: MATERIAL.SAND,
+      steam: MATERIAL.STEAM,
+      spark: MATERIAL.SPARK,
+      rock: MATERIAL.ROCK,
+      ice: MATERIAL.ICE,
+      dust: MATERIAL.DUST,
+      fixedZone: MATERIAL.FIXED_ZONE,
+    });
+
+    expect(rows).toContainEqual(expect.objectContaining({
+      inputA: MATERIAL.FIRE,
+      inputB: MATERIAL.WATER,
+      output: MATERIAL.STEAM,
+      priority: 10,
+    }));
+    expect(rows.every((row) => row.inputA >= 0 && row.inputB >= 0 && row.output >= 0)).toBe(true);
+  });
+
+  it('uses damage feedback only for selected secondary reactions', () => {
+    const feedbackRules = SECONDARY_GPU_REACTION_RULES.filter((rule) => rule.feedback?.enabled);
+
+    expect(feedbackRules.length).toBeGreaterThanOrEqual(6);
+    expect(feedbackRules).toContainEqual(expect.objectContaining({
+      output: 'chainArc',
+      feedback: expect.objectContaining({ enabled: true, damageType: 'chainArc' }),
+    }));
+    expect(SECONDARY_GPU_REACTION_RULES.find((rule) => rule.output === 'amplifyZone').feedback.enabled).toBe(false);
+  });
+
+  it('stores bounded GPU damage feedback records without exposing field readback', () => {
+    const buffer = new DamageFeedbackBuffer({ maxRecords: 1 });
+    const chainArcRule = SECONDARY_GPU_REACTION_RULES.find((rule) => rule.output === 'chainArc');
+
+    expect(buffer.pushFromRule(chainArcRule, { x: 42, y: 24 }, 2)).toEqual(expect.objectContaining({
+      type: 'chainArc',
+      x: 42,
+      y: 24,
+      radius: chainArcRule.feedback.radius,
+    }));
+    expect(buffer.push({ type: 'laserArc', x: 10, y: 10, radius: 20, damage: 4 })).toBeNull();
+    expect(buffer.droppedRecords).toBe(1);
+    expect(buffer.read()).toHaveLength(1);
+    expect(buffer.drain()).toHaveLength(1);
+    expect(buffer.read()).toHaveLength(0);
+  });
+});
+
 describe('material field shader profiles', () => {
   it('keeps projectile fire marked while letting the tail follow gas flow and decay quickly', () => {
     expect(materialFieldShaderSource).toContain('const AUX_PROJECTILE_FIRE');
@@ -116,5 +205,18 @@ describe('material field shader profiles', () => {
     expect(materialFieldShaderSource).toContain('let windStrength = min(params.gasWindStrength, 255u)');
     expect(materialFieldShaderSource).toContain('let flowX = gasFlowX(x, y, 30u)');
     expect(materialFieldShaderSource).toContain('let flowX = gasFlowX(x, y, 33u)');
+  });
+
+  it('contains elemental material constants and primary reaction branches', () => {
+    expect(materialFieldShaderSource).toContain('const ELECTRIC: u32 = 9u');
+    expect(materialFieldShaderSource).toContain('const ROCK: u32 = 10u');
+    expect(materialFieldShaderSource).toContain('const ICE: u32 = 11u');
+    expect(materialFieldShaderSource).toContain('const DUST: u32 = 12u');
+    expect(materialFieldShaderSource).toContain('const FIXED_ZONE: u32 = 13u');
+    expect(materialFieldShaderSource).toContain('return pack(SPARK');
+    expect(materialFieldShaderSource).toContain('return pack(ROCK');
+    expect(materialFieldShaderSource).toContain('return pack(ICE');
+    expect(materialFieldShaderSource).toContain('return pack(DUST');
+    expect(materialFieldShaderSource).toContain('return pack(FIXED_ZONE');
   });
 });

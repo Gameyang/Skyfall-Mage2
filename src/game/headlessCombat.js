@@ -1,5 +1,6 @@
 import { HEADLESS_GAME_CONTENT } from './content/headless.js';
 import { createGameState } from './GameState.js';
+import { createRunContent } from './runContent.js';
 import { updateGame } from './systems.js';
 
 export function runHeadlessCombatSimulation({
@@ -82,12 +83,7 @@ export function runHeadlessCombatSimulation({
 }
 
 function createSimulationContent({ content, waveSeed, contactDamageMultiplier }) {
-  const nextContent = {
-    ...content,
-    waves: waveSeed && typeof content.createWaveSequence === 'function'
-      ? content.createWaveSequence({ seed: waveSeed })
-      : content.waves,
-  };
+  const nextContent = createRunContent(content, waveSeed ? { runSeed: waveSeed } : {});
 
   if (contactDamageMultiplier === 1) {
     return nextContent;

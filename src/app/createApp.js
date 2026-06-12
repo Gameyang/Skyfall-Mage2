@@ -150,9 +150,45 @@ function collectGameResourceUrls(content, state) {
   ];
 }
 
+function createContentFromUrl(content, location = window.location) {
+  const params = new URLSearchParams(location.search);
+  const skillParam = params.get('skills') || params.get('skill');
+  if (!skillParam) return content;
+
+  const skillLoadoutOverride = parseSkillLoadoutOverride(skillParam, content.skills || {});
+  if (skillLoadoutOverride.length === 0) return content;
+
+  return {
+    ...content,
+    skillLoadoutOverride,
+  };
+}
+
+function parseSkillLoadoutOverride(value, skills) {
+  const normalized = String(value || '').trim();
+  if (!normalized || normalized.toLowerCase() === 'random') {
+    return Object.freeze([]);
+  }
+  if (normalized.toLowerCase() === 'all') {
+    return Object.freeze(Object.keys(skills));
+  }
+
+  const ids = [];
+  const seen = new Set();
+  for (const rawId of normalized.split(',')) {
+    const skillId = rawId.trim();
+    if (!skillId || seen.has(skillId) || !skills[skillId]) continue;
+
+    seen.add(skillId);
+    ids.push(skillId);
+  }
+  return Object.freeze(ids);
+}
+
 export function createApp({ root }) {
   document.title = APP_TITLE;
   root.replaceChildren();
+  const content = createContentFromUrl(GAME_CONTENT);
 
   const shell = document.createElement('main');
   shell.className = 'app-shell';
@@ -195,7 +231,7 @@ export function createApp({ root }) {
     canvas: gameCanvas,
     materialEffects: materialFieldApp,
     screenEffects: screenEffectsRenderer,
-    content: GAME_CONTENT,
+    content,
   });
   let startPromise = null;
 
@@ -207,7 +243,7 @@ export function createApp({ root }) {
       titleOverlay.setStepStatus(LOADING_STEPS.resources, 'Loading');
       titleOverlay.setStepStatus(LOADING_STEPS.shaders, 'Loading');
 
-      const resourcePromise = preloadImages(collectGameResourceUrls(GAME_CONTENT, gameRuntime.state))
+      const resourcePromise = preloadImages(collectGameResourceUrls(content, gameRuntime.state))
         .then(() => titleOverlay.setStepStatus(LOADING_STEPS.resources, 'Ready'));
       const shaderPromise = materialFieldApp.start()
         .then(() => titleOverlay.setStepStatus(LOADING_STEPS.shaders, 'Ready'));

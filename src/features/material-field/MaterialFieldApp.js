@@ -14,6 +14,11 @@ const EFFECT_MATERIALS = Object.freeze({
   water: MATERIAL.WATER,
   sand: MATERIAL.SAND,
   wetSand: MATERIAL.WET_SAND,
+  electric: MATERIAL.ELECTRIC,
+  rock: MATERIAL.ROCK,
+  ice: MATERIAL.ICE,
+  dust: MATERIAL.DUST,
+  fixedZone: MATERIAL.FIXED_ZONE,
 });
 
 const EFFECT_PROFILES = Object.freeze({

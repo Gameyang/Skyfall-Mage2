@@ -7,6 +7,11 @@ const SMOKE: u32 = 5u;
 const SPARK: u32 = 6u;
 const STEAM: u32 = 7u;
 const WET_SAND: u32 = 8u;
+const ELECTRIC: u32 = 9u;
+const ROCK: u32 = 10u;
+const ICE: u32 = 11u;
+const DUST: u32 = 12u;
+const FIXED_ZONE: u32 = 13u;
 const EMITTER_FLAG_EXPLOSION: u32 = 1u;
 const EMITTER_PROFILE_DEFAULT: u32 = 0u;
 const EMITTER_PROFILE_PURE: u32 = 1u;
@@ -178,6 +183,12 @@ fn materialDensity(mat: u32) -> u32 {
   if (mat == SOLID) {
     return 255u;
   }
+  if (mat == ROCK) {
+    return 94u;
+  }
+  if (mat == ICE) {
+    return 82u;
+  }
   if (mat == WET_SAND) {
     return 76u;
   }
@@ -190,6 +201,15 @@ fn materialDensity(mat: u32) -> u32 {
   if (mat == SPARK) {
     return 24u;
   }
+  if (mat == ELECTRIC) {
+    return 16u;
+  }
+  if (mat == DUST) {
+    return 10u;
+  }
+  if (mat == FIXED_ZONE) {
+    return 6u;
+  }
   if (mat == FIRE || mat == SMOKE || mat == STEAM) {
     return 8u;
   }
@@ -197,26 +217,26 @@ fn materialDensity(mat: u32) -> u32 {
 }
 
 fn canPowderEnter(moverMat: u32, targetMat: u32) -> bool {
-  if (targetMat == SOLID || targetMat == SAND || targetMat == WET_SAND) {
+  if (targetMat == SOLID || targetMat == SAND || targetMat == WET_SAND || targetMat == ROCK || targetMat == ICE) {
     return false;
   }
   return materialDensity(moverMat) > materialDensity(targetMat);
 }
 
 fn canFluidEnter(mat: u32) -> bool {
-  return mat != SOLID && materialDensity(WATER) > materialDensity(mat);
+  return mat != SOLID && mat != ROCK && mat != ICE && materialDensity(WATER) > materialDensity(mat);
 }
 
 fn canSupportWater(mat: u32) -> bool {
-  return mat == SOLID || mat == SAND || mat == WET_SAND || mat == WATER;
+  return mat == SOLID || mat == SAND || mat == WET_SAND || mat == ROCK || mat == ICE || mat == WATER;
 }
 
 fn canSmokeEnter(mat: u32) -> bool {
-  return mat == EMPTY || mat == FIRE;
+  return mat == EMPTY || mat == FIRE || mat == ELECTRIC || mat == DUST || mat == FIXED_ZONE;
 }
 
 fn canFireEnter(mat: u32) -> bool {
-  return mat == EMPTY || mat == SMOKE || mat == STEAM || mat == FIRE;
+  return mat == EMPTY || mat == SMOKE || mat == STEAM || mat == FIRE || mat == ELECTRIC || mat == DUST || mat == FIXED_ZONE;
 }
 
 fn isFireNear(x: i32, y: i32) -> bool {
@@ -235,6 +255,28 @@ fn isHeatNear(x: i32, y: i32) -> bool {
     material(getCell(x + 1, y)) == SPARK ||
     material(getCell(x, y - 1)) == SPARK ||
     material(getCell(x, y + 1)) == SPARK;
+}
+
+fn isElectricNear(x: i32, y: i32) -> bool {
+  return material(getCell(x - 1, y)) == ELECTRIC ||
+    material(getCell(x + 1, y)) == ELECTRIC ||
+    material(getCell(x, y - 1)) == ELECTRIC ||
+    material(getCell(x, y + 1)) == ELECTRIC ||
+    material(getCell(x - 1, y)) == SPARK ||
+    material(getCell(x + 1, y)) == SPARK ||
+    material(getCell(x, y - 1)) == SPARK ||
+    material(getCell(x, y + 1)) == SPARK;
+}
+
+fn isSandNear(x: i32, y: i32) -> bool {
+  return material(getCell(x - 1, y)) == SAND ||
+    material(getCell(x + 1, y)) == SAND ||
+    material(getCell(x, y - 1)) == SAND ||
+    material(getCell(x, y + 1)) == SAND ||
+    material(getCell(x - 1, y)) == WET_SAND ||
+    material(getCell(x + 1, y)) == WET_SAND ||
+    material(getCell(x, y - 1)) == WET_SAND ||
+    material(getCell(x, y + 1)) == WET_SAND;
 }
 
 fn isWetNear(x: i32, y: i32) -> bool {
@@ -609,6 +651,46 @@ fn sparkTarget(x: i32, y: i32) -> vec2<i32> {
   return sandTarget(x, y, SPARK);
 }
 
+fn electricTarget(x: i32, y: i32) -> vec2<i32> {
+  if (randByte(x, y, 59u) < 92u) {
+    return vec2<i32>(x, y);
+  }
+
+  let flowX = gasFlowX(x, y, 60u);
+  if (flowX != 0) {
+    let flowMat = material(getCell(x + flowX, y));
+    if (flowMat == EMPTY || flowMat == FIRE || flowMat == STEAM || flowMat == SMOKE || flowMat == DUST) {
+      return vec2<i32>(x + flowX, y);
+    }
+  }
+
+  if (randBit(x, y, 61u) && material(getCell(x, y - 1)) == EMPTY) {
+    return vec2<i32>(x, y - 1);
+  }
+  if (material(getCell(x, y + 1)) == EMPTY) {
+    return vec2<i32>(x, y + 1);
+  }
+  return vec2<i32>(x, y);
+}
+
+fn dustTarget(x: i32, y: i32) -> vec2<i32> {
+  if (randByte(x, y, 64u) < 100u) {
+    return vec2<i32>(x, y);
+  }
+
+  let flowX = gasFlowX(x, y, 65u);
+  if (flowX != 0 && material(getCell(x + flowX, y + 1)) == EMPTY) {
+    return vec2<i32>(x + flowX, y + 1);
+  }
+  if (material(getCell(x, y + 1)) == EMPTY) {
+    return vec2<i32>(x, y + 1);
+  }
+  if (flowX != 0 && material(getCell(x + flowX, y)) == EMPTY) {
+    return vec2<i32>(x + flowX, y);
+  }
+  return vec2<i32>(x, y);
+}
+
 fn targetMatches(moveTo: vec2<i32>, x: i32, y: i32) -> bool {
   return moveTo.x == x && moveTo.y == y;
 }
@@ -624,7 +706,19 @@ fn powderIncomingCell(sourceCell: u32, targetMat: u32, x: i32, y: i32, salt: u32
 fn applyCurrentOutgoing(cell: u32, x: i32, y: i32) -> u32 {
   let mat = material(cell);
 
-  if (mat == SAND || mat == WET_SAND) {
+  if (mat == SAND || mat == WET_SAND || mat == ROCK || mat == ICE) {
+    if (mat == SAND && isElectricNear(x, y) && randByte(x, y, 12u) < 126u) {
+      return pack(FIXED_ZONE, 36u + (randByte(x, y, 13u) & 31u), randByte(x, y, 14u));
+    }
+    if (mat == SAND && isFireNear(x, y) && randByte(x, y, 15u) < 112u) {
+      return pack(ROCK, 0u, randByte(x, y, 16u));
+    }
+    if (mat == SAND && isWetNear(x, y) && randByte(x, y, 17u) < 58u) {
+      return pack(DUST, 34u + (randByte(x, y, 18u) & 31u), randByte(x, y, 19u));
+    }
+    if (mat == ICE && isHeatNear(x, y) && randByte(x, y, 20u) < 148u) {
+      return pack(WATER, 0u, randByte(x, y, 21u));
+    }
     if (mat == WET_SAND && isHeatNear(x, y) && randByte(x, y, 17u) < 34u) {
       return pack(SAND, 0u, randByte(x, y, 18u));
     }
@@ -650,6 +744,12 @@ fn applyCurrentOutgoing(cell: u32, x: i32, y: i32) -> u32 {
   }
 
   if (mat == WATER) {
+    if (isElectricNear(x, y) && randByte(x, y, 30u) < 154u) {
+      return pack(ICE, 0u, randByte(x, y, 31u));
+    }
+    if (isSandNear(x, y) && randByte(x, y, 32u) < 76u) {
+      return pack(DUST, 32u + (randByte(x, y, 33u) & 31u), randByte(x, y, 34u));
+    }
     if (waterIsAbsorbedBySettledSand(x, y)) {
       return pack(EMPTY, 0u, 0u);
     }
@@ -665,7 +765,7 @@ fn applyCurrentOutgoing(cell: u32, x: i32, y: i32) -> u32 {
     return cell;
   }
 
-  if (mat == SMOKE || mat == STEAM) {
+  if (mat == SMOKE || mat == STEAM || mat == DUST || mat == FIXED_ZONE) {
     let age = life(cell);
     if (age <= 1u) {
       if (mat == STEAM && randByte(x, y, 38u) < 96u) {
@@ -673,6 +773,19 @@ fn applyCurrentOutgoing(cell: u32, x: i32, y: i32) -> u32 {
       }
       return pack(EMPTY, 0u, 0u);
     }
+
+    if (mat == FIXED_ZONE) {
+      return pack(FIXED_ZONE, age - 1u, aux(cell));
+    }
+
+    if (mat == DUST) {
+      let moveTo = dustTarget(x, y);
+      if (!targetMatches(moveTo, x, y)) {
+        return pack(EMPTY, 0u, 0u);
+      }
+      return pack(DUST, age - 1u, aux(cell));
+    }
+
     let moveTo = smokeTarget(x, y);
     if (!targetMatches(moveTo, x, y)) {
       return pack(EMPTY, 0u, 0u);
@@ -718,6 +831,12 @@ fn applyCurrentOutgoing(cell: u32, x: i32, y: i32) -> u32 {
       return pack(FIRE, nextAge, AUX_PROJECTILE_FIRE);
     }
 
+    if (isElectricNear(x, y) && randByte(x, y, 40u) < 176u) {
+      return pack(SPARK, 18u + (randByte(x, y, 41u) & 23u), randByte(x, y, 42u));
+    }
+    if (isSandNear(x, y) && randByte(x, y, 43u) < 116u) {
+      return pack(ROCK, 0u, randByte(x, y, 44u));
+    }
     if (isWetNear(x, y)) {
       return pack(STEAM, 52u + (randByte(x, y, 41u) & 31u), randByte(x, y, 45u));
     }
@@ -738,25 +857,40 @@ fn applyCurrentOutgoing(cell: u32, x: i32, y: i32) -> u32 {
     return pack(FIRE, age - 1u, randByte(x, y, 49u));
   }
 
-  if (mat == SPARK) {
+  if (mat == SPARK || mat == ELECTRIC) {
     let age = life(cell);
+    if (mat == ELECTRIC && isSandNear(x, y) && randByte(x, y, 49u) < 148u) {
+      return pack(FIXED_ZONE, 36u + (randByte(x, y, 50u) & 31u), randByte(x, y, 51u));
+    }
     if (isWetNear(x, y)) {
+      if (mat == ELECTRIC && randByte(x, y, 52u) < 172u) {
+        return pack(ICE, 0u, randByte(x, y, 53u));
+      }
       if (randByte(x, y, 50u) < 172u) {
         return pack(STEAM, 18u + (randByte(x, y, 51u) & 23u), randByte(x, y, 52u));
       }
       return pack(EMPTY, 0u, 0u);
     }
+    if (mat == ELECTRIC && isFireNear(x, y) && randByte(x, y, 54u) < 184u) {
+      return pack(SPARK, 20u + (randByte(x, y, 55u) & 23u), randByte(x, y, 56u));
+    }
     if (age <= 1u) {
+      if (mat == ELECTRIC) {
+        return pack(EMPTY, 0u, 0u);
+      }
       return pack(FIRE, 10u + (randByte(x, y, 53u) & 15u), randByte(x, y, 54u));
     }
-    let moveTo = sparkTarget(x, y);
+    var moveTo = sparkTarget(x, y);
+    if (mat == ELECTRIC) {
+      moveTo = electricTarget(x, y);
+    }
     if (!targetMatches(moveTo, x, y)) {
       if (randByte(x, y, 55u) < 72u) {
         return pack(FIRE, 5u + (randByte(x, y, 56u) & 11u), randByte(x, y, 57u));
       }
       return pack(EMPTY, 0u, 0u);
     }
-    return pack(SPARK, age - 1u, randByte(x, y, 58u));
+    return pack(mat, age - 1u, randByte(x, y, 58u));
   }
 
   return cell;
@@ -766,19 +900,19 @@ fn applyIncoming(outCell: u32, x: i32, y: i32) -> u32 {
   var out = outCell;
   let outMat = material(out);
 
-  if (outMat == EMPTY || outMat == SMOKE || outMat == WATER || outMat == FIRE || outMat == STEAM) {
+  if (outMat == EMPTY || outMat == SMOKE || outMat == WATER || outMat == FIRE || outMat == STEAM || outMat == ELECTRIC || outMat == DUST || outMat == FIXED_ZONE) {
     let above = getCell(x, y - 1);
-    if ((material(above) == SAND || material(above) == WET_SAND) && targetMatches(sandTarget(x, y - 1, material(above)), x, y)) {
+    if ((material(above) == SAND || material(above) == WET_SAND || material(above) == ROCK || material(above) == ICE) && targetMatches(sandTarget(x, y - 1, material(above)), x, y)) {
       return powderIncomingCell(above, outMat, x, y, 61u);
     }
 
     let aboveLeft = getCell(x - 1, y - 1);
-    if ((material(aboveLeft) == SAND || material(aboveLeft) == WET_SAND) && targetMatches(sandTarget(x - 1, y - 1, material(aboveLeft)), x, y)) {
+    if ((material(aboveLeft) == SAND || material(aboveLeft) == WET_SAND || material(aboveLeft) == ROCK || material(aboveLeft) == ICE) && targetMatches(sandTarget(x - 1, y - 1, material(aboveLeft)), x, y)) {
       return powderIncomingCell(aboveLeft, outMat, x, y, 62u);
     }
 
     let aboveRight = getCell(x + 1, y - 1);
-    if ((material(aboveRight) == SAND || material(aboveRight) == WET_SAND) && targetMatches(sandTarget(x + 1, y - 1, material(aboveRight)), x, y)) {
+    if ((material(aboveRight) == SAND || material(aboveRight) == WET_SAND || material(aboveRight) == ROCK || material(aboveRight) == ICE) && targetMatches(sandTarget(x + 1, y - 1, material(aboveRight)), x, y)) {
       return powderIncomingCell(aboveRight, outMat, x, y, 63u);
     }
 
@@ -786,19 +920,28 @@ fn applyIncoming(outCell: u32, x: i32, y: i32) -> u32 {
     if (material(sparkAbove) == SPARK && life(sparkAbove) > 1u && targetMatches(sparkTarget(x, y - 1), x, y)) {
       return pack(SPARK, life(sparkAbove) - 1u, randByte(x, y, 61u));
     }
+    if (material(sparkAbove) == ELECTRIC && life(sparkAbove) > 1u && targetMatches(electricTarget(x, y - 1), x, y)) {
+      return pack(ELECTRIC, life(sparkAbove) - 1u, randByte(x, y, 61u));
+    }
 
     let sparkAboveLeft = getCell(x - 1, y - 1);
     if (material(sparkAboveLeft) == SPARK && life(sparkAboveLeft) > 1u && targetMatches(sparkTarget(x - 1, y - 1), x, y)) {
       return pack(SPARK, life(sparkAboveLeft) - 1u, randByte(x, y, 62u));
+    }
+    if (material(sparkAboveLeft) == ELECTRIC && life(sparkAboveLeft) > 1u && targetMatches(electricTarget(x - 1, y - 1), x, y)) {
+      return pack(ELECTRIC, life(sparkAboveLeft) - 1u, randByte(x, y, 62u));
     }
 
     let sparkAboveRight = getCell(x + 1, y - 1);
     if (material(sparkAboveRight) == SPARK && life(sparkAboveRight) > 1u && targetMatches(sparkTarget(x + 1, y - 1), x, y)) {
       return pack(SPARK, life(sparkAboveRight) - 1u, randByte(x, y, 63u));
     }
+    if (material(sparkAboveRight) == ELECTRIC && life(sparkAboveRight) > 1u && targetMatches(electricTarget(x + 1, y - 1), x, y)) {
+      return pack(ELECTRIC, life(sparkAboveRight) - 1u, randByte(x, y, 63u));
+    }
   }
 
-  if (outMat == EMPTY || outMat == SMOKE || outMat == FIRE || outMat == STEAM) {
+  if (outMat == EMPTY || outMat == SMOKE || outMat == FIRE || outMat == STEAM || outMat == ELECTRIC || outMat == DUST || outMat == FIXED_ZONE) {
     let waterAbove = getCell(x, y - 1);
     if (material(waterAbove) == WATER && targetMatches(waterTarget(x, y - 1), x, y)) {
       out = pack(WATER, 0u, aux(waterAbove));
@@ -825,11 +968,14 @@ fn applyIncoming(outCell: u32, x: i32, y: i32) -> u32 {
     }
   }
 
-  if (material(out) == EMPTY || material(out) == FIRE || material(out) == SMOKE || material(out) == STEAM) {
+  if (material(out) == EMPTY || material(out) == FIRE || material(out) == SMOKE || material(out) == STEAM || material(out) == ELECTRIC || material(out) == DUST || material(out) == FIXED_ZONE) {
     let gasBelow = getCell(x, y + 1);
     let gasBelowMat = material(gasBelow);
     if ((gasBelowMat == SMOKE || gasBelowMat == STEAM) && targetMatches(smokeTarget(x, y + 1), x, y)) {
       out = pack(gasBelowMat, max(life(gasBelow), 1u) - 1u, randByte(x, y, 71u));
+    }
+    if (gasBelowMat == DUST && targetMatches(dustTarget(x, y + 1), x, y)) {
+      out = pack(DUST, max(life(gasBelow), 1u) - 1u, randByte(x, y, 72u));
     }
 
     let fireBelow = getCell(x, y + 1);
@@ -901,21 +1047,54 @@ fn applyBrushEmitter(cell: u32, emitter: Emitter, x: i32, y: i32) -> u32 {
 
   if (emitter.material == WATER) {
     if (cellMat == SAND) {
-      return pack(WET_SAND, 0u, roll);
+      return pack(DUST, emitterLife(emitter, 34u + (roll & 31u)), roll);
     }
     if (cellMat == WET_SAND) {
       return cell;
+    }
+    if (cellMat == ELECTRIC || cellMat == SPARK) {
+      return pack(ICE, 0u, roll);
     }
     return pack(WATER, 0u, roll);
   }
   if (emitter.material == SAND) {
     if (cellMat == WATER) {
-      return pack(WET_SAND, 0u, roll);
+      return pack(DUST, 34u + (roll & 31u), roll);
+    }
+    if (cellMat == FIRE) {
+      return pack(ROCK, 0u, roll);
+    }
+    if (cellMat == ELECTRIC || cellMat == SPARK) {
+      return pack(FIXED_ZONE, 36u + (roll & 31u), roll);
     }
     return pack(SAND, 0u, roll);
   }
   if (emitter.material == WET_SAND) {
     return pack(WET_SAND, 0u, roll);
+  }
+  if (emitter.material == ELECTRIC) {
+    if (cellMat == WATER) {
+      return pack(ICE, 0u, roll);
+    }
+    if (cellMat == SAND || cellMat == WET_SAND) {
+      return pack(FIXED_ZONE, emitterLife(emitter, 36u + (roll & 31u)), roll);
+    }
+    if (cellMat == FIRE) {
+      return pack(SPARK, emitterLife(emitter, 18u + (roll & 23u)), roll);
+    }
+    return pack(ELECTRIC, emitterLife(emitter, 18u + (roll & 23u)), roll);
+  }
+  if (emitter.material == ROCK) {
+    return pack(ROCK, 0u, roll);
+  }
+  if (emitter.material == ICE) {
+    return pack(ICE, 0u, roll);
+  }
+  if (emitter.material == DUST) {
+    return pack(DUST, emitterLife(emitter, 34u + (roll & 31u)), roll);
+  }
+  if (emitter.material == FIXED_ZONE) {
+    return pack(FIXED_ZONE, emitterLife(emitter, 36u + (roll & 31u)), roll);
   }
   if (emitter.material == SMOKE) {
     return pack(SMOKE, emitterLife(emitter, 42u + (roll & 47u)), roll);
@@ -1067,6 +1246,13 @@ fn materialColor(cell: u32, x: u32, y: u32) -> vec4<f32> {
   if (mat == SOLID) {
     return vec4<f32>(0.18 + n * 0.08, 0.17 + n * 0.06, 0.18 + n * 0.05, 1.0);
   }
+  if (mat == ROCK) {
+    return vec4<f32>(0.27 + n * 0.08, 0.25 + n * 0.06, 0.27 + n * 0.05, 1.0);
+  }
+  if (mat == ICE) {
+    let shine = 0.45 + n * 0.22;
+    return vec4<f32>(0.45 + shine * 0.35, 0.78 + shine * 0.2, 1.2 + shine * 0.35, 1.0);
+  }
   if (mat == SAND) {
     return vec4<f32>(0.78 + n * 0.12, 0.58 + n * 0.08, 0.28 + n * 0.06, 1.0);
   }
@@ -1077,9 +1263,21 @@ fn materialColor(cell: u32, x: u32, y: u32) -> vec4<f32> {
     let still = f32((hash(x, y, aux(cell) + 17u) & 31u)) / 31.0;
     return vec4<f32>(0.08 + still * 0.04, 0.30 + still * 0.08, 0.85 + still * 0.13, 1.0);
   }
+  if (mat == ELECTRIC) {
+    let heat = clamp(0.85 + l * 0.95 + n * 0.25, 0.0, 2.0);
+    return vec4<f32>(0.55 + heat * 0.8, 1.6 + heat * 1.3, 2.4 + heat * 1.8, 1.0);
+  }
   if (mat == FIRE) {
     let heat = clamp(l * 2.6 + n * 0.22, 0.0, 1.0);
     return vec4<f32>(2.15 + heat * 2.35, 0.24 + heat * 0.95, 0.02 + heat * 0.16 + n * 0.04, 1.0);
+  }
+  if (mat == DUST) {
+    let a = 0.28 + l * 0.28;
+    return vec4<f32>(a * 1.35 + n * 0.08, a * 1.12 + n * 0.06, a * 0.76 + n * 0.04, 1.0);
+  }
+  if (mat == FIXED_ZONE) {
+    let pulse = 0.44 + l * 0.62 + n * 0.18;
+    return vec4<f32>(0.55 + pulse * 0.4, 0.95 + pulse * 0.9, 1.3 + pulse * 1.2, 1.0);
   }
   if (mat == SMOKE) {
     let a = 0.22 + l * 0.48;

@@ -2,8 +2,8 @@ import { GAME_CONTENT } from './content/index.js';
 import { createGameState } from './GameState.js';
 import { createGameInput } from './input/createGameInput.js';
 import { createGameCanvasRenderer } from './render/GameCanvasRenderer.js';
+import { createRunContent } from './runContent.js';
 import { updateGame, updateViewport } from './systems.js';
-import { createRunSeed } from './waveRandomizer.js';
 
 const GAME_OVER_RESTART_DELAY_MS = 3000;
 const HIT_SHAKE_DURATION_MS = 180;
@@ -127,19 +127,6 @@ class GameRuntime {
     updateViewport(this.state, viewport.width, viewport.height, viewport.visible);
     this.gameOverStartedAt = null;
   }
-}
-
-function createRunContent(content) {
-  if (typeof content.createWaveSequence !== 'function') {
-    return content;
-  }
-
-  const runSeed = createRunSeed('skyfall');
-  return {
-    ...content,
-    runSeed,
-    waves: content.createWaveSequence({ seed: runSeed }),
-  };
 }
 
 function clamp(value, min, max) {
