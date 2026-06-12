@@ -1,7 +1,7 @@
 export const SKILL_DEFINITIONS = Object.freeze({
   fireball: Object.freeze({
     id: 'fireball',
-    cooldownMs: 1000,
+    cooldownMs: 700,
     targeting: Object.freeze({
       type: 'progress-risk',
     }),
@@ -23,7 +23,7 @@ export const SKILL_DEFINITIONS = Object.freeze({
           minRadius: 28,
           maxRadius: 68,
           minDamage: 10,
-          maxDamage: 28,
+          maxDamage: 32,
           materialEffects: Object.freeze([
             Object.freeze({ material: 'fire', profile: 'skillExplosionFire', life: 14, radiusScale: 0.92, strength: 255, frames: 5, radialForce: 1, expansionFrames: 5, explosion: true }),
             Object.freeze({ material: 'spark', radiusScale: 0.42, strength: 235, frames: 4, explosion: true }),
@@ -38,7 +38,7 @@ export const SKILL_DEFINITIONS = Object.freeze({
       }),
     }),
     impact: Object.freeze({
-      damage: 8,
+      damage: 12,
     }),
     materialEffects: Object.freeze({
       cast: Object.freeze([

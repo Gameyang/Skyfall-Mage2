@@ -194,7 +194,7 @@ describe('progress-risk targeting', () => {
 });
 
 describe('fireball skill', () => {
-  it('fires immediately at a target, then respects the one-second cooldown', () => {
+  it('fires immediately at a target, then respects the configured cooldown', () => {
     const fireball = {
       ...SKILL_DEFINITIONS.fireball,
       projectile: {
@@ -222,7 +222,7 @@ describe('fireball skill', () => {
     updateGame(state, 16, content);
     expect(state.entities.projectiles).toHaveLength(1);
 
-    updateGame(state, 999, content);
+    updateGame(state, 699, content);
     expect(state.entities.projectiles).toHaveLength(1);
 
     updateGame(state, 1, content);
@@ -342,7 +342,7 @@ describe('fireball skill', () => {
       type: 'EnergyExplosion',
       skillId: 'fireball',
       radius: 68,
-      damage: 28,
+      damage: 32,
     }));
     expect(state.frameEffects).toContainEqual(expect.objectContaining({
       material: 'fire',

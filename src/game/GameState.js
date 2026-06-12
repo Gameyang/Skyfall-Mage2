@@ -1,6 +1,14 @@
-import { GAME_CONTENT } from './content/index.js';
+import { createWaveRuntimeState } from './waveDirector.js';
 
-export function createGameState({ width = 1280, height = 720, content = GAME_CONTENT, rng = Math.random } = {}) {
+const DEFAULT_STATE_CONTENT = Object.freeze({
+  player: Object.freeze({
+    skinUrls: Object.freeze([]),
+  }),
+  skills: Object.freeze({}),
+  waves: Object.freeze([]),
+});
+
+export function createGameState({ width = 1280, height = 720, content = DEFAULT_STATE_CONTENT, rng = Math.random } = {}) {
   const playerSkinUrl = selectRandomUrl(content.player?.skinUrls, rng);
 
   return {
@@ -81,9 +89,5 @@ export function createSkillState(skillDefinitions = {}) {
 }
 
 export function createWaveState(waveDefinitions = []) {
-  return waveDefinitions.map((wave) => ({
-    id: wave.id,
-    nextAtMs: wave.startMs ?? 0,
-    spawnedGroups: 0,
-  }));
+  return createWaveRuntimeState(waveDefinitions, 0);
 }

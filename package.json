@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "balance:headless": "node scripts/run-headless-combat.mjs",
     "finish": "node scripts/finish-work.mjs",
     "test": "vitest run"
   },

@@ -1,0 +1,72 @@
+import { runHeadlessCombatSimulation } from '../src/game/headlessCombat.js';
+
+const args = parseArgs(process.argv.slice(2));
+const durationMs = readNumber(args.durationMs ?? args.duration, 120000);
+const tickMs = readNumber(args.tickMs ?? args.tick, 100);
+const width = readNumber(args.width, 960);
+const height = readNumber(args.height, 540);
+const sampleIntervalMs = readNumber(args.sampleIntervalMs ?? args.sample, 30000);
+const playerHp = readNumber(args.playerHp, 10000);
+const playerPolicy = args.playerPolicy || 'stationary';
+const waveSeed = args.waveSeed || null;
+const contactDamageMultiplier = readNumber(args.contactDamageMultiplier, 1, { allowZero: true });
+
+const { metrics } = runHeadlessCombatSimulation({
+  durationMs,
+  tickMs,
+  width,
+  height,
+  sampleIntervalMs,
+  playerHp,
+  playerPolicy,
+  waveSeed,
+  contactDamageMultiplier,
+});
+
+console.log(JSON.stringify({
+  config: {
+    durationMs,
+    tickMs,
+    width,
+    height,
+    sampleIntervalMs,
+    playerHp,
+    playerPolicy,
+    waveSeed,
+    contactDamageMultiplier,
+  },
+  summary: {
+    spawnedEnemies: metrics.spawnedEnemies,
+    backloggedSpawns: metrics.backloggedSpawns,
+    killedEnemies: metrics.killedEnemies,
+    despawnedEnemies: metrics.despawnedEnemies,
+    skippedSpawns: metrics.skippedSpawns,
+    playerHits: metrics.playerHits,
+    playerDamage: metrics.playerDamage,
+    peakActiveEnemies: metrics.peakActiveEnemies,
+    peakProjectiles: metrics.peakProjectiles,
+    finalScore: metrics.finalScore,
+    playerDiedAtMs: metrics.playerDiedAtMs,
+  },
+  waveStarts: metrics.waveStarts,
+  waveCompletions: metrics.waveCompletions,
+  waves: metrics.waves,
+  snapshots: metrics.snapshots,
+}, null, 2));
+
+function parseArgs(argv) {
+  const parsed = {};
+  for (const arg of argv) {
+    if (!arg.startsWith('--')) continue;
+    const [key, value = 'true'] = arg.slice(2).split('=');
+    parsed[key] = value;
+  }
+  return parsed;
+}
+
+function readNumber(value, fallback, { allowZero = false } = {}) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  if (allowZero && number >= 0) return number;
+  return number > 0 ? number : fallback;
+}

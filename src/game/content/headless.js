@@ -1,12 +1,17 @@
-import { ENEMY_SPRITES } from './spriteAssets.js';
+import { ENEMY_DIFFICULTY_CONFIG } from './enemyDifficulty.js';
+import { ENEMY_PATH_PATTERN_DEFINITIONS } from './enemyPathPatterns.js';
+import { ENEMY_SPAWN_PATTERN_DEFINITIONS } from './enemySpawnPatterns.js';
+import { SKILL_DEFINITIONS } from './skills.js';
+import { WAVE_DEFINITIONS } from './waves.js';
+import { createSeededWaveSequence } from '../waveRandomizer.js';
 
-export const ENEMY_DEFINITIONS = Object.freeze({
+export const HEADLESS_ENEMY_DEFINITIONS = Object.freeze({
   normalBat: Object.freeze({
     id: 'normalBat',
     hp: 30,
     speed: 86,
     radius: 18,
-    spriteUrl: ENEMY_SPRITES.bat,
+    spriteUrl: null,
     spriteSize: 52,
     contactDamage: 10,
     path: Object.freeze({
@@ -20,7 +25,7 @@ export const ENEMY_DEFINITIONS = Object.freeze({
     hp: 18,
     speed: 126,
     radius: 15,
-    spriteUrl: ENEMY_SPRITES.bat,
+    spriteUrl: null,
     spriteSize: 44,
     contactDamage: 8,
     defaultPathPatternId: 'straight',
@@ -36,7 +41,7 @@ export const ENEMY_DEFINITIONS = Object.freeze({
     hp: 70,
     speed: 62,
     radius: 23,
-    spriteUrl: ENEMY_SPRITES.bat,
+    spriteUrl: null,
     spriteSize: 62,
     contactDamage: 15,
     defaultPathPatternId: 'sCurve',
@@ -52,7 +57,7 @@ export const ENEMY_DEFINITIONS = Object.freeze({
     hp: 210,
     speed: 74,
     radius: 30,
-    spriteUrl: ENEMY_SPRITES.bat,
+    spriteUrl: null,
     spriteSize: 82,
     contactDamage: 22,
     scoreValue: 6,
@@ -63,5 +68,26 @@ export const ENEMY_DEFINITIONS = Object.freeze({
       frequency: 1.85,
       margin: 56,
     }),
+  }),
+});
+
+export const HEADLESS_GAME_CONTENT = Object.freeze({
+  enemies: HEADLESS_ENEMY_DEFINITIONS,
+  player: Object.freeze({
+    skinUrls: Object.freeze([]),
+  }),
+  skills: SKILL_DEFINITIONS,
+  waves: WAVE_DEFINITIONS,
+  enemyDifficulty: ENEMY_DIFFICULTY_CONFIG,
+  enemyPathPatterns: ENEMY_PATH_PATTERN_DEFINITIONS,
+  enemySpawnPatterns: ENEMY_SPAWN_PATTERN_DEFINITIONS,
+  createWaveSequence: Object.freeze(({ seed, waveCount = 8 } = {}) => createSeededWaveSequence({
+    seed,
+    waves: WAVE_DEFINITIONS,
+    waveCount,
+  })),
+  items: Object.freeze({}),
+  loot: Object.freeze({
+    enemyDrops: Object.freeze([]),
   }),
 });

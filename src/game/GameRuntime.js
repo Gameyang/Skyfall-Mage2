@@ -3,6 +3,7 @@ import { createGameState } from './GameState.js';
 import { createGameInput } from './input/createGameInput.js';
 import { createGameCanvasRenderer } from './render/GameCanvasRenderer.js';
 import { updateGame, updateViewport } from './systems.js';
+import { createRunSeed } from './waveRandomizer.js';
 
 const GAME_OVER_RESTART_DELAY_MS = 3000;
 const HIT_SHAKE_DURATION_MS = 180;
@@ -35,11 +36,13 @@ class GameRuntime {
     this.screenShakeElement = canvas.parentElement;
     this.materialEffects = materialEffects;
     this.screenEffects = screenEffects;
-    this.content = content;
+    this.baseContent = content;
+    this.content = createRunContent(content);
     this.renderer = createGameCanvasRenderer({ canvas });
     const initialWidth = Math.max(1, Math.floor(canvas.getBoundingClientRect().width || window.innerWidth));
     const initialHeight = Math.max(1, Math.floor(canvas.getBoundingClientRect().height || window.innerHeight));
-    this.state = createGameState({ width: initialWidth, height: initialHeight, content });
+    this.state = createGameState({ width: initialWidth, height: initialHeight, content: this.content });
+    this.state.session.runSeed = this.content.runSeed ?? null;
     this.input = createGameInput({ canvas, state: this.state });
     this.animationFrameId = 0;
     this.lastFrameTime = 0;
@@ -113,15 +116,30 @@ class GameRuntime {
   }
 
   restart(viewport) {
+    this.content = createRunContent(this.baseContent);
     const nextState = createGameState({
       width: viewport.width,
       height: viewport.height,
       content: this.content,
     });
+    nextState.session.runSeed = this.content.runSeed ?? null;
     Object.assign(this.state, nextState);
     updateViewport(this.state, viewport.width, viewport.height, viewport.visible);
     this.gameOverStartedAt = null;
   }
+}
+
+function createRunContent(content) {
+  if (typeof content.createWaveSequence !== 'function') {
+    return content;
+  }
+
+  const runSeed = createRunSeed('skyfall');
+  return {
+    ...content,
+    runSeed,
+    waves: content.createWaveSequence({ seed: runSeed }),
+  };
 }
 
 function clamp(value, min, max) {

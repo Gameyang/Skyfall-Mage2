@@ -1,7 +1,12 @@
-import { GAME_CONTENT } from './content/index.js';
 import { GAS_FLOW_CONFIG } from '../features/material-field/config.js';
 import { circlesIntersect, clamp, distance, hash01, normalize } from './math.js';
-import { createEnemyFromWave, hasEnemyReachedExit, updateEnemyPathPosition } from './enemyPaths.js';
+import { hasEnemyReachedExit, updateEnemyPathPosition } from './enemyPaths.js';
+import {
+  createWaveRuntimeState,
+  isWaveRuntimeStateCurrent,
+  spawnWaveGroup as spawnWaveGroupRuntime,
+  updateWaveSpawns as updateWaveSpawnsRuntime,
+} from './waveDirector.js';
 
 const PROJECTILE_DESPAWN_MARGIN = 96;
 const DEFAULT_SKILL_COOLDOWN_MS = 1000;
@@ -23,8 +28,17 @@ const LOST_ITEM_LIFT_SPEED_MIN = 420;
 const LOST_ITEM_LIFT_SPEED_RANGE = 180;
 const LOST_ITEM_DESPAWN_MARGIN = 96;
 const LOST_ITEM_MAX_LIFETIME_MS = 4000;
+const DEFAULT_SYSTEM_CONTENT = Object.freeze({
+  enemies: Object.freeze({}),
+  skills: Object.freeze({}),
+  waves: Object.freeze([]),
+  items: Object.freeze({}),
+  loot: Object.freeze({
+    enemyDrops: Object.freeze([]),
+  }),
+});
 
-export function updateGame(state, dtMs, content = GAME_CONTENT) {
+export function updateGame(state, dtMs, content = DEFAULT_SYSTEM_CONTENT) {
   const dt = Math.max(dtMs, 0);
   state.frameEvents = [];
   state.frameEffects = [];
@@ -52,7 +66,7 @@ export function updateGame(state, dtMs, content = GAME_CONTENT) {
   return state;
 }
 
-export function syncRuntimeCollections(state, content = GAME_CONTENT) {
+export function syncRuntimeCollections(state, content = DEFAULT_SYSTEM_CONTENT) {
   if (!state.entities.hazards) {
     state.entities.hazards = [];
   }
@@ -85,12 +99,8 @@ export function syncRuntimeCollections(state, content = GAME_CONTENT) {
   }
 
   const waveDefinitions = content.waves || [];
-  if (state.waves.length !== waveDefinitions.length) {
-    state.waves = waveDefinitions.map((wave) => ({
-      id: wave.id,
-      nextAtMs: wave.startMs ?? 0,
-      spawnedGroups: 0,
-    }));
+  if (!isWaveRuntimeStateCurrent(state.waves, waveDefinitions)) {
+    state.waves = createWaveRuntimeState(waveDefinitions, state.session.elapsedMs);
   }
 }
 
@@ -274,50 +284,27 @@ export function updatePlayerTrailHistory(state) {
   }
 }
 
-export function updateWaveSpawns(state, content = GAME_CONTENT) {
-  const waveDefinitions = content.waves || [];
-  for (let index = 0; index < waveDefinitions.length; index += 1) {
-    const wave = waveDefinitions[index];
-    const waveState = state.waves[index];
-    if (!waveState) continue;
-
-    while (state.session.elapsedMs >= waveState.nextAtMs) {
-      spawnWaveGroup(state, wave, content, waveState.spawnedGroups);
-      waveState.spawnedGroups += 1;
-      waveState.nextAtMs += wave.intervalMs || 1000;
-    }
-  }
+export function updateWaveSpawns(state, content = DEFAULT_SYSTEM_CONTENT) {
+  updateWaveSpawnsRuntime(state, content);
 }
 
-export function spawnWaveGroup(state, wave, content = GAME_CONTENT, groupIndex = 0) {
-  const enemyDefinition = content.enemies?.[wave.enemyType];
-  if (!enemyDefinition) return;
-
-  const count = Math.max(1, wave.count || 1);
-  for (let index = 0; index < count; index += 1) {
-    state.entities.enemies.push(createEnemyFromWave({
-      state,
-      wave,
-      definition: enemyDefinition,
-      index,
-      groupIndex,
-    }));
-  }
+export function spawnWaveGroup(state, wave, content = DEFAULT_SYSTEM_CONTENT, groupIndex = 0) {
+  return spawnWaveGroupRuntime(state, wave, content, groupIndex);
 }
 
 export function updateEnemies(state, dtMs) {
   const dt = dtMs / 1000;
   for (const enemy of state.entities.enemies) {
     enemy.progress += (enemy.speed || 0) * dt;
-    updateEnemyPathPosition(enemy);
+    updateEnemyPathPosition(enemy, state, dtMs);
   }
 }
 
-export function updateAutoAttack(state, dtMs, content = GAME_CONTENT) {
+export function updateAutoAttack(state, dtMs, content = DEFAULT_SYSTEM_CONTENT) {
   return updateAutoSkills(state, dtMs, content);
 }
 
-export function updateAutoSkills(state, dtMs, content = GAME_CONTENT) {
+export function updateAutoSkills(state, dtMs, content = DEFAULT_SYSTEM_CONTENT) {
   for (const [skillId, skill] of Object.entries(content.skills || {})) {
     const skillState = state.skills[skillId] || { cooldownRemainingMs: 0 };
     state.skills[skillId] = skillState;
@@ -407,7 +394,7 @@ export function updateProjectiles(state, dtMs) {
   }
 }
 
-export function updateItemDrops(state, dtMs, content = GAME_CONTENT) {
+export function updateItemDrops(state, dtMs, content = DEFAULT_SYSTEM_CONTENT) {
   if (!state.entities.itemDrops?.length) return;
 
   const dt = dtMs / 1000;
@@ -463,7 +450,7 @@ export function updateLostItems(state, dtMs) {
   state.entities.lostItems = remainingLostItems;
 }
 
-export function resolveProjectileHits(state, content = GAME_CONTENT) {
+export function resolveProjectileHits(state, content = DEFAULT_SYSTEM_CONTENT) {
   const remainingProjectiles = [];
 
   for (const projectile of state.entities.projectiles) {
@@ -514,7 +501,7 @@ export function resolveProjectileHits(state, content = GAME_CONTENT) {
   state.entities.enemies = state.entities.enemies.filter((enemy) => enemy.hp > 0);
 }
 
-export function updateHazards(state, dtMs, content = GAME_CONTENT) {
+export function updateHazards(state, dtMs, content = DEFAULT_SYSTEM_CONTENT) {
   if (!state.entities.hazards?.length) return;
 
   const remainingHazards = [];
@@ -546,7 +533,7 @@ export function updateHazards(state, dtMs, content = GAME_CONTENT) {
   state.entities.enemies = state.entities.enemies.filter((enemy) => enemy.hp > 0);
 }
 
-export function resolveItemPickups(state, content = GAME_CONTENT) {
+export function resolveItemPickups(state, content = DEFAULT_SYSTEM_CONTENT) {
   if (!state.entities.itemDrops?.length) return;
 
   const remainingDrops = [];
@@ -575,7 +562,7 @@ export function resolveItemPickups(state, content = GAME_CONTENT) {
   state.entities.itemDrops = remainingDrops;
 }
 
-export function resolvePlayerContacts(state, content = GAME_CONTENT) {
+export function resolvePlayerContacts(state, content = DEFAULT_SYSTEM_CONTENT) {
   const remainingEnemies = [];
   for (const enemy of state.entities.enemies) {
     if (!circlesIntersect(enemy, state.player)) {
@@ -588,6 +575,10 @@ export function resolvePlayerContacts(state, content = GAME_CONTENT) {
     state.frameEvents.push({
       type: 'PlayerDamaged',
       enemyId: enemy.id,
+      enemyType: enemy.type,
+      waveIndex: enemy.waveIndex,
+      waveId: enemy.waveId,
+      groupId: enemy.groupId,
       damage: enemy.contactDamage,
       playerHp: state.player.hp,
     });
@@ -618,6 +609,10 @@ export function cleanupEntities(state) {
       state.frameEvents.push({
         type: 'EnemyDespawned',
         enemyId: enemy.id,
+        enemyType: enemy.type,
+        waveIndex: enemy.waveIndex,
+        waveId: enemy.waveId,
+        groupId: enemy.groupId,
       });
       continue;
     }
@@ -649,7 +644,7 @@ export function cleanupEntities(state) {
   }
 }
 
-function applyAreaDamage(state, source, areaDamage, eventBase, content = GAME_CONTENT) {
+function applyAreaDamage(state, source, areaDamage, eventBase, content = DEFAULT_SYSTEM_CONTENT) {
   if (!areaDamage) return;
 
   const radius = areaDamage.radius ?? 0;
@@ -703,7 +698,7 @@ function updateProjectileEnergy(state, projectile, dtMs) {
   }
 }
 
-function resolveEnergyExplosion(state, projectile, skill, source, content = GAME_CONTENT) {
+function resolveEnergyExplosion(state, projectile, skill, source, content = DEFAULT_SYSTEM_CONTENT) {
   const explosion = projectile.energy?.explosion;
   if (!explosion) return;
 
@@ -780,7 +775,7 @@ function spawnHazardsFromImpact(state, skill, source) {
   }
 }
 
-function applyHazardTick(state, hazard, tickMs, content = GAME_CONTENT) {
+function applyHazardTick(state, hazard, tickMs, content = DEFAULT_SYSTEM_CONTENT) {
   const damage = (hazard.damagePerSecond || 0) * (tickMs / 1000);
   if (damage <= 0) {
     pushMaterialEffects(state, hazard.materialEffects.tick, hazard);
@@ -820,7 +815,7 @@ function applyHazardTick(state, hazard, tickMs, content = GAME_CONTENT) {
   pushMaterialEffects(state, hazard.materialEffects.tick, hazard);
 }
 
-function damageEnemy(state, enemy, damage, event, content = GAME_CONTENT) {
+function damageEnemy(state, enemy, damage, event, content = DEFAULT_SYSTEM_CONTENT) {
   if (!enemy || enemy.hp <= 0 || damage <= 0) return false;
 
   enemy.hp -= damage;
@@ -832,10 +827,14 @@ function damageEnemy(state, enemy, damage, event, content = GAME_CONTENT) {
 
   if (enemy.hp > 0) return false;
 
-  state.session.score += 1;
+  state.session.score += Math.max(1, enemy.scoreValue ?? 1);
   state.frameEvents.push({
     type: 'EnemyKilled',
     enemyId: enemy.id,
+    enemyType: enemy.type,
+    waveIndex: enemy.waveIndex,
+    waveId: enemy.waveId,
+    groupId: enemy.groupId,
     x: enemy.x,
     y: enemy.y,
   });
@@ -843,7 +842,7 @@ function damageEnemy(state, enemy, damage, event, content = GAME_CONTENT) {
   return true;
 }
 
-export function spawnItemDrop(state, itemId, source, content = GAME_CONTENT, options = {}) {
+export function spawnItemDrop(state, itemId, source, content = DEFAULT_SYSTEM_CONTENT, options = {}) {
   const item = content.items?.[itemId];
   if (!item) return null;
 
@@ -875,7 +874,7 @@ export function spawnItemDrop(state, itemId, source, content = GAME_CONTENT, opt
   return drop;
 }
 
-function rollEnemyLootDrops(state, enemy, content = GAME_CONTENT) {
+function rollEnemyLootDrops(state, enemy, content = DEFAULT_SYSTEM_CONTENT) {
   const drops = content.loot?.enemyDrops || [];
   for (const dropDefinition of drops) {
     const chance = clamp(dropDefinition.chance ?? 0, 0, 1);
@@ -889,7 +888,7 @@ function rollEnemyLootDrops(state, enemy, content = GAME_CONTENT) {
   }
 }
 
-function collectPlayerItem(state, drop, content = GAME_CONTENT) {
+function collectPlayerItem(state, drop, content = DEFAULT_SYSTEM_CONTENT) {
   const item = content.items?.[drop.itemId] || {};
   const quantity = Math.max(1, drop.quantity ?? 1);
   let remainingQuantity = quantity;
@@ -937,7 +936,7 @@ function shouldConsumeItemOnPickup(state, item) {
   return item.consumable?.type === 'heal' && state.player.hp < state.player.maxHp;
 }
 
-export function autoUsePlayerConsumables(state, content = GAME_CONTENT) {
+export function autoUsePlayerConsumables(state, content = DEFAULT_SYSTEM_CONTENT) {
   const items = state.player.collectedItems || [];
   for (let index = 0; index < items.length; index += 1) {
     const entry = items[index];
@@ -992,7 +991,7 @@ function consumeHealingItem(state, item, { itemId, quantity = 1, source, itemDro
   return consumed;
 }
 
-export function losePlayerRibbonItems(state, content = GAME_CONTENT, eventBase = {}) {
+export function losePlayerRibbonItems(state, content = DEFAULT_SYSTEM_CONTENT, eventBase = {}) {
   const totalQuantity = getCollectedItemQuantity(state);
   if (totalQuantity <= 0) return 0;
 
@@ -1033,7 +1032,7 @@ function getCollectedItemQuantity(state) {
   return (state.player.collectedItems || []).reduce((total, item) => total + Math.max(0, item.quantity || 0), 0);
 }
 
-function removeRandomCollectedItemUnit(state, content = GAME_CONTENT) {
+function removeRandomCollectedItemUnit(state, content = DEFAULT_SYSTEM_CONTENT) {
   const items = state.player.collectedItems || [];
   let totalQuantity = getCollectedItemQuantity(state);
   if (totalQuantity <= 0) return null;
@@ -1064,7 +1063,7 @@ function removeRandomCollectedItemUnit(state, content = GAME_CONTENT) {
   return null;
 }
 
-function spawnLostItemVisual(state, lostItem, content = GAME_CONTENT, index = 0, total = 1) {
+function spawnLostItemVisual(state, lostItem, content = DEFAULT_SYSTEM_CONTENT, index = 0, total = 1) {
   const item = content.items?.[lostItem.itemId] || {};
   const randomAngle = -Math.PI * 0.9 + Math.random() * Math.PI * 0.8;
   const fanOffset = total > 1 ? (index / Math.max(1, total - 1) - 0.5) * Math.PI * 0.7 : 0;
@@ -1102,7 +1101,7 @@ function isLostItemOutsideField(state, item) {
   );
 }
 
-function getItemFlowConfig(content = GAME_CONTENT) {
+function getItemFlowConfig(content = DEFAULT_SYSTEM_CONTENT) {
   const flow = content.environment?.gasFlow || content.gasFlow || GAS_FLOW_CONFIG;
   return {
     windX: clamp(flow.windX ?? GAS_FLOW_CONFIG.windX, -1, 1),
