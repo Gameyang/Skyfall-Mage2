@@ -33,6 +33,8 @@ const AUX_PROJECTILE_FIRE: u32 = 251u;
 const AUX_SKILL_EXPLOSION_FIRE: u32 = 252u;
 const PROJECTILE_FIRE_DECAY_PER_STEP: u32 = 3u;
 const SKILL_EXPLOSION_FIRE_DECAY_PER_STEP: u32 = 5u;
+const ELECTRIC_VISUAL_SUBGRID_SIZE: f32 = 4.0;
+const ELECTRIC_VISUAL_SUBGRID_SIZE_U: u32 = 4u;
 
 struct SimParams {
   width: u32,
@@ -1887,6 +1889,74 @@ fn electricForkStrength(local: vec2<f32>, x: i32, y: i32, dx: i32, dy: i32, salt
   return electricSegmentStrength(local, start, end, 0.045) * 0.72;
 }
 
+fn electricVisualSubgridLocal(local: vec2<f32>) -> vec2<f32> {
+  return fract(local * ELECTRIC_VISUAL_SUBGRID_SIZE);
+}
+
+fn electricVisualSubgridIndex(local: vec2<f32>) -> vec2<u32> {
+  let scaled = local * ELECTRIC_VISUAL_SUBGRID_SIZE;
+  return vec2<u32>(
+    min(ELECTRIC_VISUAL_SUBGRID_SIZE_U - 1u, u32(scaled.x)),
+    min(ELECTRIC_VISUAL_SUBGRID_SIZE_U - 1u, u32(scaled.y))
+  );
+}
+
+fn electricSubcellSegmentStrength(subLocal: vec2<f32>, visualX: u32, visualY: u32, salt: u32) -> f32 {
+  let roll = hash(visualX, visualY, salt);
+  if ((roll & 255u) < 116u) {
+    return 0.0;
+  }
+
+  let phase = (params.frame + ((roll >> 8u) & 7u)) & 7u;
+  if (phase == 2u || phase == 6u) {
+    return 0.0;
+  }
+
+  let direction = (roll >> 11u) & 7u;
+  let jitter = (f32((roll >> 14u) & 31u) / 31.0 - 0.5) * 0.28;
+  var end = vec2<f32>(1.08, 0.5 + jitter);
+  if (direction == 1u) {
+    end = vec2<f32>(-0.08, 0.5 + jitter);
+  } else if (direction == 2u) {
+    end = vec2<f32>(0.5 + jitter, -0.08);
+  } else if (direction == 3u) {
+    end = vec2<f32>(0.5 + jitter, 1.08);
+  } else if (direction == 4u) {
+    end = vec2<f32>(1.08, -0.08 + jitter);
+  } else if (direction == 5u) {
+    end = vec2<f32>(-0.08, -0.08 + jitter);
+  } else if (direction == 6u) {
+    end = vec2<f32>(1.08, 1.08 + jitter);
+  } else if (direction == 7u) {
+    end = vec2<f32>(-0.08, 1.08 + jitter);
+  }
+
+  var pulse = 0.54;
+  if (phase == 0u || phase == 1u || phase == 5u) {
+    pulse = 1.08;
+  }
+
+  return electricSegmentStrength(subLocal, vec2<f32>(0.5, 0.5), end, 0.065) * pulse;
+}
+
+fn electricVisualSubgridStrength(local: vec2<f32>, x: u32, y: u32, enabled: bool) -> f32 {
+  if (!enabled) {
+    return 0.0;
+  }
+
+  let subIndex = electricVisualSubgridIndex(local);
+  let subLocal = electricVisualSubgridLocal(local);
+  let visualX = x * ELECTRIC_VISUAL_SUBGRID_SIZE_U + subIndex.x;
+  let visualY = y * ELECTRIC_VISUAL_SUBGRID_SIZE_U + subIndex.y;
+  var strength = electricSubcellSegmentStrength(subLocal, visualX, visualY, 263u);
+
+  if ((hash(visualX, visualY, 269u) & 3u) == 0u) {
+    strength = max(strength, electricSubcellSegmentStrength(subLocal, visualX, visualY, 271u) * 0.62);
+  }
+
+  return strength;
+}
+
 fn electricStrandColor(cell: u32, x: u32, y: u32, local: vec2<f32>, base: vec4<f32>) -> vec4<f32> {
   let mat = material(cell);
   let ix = i32(x);
@@ -1928,7 +1998,13 @@ fn electricStrandColor(cell: u32, x: u32, y: u32, local: vec2<f32>, base: vec4<f
     forkStrength = max(forkStrength, electricForkStrength(local, ix, iy, -1, 1, 251u));
   }
 
-  let combinedStrength = max(strength, forkStrength);
+  let subgridStrength = electricVisualSubgridStrength(
+    local,
+    x,
+    y,
+    isElectricArcSourceCell(cell) || strength > 0.035 || forkStrength > 0.035
+  );
+  let combinedStrength = max(max(strength, forkStrength), subgridStrength);
   if (combinedStrength <= 0.0) {
     return base;
   }
@@ -1936,8 +2012,9 @@ fn electricStrandColor(cell: u32, x: u32, y: u32, local: vec2<f32>, base: vec4<f
   let pulse = electricTemporalPulse(x, y, aux(cell) + 211u);
   let coreStrength = pow(clamp(strength, 0.0, 1.0), 3.0);
   let forkCoreStrength = pow(clamp(forkStrength, 0.0, 1.0), 2.6);
+  let subgridCoreStrength = pow(clamp(subgridStrength, 0.0, 1.0), 2.8);
   let halo = vec3<f32>(0.18, 0.94, 1.95) * combinedStrength * pulse;
-  let core = vec3<f32>(1.35, 1.58, 1.72) * (coreStrength + forkCoreStrength * 0.72) * pulse;
+  let core = vec3<f32>(1.35, 1.58, 1.72) * (coreStrength + forkCoreStrength * 0.72 + subgridCoreStrength * 0.54) * pulse;
   return vec4<f32>(base.rgb + halo + core, max(base.a, min(1.0, combinedStrength * 1.65)));
 }
 
