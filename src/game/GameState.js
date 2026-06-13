@@ -1,4 +1,5 @@
 import { createWaveRuntimeState } from './waveDirector.js';
+import { SKILL_SEQUENCE_STEP_MS } from './skillSequence.js';
 
 const DEFAULT_STATE_CONTENT = Object.freeze({
   player: Object.freeze({
@@ -10,6 +11,8 @@ const DEFAULT_STATE_CONTENT = Object.freeze({
 
 export function createGameState({ width = 1280, height = 720, content = DEFAULT_STATE_CONTENT, rng = Math.random } = {}) {
   const playerSkinUrl = selectRandomUrl(content.player?.skinUrls, rng);
+  const equippedSkillIds = Object.freeze([...(content.equippedSkillIds || Object.keys(content.skills || {}))]);
+  const orderedInitialSkillIds = Array.isArray(content.equippedSkillIds) ? equippedSkillIds : [];
 
   return {
     viewport: {
@@ -33,7 +36,9 @@ export function createGameState({ width = 1280, height = 720, content = DEFAULT_
       nextItemDropId: 1,
       nextLostItemId: 1,
       contactFlashMs: 0,
-      equippedSkillIds: Object.freeze([...(content.equippedSkillIds || Object.keys(content.skills || {}))]),
+      autoSkillSequenceIndex: 0,
+      autoSkillSequenceCooldownMs: 0,
+      equippedSkillIds,
     },
     input: {
       up: false,
@@ -63,7 +68,7 @@ export function createGameState({ width = 1280, height = 720, content = DEFAULT_
       itemDrops: [],
       lostItems: [],
     },
-    skills: createSkillState(content.skills),
+    skills: createSkillState(content.skills, orderedInitialSkillIds),
     waves: createWaveState(content.waves),
     frameEvents: [],
     frameEffects: [],
@@ -79,14 +84,26 @@ function selectRandomUrl(urls = [], rng = Math.random) {
   return urls[index];
 }
 
-export function createSkillState(skillDefinitions = {}) {
+export function createSkillState(skillDefinitions = {}, orderedSkillIds = []) {
   const skills = {};
+  const initialCooldowns = createInitialSkillCooldowns(skillDefinitions, orderedSkillIds);
   for (const skillId of Object.keys(skillDefinitions)) {
     skills[skillId] = {
-      cooldownRemainingMs: 0,
+      cooldownRemainingMs: initialCooldowns.get(skillId) ?? 0,
     };
   }
   return skills;
+}
+
+function createInitialSkillCooldowns(skillDefinitions, orderedSkillIds) {
+  const initialCooldowns = new Map();
+  if (!Array.isArray(orderedSkillIds) || orderedSkillIds.length <= 1) return initialCooldowns;
+
+  orderedSkillIds.forEach((skillId, index) => {
+    if (!skillDefinitions[skillId]) return;
+    initialCooldowns.set(skillId, index * SKILL_SEQUENCE_STEP_MS);
+  });
+  return initialCooldowns;
 }
 
 export function createWaveState(waveDefinitions = []) {

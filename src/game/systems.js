@@ -1,6 +1,7 @@
 import { GAS_FLOW_CONFIG } from '../features/material-field/config.js';
 import { circlesIntersect, clamp, distance, hash01, normalize } from './math.js';
 import { hasEnemyReachedExit, updateEnemyPathPosition } from './enemyPaths.js';
+import { SKILL_SEQUENCE_STEP_MS } from './skillSequence.js';
 import {
   createWaveRuntimeState,
   isWaveRuntimeStateCurrent,
@@ -305,10 +306,17 @@ export function updateAutoAttack(state, dtMs, content = DEFAULT_SYSTEM_CONTENT) 
 }
 
 export function updateAutoSkills(state, dtMs, content = DEFAULT_SYSTEM_CONTENT) {
-  for (const [skillId, skill] of Object.entries(content.skills || {})) {
-    const skillState = state.skills[skillId] || { cooldownRemainingMs: 0 };
-    state.skills[skillId] = skillState;
-    skillState.cooldownRemainingMs = Math.max(0, skillState.cooldownRemainingMs - dtMs);
+  const skills = content.skills || {};
+  updateSkillCooldowns(state, dtMs, skills);
+
+  const sequencedSkillIds = getSequencedSkillIds(content, skills);
+  if (sequencedSkillIds.length > 1) {
+    updateSequencedAutoSkill(state, dtMs, skills, sequencedSkillIds);
+    return;
+  }
+
+  for (const [skillId, skill] of Object.entries(skills)) {
+    const skillState = state.skills[skillId];
     if (skillState.cooldownRemainingMs > 0) continue;
 
     const target = selectTargetForSkill(state, skill);
@@ -319,6 +327,49 @@ export function updateAutoSkills(state, dtMs, content = DEFAULT_SYSTEM_CONTENT) 
 
     skillState.cooldownRemainingMs += skill.cooldownMs ?? DEFAULT_SKILL_COOLDOWN_MS;
   }
+}
+
+function updateSkillCooldowns(state, dtMs, skills) {
+  for (const skillId of Object.keys(skills)) {
+    const skillState = state.skills[skillId] || { cooldownRemainingMs: 0 };
+    state.skills[skillId] = skillState;
+    skillState.cooldownRemainingMs = Math.max(0, skillState.cooldownRemainingMs - dtMs);
+  }
+}
+
+function getSequencedSkillIds(content, skills) {
+  if (!Array.isArray(content.equippedSkillIds) || content.equippedSkillIds.length <= 1) return [];
+  return content.equippedSkillIds.filter((skillId) => skills[skillId]);
+}
+
+function updateSequencedAutoSkill(state, dtMs, skills, sequencedSkillIds) {
+  state.session.autoSkillSequenceCooldownMs = Math.max(
+    0,
+    (state.session.autoSkillSequenceCooldownMs ?? 0) - dtMs,
+  );
+  if (state.session.autoSkillSequenceCooldownMs > 0) return;
+
+  const sequenceIndex = normalizeSequenceIndex(state.session.autoSkillSequenceIndex, sequencedSkillIds.length);
+  const skillId = sequencedSkillIds[sequenceIndex];
+  const skill = skills[skillId];
+  const skillState = state.skills[skillId] || { cooldownRemainingMs: 0 };
+  state.skills[skillId] = skillState;
+  if (skillState.cooldownRemainingMs > 0) return;
+
+  const target = selectTargetForSkill(state, skill);
+  if (!target) return;
+
+  const projectiles = spawnProjectilesFromSkill(state, skill, target, skillId);
+  if (!projectiles.length) return;
+
+  skillState.cooldownRemainingMs += skill.cooldownMs ?? DEFAULT_SKILL_COOLDOWN_MS;
+  state.session.autoSkillSequenceIndex = (sequenceIndex + 1) % sequencedSkillIds.length;
+  state.session.autoSkillSequenceCooldownMs = SKILL_SEQUENCE_STEP_MS;
+}
+
+function normalizeSequenceIndex(index, sequenceLength) {
+  if (!Number.isFinite(index) || sequenceLength <= 0) return 0;
+  return Math.max(0, Math.floor(index)) % sequenceLength;
 }
 
 export function selectTargetForSkill(state, skill) {

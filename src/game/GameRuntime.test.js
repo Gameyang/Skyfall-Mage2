@@ -3,6 +3,7 @@ import { computeScreenShakeOffset } from './GameRuntime.js';
 import { BASE_ELEMENT_WEAPON_IDS, createBaseElementSkillLoadout, SKILL_DEFINITIONS } from './content/skills.js';
 import { createGameState } from './GameState.js';
 import { createRunContent } from './runContent.js';
+import { SKILL_SEQUENCE_STEP_MS } from './skillSequence.js';
 
 function createState({ contactFlashMs = 0, elapsedMs = 120, gameOver = false } = {}) {
   return {
@@ -32,7 +33,7 @@ describe('game runtime screen shake', () => {
 });
 
 describe('run skill loadouts', () => {
-  it('equips one random base elemental weapon for a normal run', () => {
+  it('equips all base elemental weapons in a randomized order for a normal run', () => {
     const content = {
       skills: SKILL_DEFINITIONS,
       waves: [],
@@ -41,12 +42,12 @@ describe('run skill loadouts', () => {
 
     const runContent = createRunContent(content, { runSeed: 'loadout-alpha' });
 
-    expect(runContent.equippedSkillIds).toHaveLength(1);
-    expect(BASE_ELEMENT_WEAPON_IDS).toContain(runContent.equippedSkillIds[0]);
+    expect(runContent.equippedSkillIds).toHaveLength(BASE_ELEMENT_WEAPON_IDS.length);
+    expect(new Set(runContent.equippedSkillIds)).toEqual(new Set(BASE_ELEMENT_WEAPON_IDS));
     expect(Object.keys(runContent.skills)).toEqual([...runContent.equippedSkillIds]);
   });
 
-  it('keeps the selected base weapon stable for the same run seed', () => {
+  it('keeps the shuffled base elemental order stable for the same run seed', () => {
     const content = {
       skills: SKILL_DEFINITIONS,
       waves: [],
@@ -57,23 +58,37 @@ describe('run skill loadouts', () => {
       .toEqual(createRunContent(content, { runSeed: 'same-seed' }).equippedSkillIds);
   });
 
-  it('can select different base weapons across different run seeds', () => {
+  it('can select different base elemental orders across different run seeds', () => {
     const content = {
       skills: SKILL_DEFINITIONS,
       waves: [],
       createSkillLoadout: createBaseElementSkillLoadout,
     };
 
-    const selectedSkillIds = new Set(
+    const selectedOrders = new Set(
       Array.from({ length: 16 }, (_, index) => createRunContent(content, {
         runSeed: `loadout-${index}`,
-      }).equippedSkillIds[0]),
+      }).equippedSkillIds.join('|')),
     );
 
-    expect(selectedSkillIds.size).toBeGreaterThan(1);
-    for (const skillId of selectedSkillIds) {
-      expect(BASE_ELEMENT_WEAPON_IDS).toContain(skillId);
+    expect(selectedOrders.size).toBeGreaterThan(1);
+    for (const order of selectedOrders) {
+      expect(new Set(order.split('|'))).toEqual(new Set(BASE_ELEMENT_WEAPON_IDS));
     }
+  });
+
+  it('staggers randomized base elemental firing by equipped order', () => {
+    const content = {
+      skills: SKILL_DEFINITIONS,
+      waves: [],
+      createSkillLoadout: createBaseElementSkillLoadout,
+    };
+
+    const runContent = createRunContent(content, { runSeed: 'stagger-seed' });
+    const state = createGameState({ content: runContent });
+
+    expect(runContent.equippedSkillIds.map((skillId) => state.skills[skillId].cooldownRemainingMs))
+      .toEqual(BASE_ELEMENT_WEAPON_IDS.map((_, index) => index * SKILL_SEQUENCE_STEP_MS));
   });
 
   it('honors skill loadout overrides for focused skill testing', () => {

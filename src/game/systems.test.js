@@ -5,6 +5,7 @@ import { ITEM_DEFINITIONS } from './content/items.js';
 import { SKILL_DEFINITIONS } from './content/skills.js';
 import { createEnemyFromWave, createSCurvePath, sampleSCurvePath } from './enemyPaths.js';
 import { createGameState } from './GameState.js';
+import { SKILL_SEQUENCE_STEP_MS } from './skillSequence.js';
 import {
   applyGpuDamageFeedback,
   losePlayerRibbonItems,
@@ -269,6 +270,51 @@ describe('fireball skill', () => {
     updateGame(state, 16, content);
 
     expect(state.entities.projectiles.map((projectile) => projectile.skillId).sort()).toEqual(['firebolt', 'sparkbolt']);
+  });
+
+  it('casts equipped skills one at a time in equipped order', () => {
+    const createSkill = (id) => ({
+      id,
+      cooldownMs: 300,
+      targeting: { type: 'progress-risk' },
+      projectile: {
+        speed: 0,
+        damage: 1,
+        radius: 4,
+        lifetimeMs: 1000,
+      },
+    });
+    const content = createTestContent({
+      skills: {
+        firebolt: createSkill('firebolt'),
+        sparkbolt: createSkill('sparkbolt'),
+      },
+    });
+    content.equippedSkillIds = Object.freeze(['firebolt', 'sparkbolt']);
+    const state = createGameState({ width: 800, height: 600, content });
+    state.entities.enemies.push({
+      id: 1,
+      hp: 30,
+      x: 700,
+      y: 300,
+      radius: 18,
+      progress: 400,
+      travelDistance: 1000,
+      contactDamage: 12,
+    });
+
+    updateGame(state, 16, content);
+    expect(state.entities.projectiles.map((projectile) => projectile.skillId)).toEqual(['firebolt']);
+
+    updateGame(state, SKILL_SEQUENCE_STEP_MS, content);
+    expect(state.entities.projectiles.map((projectile) => projectile.skillId)).toEqual(['firebolt', 'sparkbolt']);
+
+    updateGame(state, SKILL_SEQUENCE_STEP_MS, content);
+    expect(state.entities.projectiles.map((projectile) => projectile.skillId)).toEqual([
+      'firebolt',
+      'sparkbolt',
+      'firebolt',
+    ]);
   });
 
   it('binds fire energy to the flying fireball entity and emits profiled fire from its moving position', () => {

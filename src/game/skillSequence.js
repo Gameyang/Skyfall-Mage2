@@ -1,0 +1,1 @@
+export const SKILL_SEQUENCE_STEP_MS = 220;
