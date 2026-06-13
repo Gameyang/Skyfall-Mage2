@@ -472,6 +472,26 @@ describe('fireball skill', () => {
     }));
   });
 
+  it('keeps sand bolt flight nearly dry while bursting sand radially on hit', () => {
+    const sandBolt = SKILL_DEFINITIONS.sand_bolt;
+
+    expect(sandBolt.projectile.energy.trailEffects[0]).toEqual(expect.objectContaining({
+      material: 'sand',
+      radius: 2,
+      strength: 3,
+      frames: 1,
+    }));
+    expect(sandBolt.materialEffects.hit[0]).toEqual(expect.objectContaining({
+      material: 'sand',
+      radius: 22,
+      strength: 255,
+      frames: 3,
+      radialForce: 1,
+      expansionFrames: 2,
+    }));
+    expect(sandBolt.materialEffects.hit[0].explosion).toBeUndefined();
+  });
+
   it('spawns sand barrage as a fan of five base sand projectiles', () => {
     const content = createTestContent({
       skills: { sand_barrage: SKILL_DEFINITIONS.sand_barrage },

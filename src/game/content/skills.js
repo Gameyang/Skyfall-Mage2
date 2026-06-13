@@ -246,7 +246,7 @@ const SAND_BOLT_SKILL = freezeSkill({
       max: 38,
       trailIntervalMs: 44,
       trailLeakPerSecond: 0,
-      trailEffects: materialTrail('sand', { radius: 4, strength: 185, frames: 1 }),
+      trailEffects: materialTrail('sand', { radius: 2, strength: 3, frames: 1 }),
     }),
     visual: Object.freeze({
       color: '#d9a84a',
@@ -262,7 +262,14 @@ const SAND_BOLT_SKILL = freezeSkill({
       effect({ material: 'sand', radius: 5, strength: 190, frames: 2 }),
     ]),
     hit: Object.freeze([
-      effect({ material: 'sand', radius: 9, strength: 210, frames: 2 }),
+      effect({
+        material: 'sand',
+        radius: 22,
+        strength: 255,
+        frames: 3,
+        radialForce: 1,
+        expansionFrames: 2,
+      }),
     ]),
   }),
 });
