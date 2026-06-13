@@ -297,6 +297,7 @@ describe('material field shader profiles', () => {
   it('renders electric carriers as connected strand segments instead of isolated dots', () => {
     expect(materialFieldShaderSource).toContain('const ELECTRIC_VISUAL_SUBGRID_SIZE: f32 = 4.0');
     expect(materialFieldShaderSource).toContain('const ELECTRIC_VISUAL_SUBGRID_SIZE_U: u32 = 4u');
+    expect(materialFieldShaderSource).toContain('const ELECTRIC_NODE_START_OFFSET: f32 = 0.075');
     expect(materialFieldShaderSource).toContain('fn electricStrandColor');
     expect(materialFieldShaderSource).toContain('fn electricBridgeStrength');
     expect(materialFieldShaderSource).toContain('fn electricDirectionalBridgeStrength');
@@ -309,14 +310,18 @@ describe('material field shader profiles', () => {
     expect(materialFieldShaderSource).toContain('fn electricVisualSubgridIndex');
     expect(materialFieldShaderSource).toContain('fn electricSubcellSegmentStrength');
     expect(materialFieldShaderSource).toContain('fn electricVisualSubgridStrength');
+    expect(materialFieldShaderSource).toContain('fn electricNodeStart');
     expect(materialFieldShaderSource).toContain('fn distanceToSegment');
     expect(materialFieldShaderSource).toContain('isElectricVisualSourceAt(x - 1, y) && isElectricVisualSourceAt(x + 1, y)');
     expect(materialFieldShaderSource).toContain('isElectricVisualSourceAt(x + dx * 3, y + dy * 3)');
     expect(materialFieldShaderSource).toContain('electricDirectionalBridgeStrength(local, ix, iy, 1, 0');
+    expect(materialFieldShaderSource).toContain('let start = electricNodeStart(offset)');
+    expect(materialFieldShaderSource).toContain('return electricSegmentStrength(local, start, end, 0.082)');
+    expect(materialFieldShaderSource).toContain('return electricSegmentStrength(subLocal, start, end, 0.052) * pulse');
     expect(materialFieldShaderSource).toContain('let visualX = x * ELECTRIC_VISUAL_SUBGRID_SIZE_U + subIndex.x');
     expect(materialFieldShaderSource).toContain('let subgridStrength = electricVisualSubgridStrength');
     expect(materialFieldShaderSource).toContain('let combinedStrength = max(max(strength, forkStrength), subgridStrength)');
-    expect(materialFieldShaderSource).toContain('let subgridCoreStrength = pow(clamp(subgridStrength, 0.0, 1.0), 2.8)');
+    expect(materialFieldShaderSource).toContain('let subgridCoreStrength = pow(clamp(subgridStrength, 0.0, 1.0), 3.25)');
     expect(materialFieldShaderSource).toContain('let halo = vec3<f32>(0.18, 0.94, 1.95) * combinedStrength * pulse');
     expect(materialFieldShaderSource).toContain('let core = vec3<f32>(1.35, 1.58, 1.72)');
     expect(materialFieldShaderSource).toContain('let gridLocal = fract(gridPosition)');

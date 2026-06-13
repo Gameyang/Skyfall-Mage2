@@ -35,6 +35,7 @@ const PROJECTILE_FIRE_DECAY_PER_STEP: u32 = 3u;
 const SKILL_EXPLOSION_FIRE_DECAY_PER_STEP: u32 = 5u;
 const ELECTRIC_VISUAL_SUBGRID_SIZE: f32 = 4.0;
 const ELECTRIC_VISUAL_SUBGRID_SIZE_U: u32 = 4u;
+const ELECTRIC_NODE_START_OFFSET: f32 = 0.075;
 
 struct SimParams {
   width: u32,
@@ -1770,6 +1771,10 @@ fn electricStrandJitter(x: i32, y: i32, salt: u32) -> f32 {
   return (f32(randByte(x, y, salt)) / 255.0 - 0.5) * 0.2;
 }
 
+fn electricNodeStart(direction: vec2<f32>) -> vec2<f32> {
+  return vec2<f32>(0.5, 0.5) + normalize(direction) * ELECTRIC_NODE_START_OFFSET;
+}
+
 fn electricTemporalPulse(x: u32, y: u32, salt: u32) -> f32 {
   let phase = (params.frame + (hash(x, y, salt) & 7u)) & 7u;
   var gate = 0.58;
@@ -1802,9 +1807,10 @@ fn electricNeighborStrength(local: vec2<f32>, x: i32, y: i32, dx: i32, dy: i32, 
 
   let offset = vec2<f32>(f32(dx), f32(dy));
   let perpendicular = normalize(vec2<f32>(-offset.y, offset.x));
+  let start = electricNodeStart(offset);
   let end = vec2<f32>(0.5, 0.5) + offset * 0.64 + perpendicular * electricStrandJitter(x, y, salt);
   let width = 0.045 + f32(randByte(x, y, salt + 1u) & 15u) / 255.0;
-  return electricSegmentStrength(local, vec2<f32>(0.5, 0.5), end, width);
+  return electricSegmentStrength(local, start, end, width);
 }
 
 fn electricBridgeStrength(mat: u32, x: i32, y: i32, local: vec2<f32>) -> f32 {
@@ -1861,8 +1867,9 @@ fn electricReachStrength(local: vec2<f32>, x: i32, y: i32, dx: i32, dy: i32, sal
 
   let direction = normalize(vec2<f32>(f32(dx), f32(dy)));
   let perpendicular = vec2<f32>(-direction.y, direction.x);
+  let start = electricNodeStart(direction);
   let end = vec2<f32>(0.5, 0.5) + direction * 0.92 + perpendicular * electricStrandJitter(x, y, salt);
-  return electricSegmentStrength(local, vec2<f32>(0.5, 0.5), end, 0.095);
+  return electricSegmentStrength(local, start, end, 0.082);
 }
 
 fn electricForkStrength(local: vec2<f32>, x: i32, y: i32, dx: i32, dy: i32, salt: u32) -> f32 {
@@ -1936,7 +1943,8 @@ fn electricSubcellSegmentStrength(subLocal: vec2<f32>, visualX: u32, visualY: u3
     pulse = 1.08;
   }
 
-  return electricSegmentStrength(subLocal, vec2<f32>(0.5, 0.5), end, 0.065) * pulse;
+  let start = electricNodeStart(end - vec2<f32>(0.5, 0.5));
+  return electricSegmentStrength(subLocal, start, end, 0.052) * pulse;
 }
 
 fn electricVisualSubgridStrength(local: vec2<f32>, x: u32, y: u32, enabled: bool) -> f32 {
@@ -2010,9 +2018,9 @@ fn electricStrandColor(cell: u32, x: u32, y: u32, local: vec2<f32>, base: vec4<f
   }
 
   let pulse = electricTemporalPulse(x, y, aux(cell) + 211u);
-  let coreStrength = pow(clamp(strength, 0.0, 1.0), 3.0);
-  let forkCoreStrength = pow(clamp(forkStrength, 0.0, 1.0), 2.6);
-  let subgridCoreStrength = pow(clamp(subgridStrength, 0.0, 1.0), 2.8);
+  let coreStrength = pow(clamp(strength, 0.0, 1.0), 3.45);
+  let forkCoreStrength = pow(clamp(forkStrength, 0.0, 1.0), 3.0);
+  let subgridCoreStrength = pow(clamp(subgridStrength, 0.0, 1.0), 3.25);
   let halo = vec3<f32>(0.18, 0.94, 1.95) * combinedStrength * pulse;
   let core = vec3<f32>(1.35, 1.58, 1.72) * (coreStrength + forkCoreStrength * 0.72 + subgridCoreStrength * 0.54) * pulse;
   return vec4<f32>(base.rgb + halo + core, max(base.a, min(1.0, combinedStrength * 1.65)));
