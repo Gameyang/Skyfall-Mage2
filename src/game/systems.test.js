@@ -9,7 +9,7 @@ import { getSkillSequenceDelayMs } from './skillSequence.js';
 import {
   applyGpuDamageFeedback,
   losePlayerRibbonItems,
-  selectProgressRiskTarget,
+  selectNearestTarget,
   updateGame,
   updatePlayer,
   updateViewport,
@@ -171,8 +171,8 @@ describe('viewport sizing', () => {
   });
 });
 
-describe('progress-risk targeting', () => {
-  it('prioritizes a high-progress threat over a merely nearby enemy', () => {
+describe('nearest targeting', () => {
+  it('prioritizes the nearest living enemy over a high-progress threat', () => {
     const state = createGameState({ width: 800, height: 600, content: createTestContent() });
     state.player.x = 400;
     state.player.y = 300;
@@ -197,7 +197,7 @@ describe('progress-risk targeting', () => {
       },
     ];
 
-    expect(selectProgressRiskTarget(state).id).toBe(2);
+    expect(selectNearestTarget(state).id).toBe(1);
   });
 });
 
@@ -241,7 +241,7 @@ describe('fireball skill', () => {
     const createSkill = (id) => ({
       id,
       cooldownMs: 1000,
-      targeting: { type: 'progress-risk' },
+      targeting: { type: 'nearest' },
       projectile: {
         speed: 0,
         damage: 1,
@@ -276,7 +276,7 @@ describe('fireball skill', () => {
     const createSkill = (id) => ({
       id,
       cooldownMs: 300,
-      targeting: { type: 'progress-risk' },
+      targeting: { type: 'nearest' },
       projectile: {
         speed: 0,
         damage: 1,
@@ -429,7 +429,7 @@ describe('fireball skill', () => {
         element: expect.any(String),
         tags: expect.arrayContaining([skill.element, 'base-element', 'gpu-reaction-input']),
         cooldownMs: expect.any(Number),
-        targeting: expect.objectContaining({ type: 'progress-risk' }),
+        targeting: expect.objectContaining({ type: 'nearest' }),
         gpuReactionRole: 'base-input-only',
       }));
       expect(collectSkillMaterials(skill).every((material) => (
@@ -580,7 +580,7 @@ describe('combat resolution', () => {
       skills: {
         blast: {
           id: 'blast',
-          targeting: { type: 'progress-risk' },
+          targeting: { type: 'nearest' },
           projectile: {
             speed: 0,
             damage: 0,
@@ -655,7 +655,7 @@ describe('combat resolution', () => {
       skills: {
         charge: {
           id: 'charge',
-          targeting: { type: 'progress-risk' },
+          targeting: { type: 'nearest' },
           projectile: {
             speed: 0,
             damage: 0,
@@ -729,7 +729,7 @@ describe('combat resolution', () => {
       skills: {
         burn: {
           id: 'burn',
-          targeting: { type: 'progress-risk' },
+          targeting: { type: 'nearest' },
           projectile: {
             speed: 0,
             damage: 0,
@@ -789,7 +789,7 @@ describe('combat resolution', () => {
       skills: {
         steam: {
           id: 'steam',
-          targeting: { type: 'progress-risk' },
+          targeting: { type: 'nearest' },
           projectile: {
             speed: 0,
             damage: 0,

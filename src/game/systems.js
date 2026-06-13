@@ -1,5 +1,5 @@
 import { GAS_FLOW_CONFIG } from '../features/material-field/config.js';
-import { circlesIntersect, clamp, distance, hash01, normalize } from './math.js';
+import { circlesIntersect, clamp, distance, distanceSq, hash01, normalize } from './math.js';
 import { hasEnemyReachedExit, updateEnemyPathPosition } from './enemyPaths.js';
 import { getSkillSequenceDelayMs } from './skillSequence.js';
 import {
@@ -373,21 +373,21 @@ function normalizeSequenceIndex(index, sequenceLength) {
 }
 
 export function selectTargetForSkill(state, skill) {
-  if (skill.targeting?.type === 'progress-risk') {
-    return selectProgressRiskTarget(state);
+  if (skill.targeting?.type === 'nearest') {
+    return selectNearestTarget(state);
   }
-  return selectProgressRiskTarget(state);
+  return selectNearestTarget(state);
 }
 
-export function selectProgressRiskTarget(state) {
+export function selectNearestTarget(state) {
   let bestTarget = null;
-  let bestScore = -Infinity;
+  let bestDistanceSq = Infinity;
 
   for (const enemy of state.entities.enemies) {
     if (enemy.hp <= 0) continue;
-    const score = scoreProgressRisk(enemy, state.player, state.viewport);
-    if (score > bestScore) {
-      bestScore = score;
+    const currentDistanceSq = distanceSq(enemy, state.player);
+    if (currentDistanceSq < bestDistanceSq) {
+      bestDistanceSq = currentDistanceSq;
       bestTarget = enemy;
     }
   }
@@ -395,11 +395,8 @@ export function selectProgressRiskTarget(state) {
   return bestTarget;
 }
 
-export function scoreProgressRisk(enemy, player, viewport) {
-  const progressRisk = clamp(enemy.progress / Math.max(1, enemy.travelDistance), 0, 1);
-  const collisionDistance = Math.max(0, distance(enemy, player) - enemy.radius - player.radius);
-  const proximityRisk = 1 - clamp(collisionDistance / Math.max(viewport.width, viewport.height, 1), 0, 1);
-  return progressRisk * 0.64 + proximityRisk * 0.36;
+export function selectProgressRiskTarget(state) {
+  return selectNearestTarget(state);
 }
 
 export function spawnProjectileFromSkill(state, skill, target, skillId = skill.id) {

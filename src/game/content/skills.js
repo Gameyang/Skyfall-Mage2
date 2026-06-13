@@ -1,5 +1,5 @@
 const BASE_TARGETING = Object.freeze({
-  type: 'progress-risk',
+  type: 'nearest',
 });
 
 const BASE_SKILL_TAGS = Object.freeze(['base-element', 'gpu-reaction-input']);
