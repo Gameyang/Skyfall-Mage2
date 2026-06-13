@@ -323,7 +323,6 @@ function updateAutoWeapons(state, dtMs, content = DEFAULT_SYSTEM_CONTENT) {
   syncWeaponRuntimeState(state);
   updateWeaponFollowerPositions(state, dtMs);
   const runtimeSkills = createRuntimeSkillMapForWeapons(state, content);
-  updateWeaponCooldowns(state, dtMs);
 
   const equipped = state.weapons.equippedWeaponInstanceIds || [];
   if (!equipped.some(Boolean)) return;
@@ -339,16 +338,18 @@ function updateAutoWeapons(state, dtMs, content = DEFAULT_SYSTEM_CONTENT) {
     }
 
     const runtime = state.weapons.equippedRuntime[sequenceIndex];
-    if (!runtime || runtime.cooldownRemainingMs > 0) {
-      state.weapons.attackSequenceIndex = sequenceIndex;
-      return;
-    }
-
     const skill = runtimeSkills[instanceId];
-    if (!skill) {
+    if (!runtime || !skill) {
       sequenceIndex = (sequenceIndex + 1) % equipped.length;
       attempts += 1;
       continue;
+    }
+
+    startWeaponTurnCooldown(runtime, skill);
+    runtime.cooldownRemainingMs = Math.max(0, (runtime.cooldownRemainingMs || 0) - dtMs);
+    if (runtime.cooldownRemainingMs > 0) {
+      state.weapons.attackSequenceIndex = sequenceIndex;
+      return;
     }
 
     const target = selectTargetForSkill(state, skill);
@@ -365,7 +366,8 @@ function updateAutoWeapons(state, dtMs, content = DEFAULT_SYSTEM_CONTENT) {
       return;
     }
 
-    runtime.cooldownRemainingMs += skill.cooldownMs ?? DEFAULT_SKILL_COOLDOWN_MS;
+    runtime.cooldownRemainingMs = 0;
+    runtime.cooldownStarted = false;
     state.weapons.attackSequenceIndex = (sequenceIndex + 1) % equipped.length;
     return;
   }
@@ -373,10 +375,10 @@ function updateAutoWeapons(state, dtMs, content = DEFAULT_SYSTEM_CONTENT) {
   state.weapons.attackSequenceIndex = sequenceIndex;
 }
 
-function updateWeaponCooldowns(state, dtMs) {
-  for (const runtime of state.weapons?.equippedRuntime || []) {
-    runtime.cooldownRemainingMs = Math.max(0, (runtime.cooldownRemainingMs || 0) - dtMs);
-  }
+function startWeaponTurnCooldown(runtime, skill) {
+  if (runtime.cooldownStarted) return;
+  runtime.cooldownRemainingMs = skill.cooldownMs ?? DEFAULT_SKILL_COOLDOWN_MS;
+  runtime.cooldownStarted = true;
 }
 
 function updateSkillCooldowns(state, dtMs, skills) {

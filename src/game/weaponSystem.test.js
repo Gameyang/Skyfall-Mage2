@@ -111,6 +111,43 @@ describe('weapon reveal progress', () => {
 });
 
 describe('weapon auto attack sequence', () => {
+  function createTargetedWeaponState() {
+    const content = createWeaponTestContent({
+      enemies: {
+        testEnemy: {
+          id: 'testEnemy',
+          hp: 500,
+          speed: 0,
+          radius: 18,
+          contactDamage: 0,
+        },
+      },
+    });
+    const state = createGameState({ width: 800, height: 800, content });
+    state.player.recenter = null;
+    state.player.x = 400;
+    state.player.y = 400;
+    state.entities.enemies.push({
+      id: 1,
+      type: 'testEnemy',
+      hp: 500,
+      maxHp: 500,
+      x: 720,
+      y: 400,
+      radius: 18,
+      progress: 0,
+      travelDistance: 1000,
+      contactDamage: 0,
+    });
+    return { content, state };
+  }
+
+  function getEquippedWeaponSkills(state, content) {
+    return state.weapons.equippedWeaponInstanceIds.map((instanceId) => (
+      buildWeaponRuntimeSkill(state.weapons.weaponInstancesById[instanceId], content)
+    ));
+  }
+
   it('normalizes the equipped loadout to three weapon slots', () => {
     const content = createWeaponTestContent();
     const state = createGameState({ width: 800, height: 800, content });
@@ -128,82 +165,50 @@ describe('weapon auto attack sequence', () => {
     expect(state.weapons.equippedRuntime).toHaveLength(3);
   });
 
-  it('fires equipped weapon instances in strict slot order', () => {
-    const content = createWeaponTestContent({
-      enemies: {
-        testEnemy: {
-          id: 'testEnemy',
-          hp: 500,
-          speed: 0,
-          radius: 18,
-          contactDamage: 0,
-        },
-      },
-    });
-    const state = createGameState({ width: 800, height: 800, content });
-    state.player.recenter = null;
-    state.player.x = 400;
-    state.player.y = 400;
-    state.entities.enemies.push({
-      id: 1,
-      type: 'testEnemy',
-      hp: 500,
-      maxHp: 500,
-      x: 720,
-      y: 400,
-      radius: 18,
-      progress: 0,
-      travelDistance: 1000,
-      contactDamage: 0,
-    });
+  it('fires equipped weapon instances after each slot cooldown in strict order', () => {
+    const { content, state } = createTargetedWeaponState();
+    const skills = getEquippedWeaponSkills(state, content);
 
-    updateGame(state, 16, content);
-    updateGame(state, 16, content);
-    updateGame(state, 16, content);
+    updateAutoAttack(state, skills[0].cooldownMs - 1, content);
+    expect(state.entities.projectiles).toHaveLength(0);
+    expect(state.weapons.attackSequenceIndex).toBe(0);
+    expect(state.weapons.equippedRuntime[0]).toEqual(expect.objectContaining({
+      cooldownRemainingMs: 1,
+      cooldownStarted: true,
+    }));
+    expect(state.weapons.equippedRuntime[1]).toEqual(expect.objectContaining({
+      cooldownRemainingMs: 0,
+      cooldownStarted: false,
+    }));
+
+    updateAutoAttack(state, 1, content);
+    updateAutoAttack(state, skills[1].cooldownMs, content);
+    updateAutoAttack(state, skills[2].cooldownMs, content);
 
     expect(state.entities.projectiles.map((projectile) => projectile.skillId)).toEqual([
       'starter-0-fire_bolt_staff',
       'starter-1-water_bolt_staff',
       'starter-2-electric_bolt_staff',
     ]);
+    expect(state.weapons.attackSequenceIndex).toBe(0);
+    expect(state.weapons.equippedRuntime.map((runtime) => runtime.cooldownStarted)).toEqual([
+      false,
+      false,
+      false,
+    ]);
   });
 
   it('spawns each equipped weapon projectile from its in-world slot anchor', () => {
-    const content = createWeaponTestContent({
-      enemies: {
-        testEnemy: {
-          id: 'testEnemy',
-          hp: 500,
-          speed: 0,
-          radius: 18,
-          contactDamage: 0,
-        },
-      },
-    });
-    const state = createGameState({ width: 800, height: 800, content });
-    state.player.recenter = null;
-    state.player.x = 400;
-    state.player.y = 400;
+    const { content, state } = createTargetedWeaponState();
     state.player.facing = { x: 1, y: 0 };
-    state.entities.enemies.push({
-      id: 1,
-      type: 'testEnemy',
-      hp: 500,
-      maxHp: 500,
-      x: 720,
-      y: 400,
-      radius: 18,
-      progress: 0,
-      travelDistance: 1000,
-      contactDamage: 0,
-    });
+    const skills = getEquippedWeaponSkills(state, content);
     const origins = [];
 
-    updateAutoAttack(state, 16, content);
+    updateAutoAttack(state, skills[0].cooldownMs, content);
     origins.push(getWeaponSlotPosition(state, 0));
-    updateAutoAttack(state, 16, content);
+    updateAutoAttack(state, skills[1].cooldownMs, content);
     origins.push(getWeaponSlotPosition(state, 1));
-    updateAutoAttack(state, 16, content);
+    updateAutoAttack(state, skills[2].cooldownMs, content);
     origins.push(getWeaponSlotPosition(state, 2));
 
     expect(state.entities.projectiles).toHaveLength(3);

@@ -33,6 +33,7 @@ export function createStarterWeaponState({ content = {}, seed = 'starter' } = {}
       slotIndex,
       weaponInstanceId: instanceId,
       cooldownRemainingMs: 0,
+      cooldownStarted: false,
     })),
     attackSequenceIndex: 0,
   };

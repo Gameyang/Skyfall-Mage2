@@ -19,6 +19,9 @@ export function syncWeaponRuntimeState(state) {
       cooldownRemainingMs: previous?.weaponInstanceId === instanceId
         ? Math.max(0, previous.cooldownRemainingMs || 0)
         : 0,
+      cooldownStarted: previous?.weaponInstanceId === instanceId
+        ? Boolean(previous.cooldownStarted)
+        : false,
       follower: previousFollower ? { ...previousFollower } : null,
     };
   });
