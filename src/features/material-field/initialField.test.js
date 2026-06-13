@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CELL_COUNT, EMITTER_PROFILE, EMITTER_WORDS, GAS_FLOW_CONFIG } from './config.js';
+import { BLOOM_CONFIG, CELL_COUNT, EMITTER_PROFILE, EMITTER_WORDS, GAS_FLOW_CONFIG } from './config.js';
 import { seedInitialField } from './initialField.js';
 import { MaterialEmitterState } from './MaterialEmitterState.js';
 import { MATERIAL } from './materials.js';
@@ -285,12 +285,26 @@ describe('material field shader profiles', () => {
     expect(materialFieldShaderSource).toContain('return pack(SPARK, life(sparkAbove) - 1u, aux(sparkAbove))');
   });
 
+  it('keeps bloom restrained so electric particles do not overwhelm strand shapes', () => {
+    expect(BLOOM_CONFIG).toEqual(expect.objectContaining({
+      threshold: 1.18,
+      intensity: 0.48,
+      radius: 0.9,
+      levels: 5,
+    }));
+  });
+
   it('renders electric carriers as connected strand segments instead of isolated dots', () => {
     expect(materialFieldShaderSource).toContain('fn electricStrandColor');
     expect(materialFieldShaderSource).toContain('fn electricBridgeStrength');
+    expect(materialFieldShaderSource).toContain('fn electricDirectionalBridgeStrength');
+    expect(materialFieldShaderSource).toContain('fn electricReachStrength');
+    expect(materialFieldShaderSource).toContain('fn electricVisualSourceAlong');
     expect(materialFieldShaderSource).toContain('fn electricNeighborStrength');
     expect(materialFieldShaderSource).toContain('fn distanceToSegment');
     expect(materialFieldShaderSource).toContain('isElectricVisualSourceAt(x - 1, y) && isElectricVisualSourceAt(x + 1, y)');
+    expect(materialFieldShaderSource).toContain('isElectricVisualSourceAt(x + dx * 3, y + dy * 3)');
+    expect(materialFieldShaderSource).toContain('electricDirectionalBridgeStrength(local, ix, iy, 1, 0');
     expect(materialFieldShaderSource).toContain('let gridLocal = fract(gridPosition)');
     expect(materialFieldShaderSource).toContain('return electricStrandColor(cell, gx, gy, gridLocal, materialColor(cell, gx, gy))');
   });

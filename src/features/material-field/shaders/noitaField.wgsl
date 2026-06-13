@@ -1674,8 +1674,8 @@ fn materialColor(cell: u32, x: u32, y: u32) -> vec4<f32> {
     return vec4<f32>(0.08 + still * 0.04, 0.30 + still * 0.08, 0.85 + still * 0.13, 1.0);
   }
   if (mat == ELECTRIC) {
-    let heat = clamp(0.85 + l * 0.95 + n * 0.25, 0.0, 2.0);
-    return vec4<f32>(0.55 + heat * 0.8, 1.6 + heat * 1.3, 2.4 + heat * 1.8, 1.0);
+    let charge = clamp(0.42 + l * 0.48 + n * 0.12, 0.0, 1.0);
+    return vec4<f32>(0.28 + charge * 0.42, 0.82 + charge * 0.58, 1.12 + charge * 0.72, 1.0);
   }
   if (mat == FIRE) {
     let heat = clamp(l * 2.6 + n * 0.22, 0.0, 1.0);
@@ -1690,24 +1690,24 @@ fn materialColor(cell: u32, x: u32, y: u32) -> vec4<f32> {
     return vec4<f32>(0.55 + pulse * 0.4, 0.95 + pulse * 0.9, 1.3 + pulse * 1.2, 1.0);
   }
   if (mat == CHAIN_ARC) {
-    let pulse = 0.85 + l * 1.15 + n * 0.45;
-    return vec4<f32>(0.72 + pulse * 0.95, 1.9 + pulse * 1.45, 3.2 + pulse * 2.0, 1.0);
+    let pulse = 0.58 + l * 0.68 + n * 0.18;
+    return vec4<f32>(0.42 + pulse * 0.5, 1.1 + pulse * 0.74, 1.62 + pulse * 0.98, 1.0);
   }
   if (mat == CHAIN_EXPLOSION) {
     let heat = 0.9 + l * 1.2 + n * 0.35;
     return vec4<f32>(3.1 + heat * 1.4, 1.35 + heat * 0.95, 0.35 + heat * 0.45, 1.0);
   }
   if (mat == LASER_ARC) {
-    let beam = 0.92 + l * 1.0 + n * 0.28;
-    return vec4<f32>(0.75 + beam * 0.8, 2.25 + beam * 1.55, 3.4 + beam * 1.75, 1.0);
+    let beam = 0.62 + l * 0.62 + n * 0.14;
+    return vec4<f32>(0.38 + beam * 0.46, 1.18 + beam * 0.72, 1.72 + beam * 0.92, 1.0);
   }
   if (mat == PINBALL_ROCK) {
     let shine = 0.32 + n * 0.22;
     return vec4<f32>(0.36 + shine * 0.38, 0.42 + shine * 0.34, 0.50 + shine * 0.46, 1.0);
   }
   if (mat == LIGHTNING_ROCK) {
-    let charge = 0.5 + l * 0.9 + n * 0.28;
-    return vec4<f32>(0.45 + charge * 0.55, 0.85 + charge * 1.1, 1.35 + charge * 1.45, 1.0);
+    let charge = 0.42 + l * 0.56 + n * 0.16;
+    return vec4<f32>(0.36 + charge * 0.38, 0.72 + charge * 0.62, 1.08 + charge * 0.78, 1.0);
   }
   if (mat == ICE_BURST) {
     let shard = 0.58 + l * 0.72 + n * 0.24;
@@ -1722,8 +1722,8 @@ fn materialColor(cell: u32, x: u32, y: u32) -> vec4<f32> {
     return vec4<f32>(1.8 + ember * 1.2, 0.72 + ember * 0.58, 0.24 + ember * 0.18, 1.0);
   }
   if (mat == CHARGED_DUST) {
-    let charge = 0.42 + l * 0.68 + n * 0.26;
-    return vec4<f32>(0.56 + charge * 0.4, 1.2 + charge * 0.9, 1.65 + charge * 1.2, 1.0);
+    let charge = 0.36 + l * 0.46 + n * 0.14;
+    return vec4<f32>(0.42 + charge * 0.28, 0.86 + charge * 0.5, 1.14 + charge * 0.66, 1.0);
   }
   if (mat == AMPLIFY_ZONE) {
     let pulse = 0.5 + l * 0.72 + n * 0.24;
@@ -1742,8 +1742,8 @@ fn materialColor(cell: u32, x: u32, y: u32) -> vec4<f32> {
     return vec4<f32>(a + n * 0.06, a + n * 0.05, a + n * 0.04, 1.0);
   }
   if (mat == SPARK) {
-    let heat = clamp(0.8 + l * 0.8 + n * 0.25, 0.0, 1.8);
-    return vec4<f32>(2.8 + heat * 1.45, 1.85 + heat * 1.05, 0.55 + heat * 0.45, 1.0);
+    let heat = clamp(0.58 + l * 0.52 + n * 0.16, 0.0, 1.2);
+    return vec4<f32>(1.38 + heat * 0.62, 0.94 + heat * 0.46, 0.34 + heat * 0.24, 1.0);
   }
   if (mat == STEAM) {
     let a = 0.36 + l * 0.44;
@@ -1761,11 +1761,11 @@ fn distanceToSegment(point: vec2<f32>, start: vec2<f32>, end: vec2<f32>) -> f32 
 
 fn electricSegmentStrength(local: vec2<f32>, start: vec2<f32>, end: vec2<f32>, width: f32) -> f32 {
   let dist = distanceToSegment(local, start, end);
-  return 1.0 - smoothstep(width, width + 0.075, dist);
+  return 1.0 - smoothstep(width, width + 0.11, dist);
 }
 
 fn electricStrandJitter(x: i32, y: i32, salt: u32) -> f32 {
-  return (f32(randByte(x, y, salt)) / 255.0 - 0.5) * 0.28;
+  return (f32(randByte(x, y, salt)) / 255.0 - 0.5) * 0.2;
 }
 
 fn isElectricVisualSourceAt(x: i32, y: i32) -> bool {
@@ -1824,11 +1824,47 @@ fn electricBridgeStrength(mat: u32, x: i32, y: i32, local: vec2<f32>) -> f32 {
   return strength;
 }
 
+fn electricVisualSourceAlong(x: i32, y: i32, dx: i32, dy: i32) -> bool {
+  return isElectricVisualSourceAt(x + dx, y + dy) ||
+    isElectricVisualSourceAt(x + dx * 2, y + dy * 2) ||
+    isElectricVisualSourceAt(x + dx * 3, y + dy * 3);
+}
+
+fn electricDirectionalBridgeStrength(local: vec2<f32>, x: i32, y: i32, dx: i32, dy: i32, salt: u32) -> f32 {
+  if (!(electricVisualSourceAlong(x, y, -dx, -dy) && electricVisualSourceAlong(x, y, dx, dy))) {
+    return 0.0;
+  }
+
+  let direction = normalize(vec2<f32>(f32(dx), f32(dy)));
+  let perpendicular = vec2<f32>(-direction.y, direction.x);
+  let start = vec2<f32>(0.5, 0.5) - direction * 0.86 + perpendicular * electricStrandJitter(x, y, salt);
+  let end = vec2<f32>(0.5, 0.5) + direction * 0.86 + perpendicular * electricStrandJitter(x, y, salt + 1u);
+  return electricSegmentStrength(local, start, end, 0.105);
+}
+
+fn electricReachStrength(local: vec2<f32>, x: i32, y: i32, dx: i32, dy: i32, salt: u32) -> f32 {
+  if (!electricVisualSourceAlong(x, y, dx, dy)) {
+    return 0.0;
+  }
+
+  let direction = normalize(vec2<f32>(f32(dx), f32(dy)));
+  let perpendicular = vec2<f32>(-direction.y, direction.x);
+  let end = vec2<f32>(0.5, 0.5) + direction * 0.92 + perpendicular * electricStrandJitter(x, y, salt);
+  return electricSegmentStrength(local, vec2<f32>(0.5, 0.5), end, 0.095);
+}
+
 fn electricStrandColor(cell: u32, x: u32, y: u32, local: vec2<f32>, base: vec4<f32>) -> vec4<f32> {
   let mat = material(cell);
   let ix = i32(x);
   let iy = i32(y);
   var strength = electricBridgeStrength(mat, ix, iy, local);
+
+  if (isElectricBridgeMaterial(mat)) {
+    strength = max(strength, electricDirectionalBridgeStrength(local, ix, iy, 1, 0, 213u));
+    strength = max(strength, electricDirectionalBridgeStrength(local, ix, iy, 0, 1, 215u));
+    strength = max(strength, electricDirectionalBridgeStrength(local, ix, iy, 1, 1, 217u));
+    strength = max(strength, electricDirectionalBridgeStrength(local, ix, iy, 1, -1, 219u));
+  }
 
   if (isElectricArcSourceCell(cell)) {
     strength = max(strength, electricNeighborStrength(local, ix, iy, 1, 0, 187u));
@@ -1839,15 +1875,23 @@ fn electricStrandColor(cell: u32, x: u32, y: u32, local: vec2<f32>, base: vec4<f
     strength = max(strength, electricNeighborStrength(local, ix, iy, -1, -1, 197u));
     strength = max(strength, electricNeighborStrength(local, ix, iy, 1, 1, 199u));
     strength = max(strength, electricNeighborStrength(local, ix, iy, -1, 1, 201u));
+    strength = max(strength, electricReachStrength(local, ix, iy, 1, 0, 221u));
+    strength = max(strength, electricReachStrength(local, ix, iy, -1, 0, 223u));
+    strength = max(strength, electricReachStrength(local, ix, iy, 0, -1, 225u));
+    strength = max(strength, electricReachStrength(local, ix, iy, 0, 1, 227u));
+    strength = max(strength, electricReachStrength(local, ix, iy, 1, -1, 229u));
+    strength = max(strength, electricReachStrength(local, ix, iy, -1, -1, 231u));
+    strength = max(strength, electricReachStrength(local, ix, iy, 1, 1, 233u));
+    strength = max(strength, electricReachStrength(local, ix, iy, -1, 1, 235u));
   }
 
   if (strength <= 0.0) {
     return base;
   }
 
-  let flicker = 0.74 + f32(hash(x, y, params.frame + 211u) & 63u) / 63.0 * 0.46;
-  let strand = vec3<f32>(0.9, 3.05, 5.4) * strength * flicker;
-  return vec4<f32>(base.rgb + strand, max(base.a, min(1.0, strength * 1.35)));
+  let flicker = 0.82 + f32(hash(x, y, params.frame + 211u) & 63u) / 63.0 * 0.24;
+  let strand = vec3<f32>(0.32, 1.1, 1.85) * strength * flicker;
+  return vec4<f32>(base.rgb + strand, max(base.a, min(1.0, strength * 1.45)));
 }
 
 @fragment

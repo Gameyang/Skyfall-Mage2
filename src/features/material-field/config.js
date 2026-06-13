@@ -34,10 +34,10 @@ export const HDR_SCENE_FORMAT = 'rgba16float';
 export const SCENE_CLEAR_COLOR = Object.freeze({ r: 0, g: 0, b: 0, a: 0 });
 export const BLOOM_CONFIG = Object.freeze({
   enabled: true,
-  threshold: 0.98,
-  intensity: 0.95,
-  radius: 1.35,
-  levels: 6,
+  threshold: 1.18,
+  intensity: 0.48,
+  radius: 0.9,
+  levels: 5,
   bloomFormat: HDR_SCENE_FORMAT,
   clearColor: SCENE_CLEAR_COLOR,
 });
