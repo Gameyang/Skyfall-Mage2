@@ -1,2 +1,2 @@
-export const BATTLE_FIELD_WIDTH = 512;
-export const BATTLE_FIELD_HEIGHT = 512;
+export const BATTLE_FIELD_WIDTH = 1024;
+export const BATTLE_FIELD_HEIGHT = 1024;
