@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { computeScreenShakeOffset } from './GameRuntime.js';
 import { BASE_ELEMENT_WEAPON_IDS, createBaseElementSkillLoadout, SKILL_DEFINITIONS } from './content/skills.js';
+import { createStarterWeaponLoadout, STARTER_WEAPON_DEFINITION_IDS, WEAPON_DEFINITIONS } from './content/weapons.js';
 import { createGameState } from './GameState.js';
 import { createRunContent } from './runContent.js';
 import { getSkillSequenceDelayMs } from './skillSequence.js';
@@ -109,5 +110,49 @@ describe('run skill loadouts', () => {
 
     expect(Object.keys(runContent.skills)).toEqual(['water_bolt']);
     expect(state.session.equippedSkillIds).toEqual(['water_bolt']);
+  });
+});
+
+describe('run starter weapon loadouts', () => {
+  function createWeaponContent() {
+    return {
+      skills: {},
+      waves: [],
+      weapons: WEAPON_DEFINITIONS,
+      starterWeaponDefinitionIds: STARTER_WEAPON_DEFINITION_IDS,
+      createStarterWeaponLoadout,
+    };
+  }
+
+  it('equips three starter weapons selected from the four base elements', () => {
+    const runContent = createRunContent(createWeaponContent(), { runSeed: 'weapon-loadout-alpha' });
+    const state = createGameState({ content: runContent });
+    const equippedWeapons = state.weapons.equippedWeaponInstanceIds.map((instanceId) => (
+      state.weapons.weaponInstancesById[instanceId]
+    ));
+    const equippedElements = equippedWeapons.map((weapon) => WEAPON_DEFINITIONS[weapon.definitionId].baseElement);
+
+    expect(runContent.starterWeaponDefinitionIds).toHaveLength(3);
+    expect(state.weapons.equippedWeaponInstanceIds).toHaveLength(3);
+    expect(new Set(equippedElements).size).toBe(3);
+    expect(equippedElements.every((element) => ['fire', 'water', 'electric', 'sand'].includes(element))).toBe(true);
+  });
+
+  it('keeps starter weapon loadouts stable for the same run seed', () => {
+    const content = createWeaponContent();
+
+    expect(createRunContent(content, { runSeed: 'same-weapon-seed' }).starterWeaponDefinitionIds)
+      .toEqual(createRunContent(content, { runSeed: 'same-weapon-seed' }).starterWeaponDefinitionIds);
+  });
+
+  it('can select different three-element starter sets across run seeds', () => {
+    const content = createWeaponContent();
+    const selectedSets = new Set(
+      Array.from({ length: 16 }, (_, index) => createRunContent(content, {
+        runSeed: `weapon-loadout-${index}`,
+      }).starterWeaponDefinitionIds.slice().sort().join('|')),
+    );
+
+    expect(selectedSets.size).toBeGreaterThan(1);
   });
 });

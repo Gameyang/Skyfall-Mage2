@@ -8,7 +8,7 @@ import { PLAYER_SKIN_URLS } from './spriteAssets.js';
 import { WAVE_DEFINITIONS } from './waves.js';
 import { ATTACK_PATTERN_DEFINITIONS } from './attackPatterns.js';
 import { WEAPON_AFFIX_DEFINITIONS } from './weaponAffixes.js';
-import { STARTER_WEAPON_DEFINITION_IDS, WEAPON_DEFINITIONS } from './weapons.js';
+import { createStarterWeaponLoadout, STARTER_WEAPON_DEFINITION_IDS, WEAPON_DEFINITIONS } from './weapons.js';
 import { createSeededWaveSequence } from '../waveRandomizer.js';
 
 export const GAME_CONTENT = Object.freeze({
@@ -21,6 +21,7 @@ export const GAME_CONTENT = Object.freeze({
   weaponAffixes: WEAPON_AFFIX_DEFINITIONS,
   attackPatterns: ATTACK_PATTERN_DEFINITIONS,
   starterWeaponDefinitionIds: STARTER_WEAPON_DEFINITION_IDS,
+  createStarterWeaponLoadout,
   createSkillLoadout: createBaseElementSkillLoadout,
   waves: WAVE_DEFINITIONS,
   enemyDifficulty: ENEMY_DIFFICULTY_CONFIG,

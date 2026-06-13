@@ -254,8 +254,56 @@ export const WEAPON_DEFINITIONS = Object.freeze({
   }),
 });
 
+export const STARTER_WEAPON_LOADOUT_SIZE = 3;
+
 export const STARTER_WEAPON_DEFINITION_IDS = Object.freeze([
   'fire_bolt_staff',
   'water_bolt_staff',
   'electric_bolt_staff',
+  'sand_bolt_staff',
 ]);
+
+export function createStarterWeaponLoadout({
+  seed = 'default',
+  weaponIds = STARTER_WEAPON_DEFINITION_IDS,
+  weapons = WEAPON_DEFINITIONS,
+  count = STARTER_WEAPON_LOADOUT_SIZE,
+} = {}) {
+  const candidates = [];
+  const seenElements = new Set();
+  for (const weaponId of weaponIds || []) {
+    const definition = weapons?.[weaponId];
+    const element = definition?.baseElement || weaponId;
+    if (!definition || seenElements.has(element)) continue;
+
+    seenElements.add(element);
+    candidates.push(weaponId);
+  }
+
+  const rng = createSeededRandom(`${seed}:starter-weapons`);
+  for (let index = candidates.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(rng() * (index + 1));
+    [candidates[index], candidates[swapIndex]] = [candidates[swapIndex], candidates[index]];
+  }
+
+  return Object.freeze(candidates.slice(0, Math.max(0, Math.min(count, candidates.length))));
+}
+
+function createSeededRandom(seed) {
+  let value = hashString(String(seed)) || 1;
+  return () => {
+    value ^= value << 13;
+    value ^= value >>> 17;
+    value ^= value << 5;
+    return ((value >>> 0) % 100000) / 100000;
+  };
+}
+
+function hashString(value) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
