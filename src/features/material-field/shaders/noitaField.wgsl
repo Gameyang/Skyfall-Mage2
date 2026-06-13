@@ -1674,8 +1674,8 @@ fn materialColor(cell: u32, x: u32, y: u32) -> vec4<f32> {
     return vec4<f32>(0.08 + still * 0.04, 0.30 + still * 0.08, 0.85 + still * 0.13, 1.0);
   }
   if (mat == ELECTRIC) {
-    let charge = clamp(0.42 + l * 0.48 + n * 0.12, 0.0, 1.0);
-    return vec4<f32>(0.28 + charge * 0.42, 0.82 + charge * 0.58, 1.12 + charge * 0.72, 1.0);
+    let charge = clamp(0.32 + l * 0.42 + n * 0.14, 0.0, 1.0);
+    return vec4<f32>(0.10 + charge * 0.18, 0.42 + charge * 0.32, 0.70 + charge * 0.42, 1.0);
   }
   if (mat == FIRE) {
     let heat = clamp(l * 2.6 + n * 0.22, 0.0, 1.0);
@@ -1768,6 +1768,16 @@ fn electricStrandJitter(x: i32, y: i32, salt: u32) -> f32 {
   return (f32(randByte(x, y, salt)) / 255.0 - 0.5) * 0.2;
 }
 
+fn electricTemporalPulse(x: u32, y: u32, salt: u32) -> f32 {
+  let phase = (params.frame + (hash(x, y, salt) & 7u)) & 7u;
+  var gate = 0.58;
+  if (phase == 0u || phase == 1u || phase == 5u) {
+    gate = 1.18;
+  }
+  let noise = f32(hash(x, y, params.frame + salt) & 63u) / 63.0;
+  return gate + noise * 0.22;
+}
+
 fn isElectricVisualSourceAt(x: i32, y: i32) -> bool {
   return isElectricArcSourceCell(getCell(x, y));
 }
@@ -1853,11 +1863,36 @@ fn electricReachStrength(local: vec2<f32>, x: i32, y: i32, dx: i32, dy: i32, sal
   return electricSegmentStrength(local, vec2<f32>(0.5, 0.5), end, 0.095);
 }
 
+fn electricForkStrength(local: vec2<f32>, x: i32, y: i32, dx: i32, dy: i32, salt: u32) -> f32 {
+  if (!electricVisualSourceAlong(x, y, dx, dy)) {
+    return 0.0;
+  }
+
+  let roll = randByte(x, y, salt);
+  if (roll < 92u) {
+    return 0.0;
+  }
+
+  var side = -1.0;
+  if ((roll & 1u) == 1u) {
+    side = 1.0;
+  }
+
+  let direction = normalize(vec2<f32>(f32(dx), f32(dy)));
+  let perpendicular = vec2<f32>(-direction.y, direction.x);
+  let start = vec2<f32>(0.5, 0.5) + direction * 0.18;
+  let branchDirection = normalize(direction * 0.38 + perpendicular * side * 0.78);
+  let branchLength = 0.30 + f32((roll >> 1u) & 31u) / 255.0;
+  let end = start + branchDirection * branchLength + perpendicular * electricStrandJitter(x, y, salt + 1u);
+  return electricSegmentStrength(local, start, end, 0.045) * 0.72;
+}
+
 fn electricStrandColor(cell: u32, x: u32, y: u32, local: vec2<f32>, base: vec4<f32>) -> vec4<f32> {
   let mat = material(cell);
   let ix = i32(x);
   let iy = i32(y);
   var strength = electricBridgeStrength(mat, ix, iy, local);
+  var forkStrength = 0.0;
 
   if (isElectricBridgeMaterial(mat)) {
     strength = max(strength, electricDirectionalBridgeStrength(local, ix, iy, 1, 0, 213u));
@@ -1883,15 +1918,27 @@ fn electricStrandColor(cell: u32, x: u32, y: u32, local: vec2<f32>, base: vec4<f
     strength = max(strength, electricReachStrength(local, ix, iy, -1, -1, 231u));
     strength = max(strength, electricReachStrength(local, ix, iy, 1, 1, 233u));
     strength = max(strength, electricReachStrength(local, ix, iy, -1, 1, 235u));
+    forkStrength = max(forkStrength, electricForkStrength(local, ix, iy, 1, 0, 237u));
+    forkStrength = max(forkStrength, electricForkStrength(local, ix, iy, -1, 0, 239u));
+    forkStrength = max(forkStrength, electricForkStrength(local, ix, iy, 0, -1, 241u));
+    forkStrength = max(forkStrength, electricForkStrength(local, ix, iy, 0, 1, 243u));
+    forkStrength = max(forkStrength, electricForkStrength(local, ix, iy, 1, -1, 245u));
+    forkStrength = max(forkStrength, electricForkStrength(local, ix, iy, -1, -1, 247u));
+    forkStrength = max(forkStrength, electricForkStrength(local, ix, iy, 1, 1, 249u));
+    forkStrength = max(forkStrength, electricForkStrength(local, ix, iy, -1, 1, 251u));
   }
 
-  if (strength <= 0.0) {
+  let combinedStrength = max(strength, forkStrength);
+  if (combinedStrength <= 0.0) {
     return base;
   }
 
-  let flicker = 0.82 + f32(hash(x, y, params.frame + 211u) & 63u) / 63.0 * 0.24;
-  let strand = vec3<f32>(0.46, 1.42, 2.32) * strength * flicker;
-  return vec4<f32>(base.rgb + strand, max(base.a, min(1.0, strength * 1.45)));
+  let pulse = electricTemporalPulse(x, y, aux(cell) + 211u);
+  let coreStrength = pow(clamp(strength, 0.0, 1.0), 3.0);
+  let forkCoreStrength = pow(clamp(forkStrength, 0.0, 1.0), 2.6);
+  let halo = vec3<f32>(0.18, 0.94, 1.95) * combinedStrength * pulse;
+  let core = vec3<f32>(1.35, 1.58, 1.72) * (coreStrength + forkCoreStrength * 0.72) * pulse;
+  return vec4<f32>(base.rgb + halo + core, max(base.a, min(1.0, combinedStrength * 1.65)));
 }
 
 @fragment

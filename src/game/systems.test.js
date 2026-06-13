@@ -454,6 +454,22 @@ describe('fireball skill', () => {
       color: '#8be8ff',
     }));
     expect(SKILL_DEFINITIONS.electric_bolt.projectile.visual.coreColor).not.toBe('#fff0a6');
+    expect(SKILL_DEFINITIONS.electric_bolt.projectile.energy.trailIntervalMs).toBe(30);
+    expect(SKILL_DEFINITIONS.electric_bolt.projectile.energy.trailEffects[0]).toEqual(expect.objectContaining({
+      material: 'electric',
+      radius: 5,
+      life: 24,
+    }));
+    expect(SKILL_DEFINITIONS.electric_bolt.materialEffects.cast[0]).toEqual(expect.objectContaining({
+      material: 'electric',
+      radius: 6,
+      life: 24,
+    }));
+    expect(SKILL_DEFINITIONS.electric_bolt.materialEffects.hit[0]).toEqual(expect.objectContaining({
+      material: 'electric',
+      radius: 11,
+      life: 28,
+    }));
   });
 
   it('spawns sand barrage as a fan of five base sand projectiles', () => {

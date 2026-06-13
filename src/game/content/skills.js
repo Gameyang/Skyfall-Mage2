@@ -199,9 +199,9 @@ const ELECTRIC_BOLT_SKILL = freezeSkill({
     energy: Object.freeze({
       initial: 32,
       max: 32,
-      trailIntervalMs: 36,
+      trailIntervalMs: 30,
       trailLeakPerSecond: 0,
-      trailEffects: materialTrail('electric', { radius: 4, strength: 230, frames: 1, life: 14 }),
+      trailEffects: materialTrail('electric', { radius: 5, strength: 235, frames: 1, life: 24 }),
     }),
     visual: Object.freeze({
       shape: 'bolt',
@@ -215,10 +215,10 @@ const ELECTRIC_BOLT_SKILL = freezeSkill({
   }),
   materialEffects: Object.freeze({
     cast: Object.freeze([
-      effect({ material: 'electric', radius: 5, strength: 230, frames: 2, life: 14 }),
+      effect({ material: 'electric', radius: 6, strength: 235, frames: 2, life: 24 }),
     ]),
     hit: Object.freeze([
-      effect({ material: 'electric', radius: 10, strength: 245, frames: 3, life: 14 }),
+      effect({ material: 'electric', radius: 11, strength: 250, frames: 3, life: 28 }),
     ]),
   }),
 });

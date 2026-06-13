@@ -301,11 +301,14 @@ describe('material field shader profiles', () => {
     expect(materialFieldShaderSource).toContain('fn electricReachStrength');
     expect(materialFieldShaderSource).toContain('fn electricVisualSourceAlong');
     expect(materialFieldShaderSource).toContain('fn electricNeighborStrength');
+    expect(materialFieldShaderSource).toContain('fn electricTemporalPulse');
+    expect(materialFieldShaderSource).toContain('fn electricForkStrength');
     expect(materialFieldShaderSource).toContain('fn distanceToSegment');
     expect(materialFieldShaderSource).toContain('isElectricVisualSourceAt(x - 1, y) && isElectricVisualSourceAt(x + 1, y)');
     expect(materialFieldShaderSource).toContain('isElectricVisualSourceAt(x + dx * 3, y + dy * 3)');
     expect(materialFieldShaderSource).toContain('electricDirectionalBridgeStrength(local, ix, iy, 1, 0');
-    expect(materialFieldShaderSource).toContain('vec3<f32>(0.46, 1.42, 2.32) * strength * flicker');
+    expect(materialFieldShaderSource).toContain('let halo = vec3<f32>(0.18, 0.94, 1.95) * combinedStrength * pulse');
+    expect(materialFieldShaderSource).toContain('let core = vec3<f32>(1.35, 1.58, 1.72)');
     expect(materialFieldShaderSource).toContain('let gridLocal = fract(gridPosition)');
     expect(materialFieldShaderSource).toContain('return electricStrandColor(cell, gx, gy, gridLocal, materialColor(cell, gx, gy))');
   });
