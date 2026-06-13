@@ -1,3 +1,4 @@
+import { BATTLE_FIELD_HEIGHT, BATTLE_FIELD_WIDTH } from './battlefield.js';
 import { GAME_CONTENT } from './content/index.js';
 import { createGameState } from './GameState.js';
 import { createGameInput } from './input/createGameInput.js';
@@ -39,9 +40,11 @@ class GameRuntime {
     this.baseContent = content;
     this.content = createRunContent(content);
     this.renderer = createGameCanvasRenderer({ canvas });
-    const initialWidth = Math.max(1, Math.floor(canvas.getBoundingClientRect().width || window.innerWidth));
-    const initialHeight = Math.max(1, Math.floor(canvas.getBoundingClientRect().height || window.innerHeight));
-    this.state = createGameState({ width: initialWidth, height: initialHeight, content: this.content });
+    this.state = createGameState({
+      width: BATTLE_FIELD_WIDTH,
+      height: BATTLE_FIELD_HEIGHT,
+      content: this.content,
+    });
     this.state.session.runSeed = this.content.runSeed ?? null;
     this.input = createGameInput({ canvas, state: this.state });
     this.animationFrameId = 0;

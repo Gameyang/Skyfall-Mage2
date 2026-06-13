@@ -1,3 +1,4 @@
+import { BATTLE_FIELD_HEIGHT, BATTLE_FIELD_WIDTH } from '../battlefield.js';
 import gameOverScreenUrl from '../../assets/generated/game-over-screen.webp?url';
 
 export function createGameCanvasRenderer({ canvas }) {
@@ -19,6 +20,12 @@ class GameCanvasRenderer {
     const rect = this.canvas.getBoundingClientRect();
     const cssWidth = Math.max(1, Math.floor(rect.width || window.innerWidth));
     const cssHeight = Math.max(1, Math.floor(rect.height || window.innerHeight));
+    const displayRect = {
+      left: rect.left || 0,
+      top: rect.top || 0,
+      width: rect.width || cssWidth,
+      height: rect.height || cssHeight,
+    };
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const pixelWidth = Math.max(1, Math.floor(cssWidth * dpr));
     const pixelHeight = Math.max(1, Math.floor(cssHeight * dpr));
@@ -28,12 +35,12 @@ class GameCanvasRenderer {
       this.canvas.height = pixelHeight;
     }
 
-    this.context.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.context.setTransform(pixelWidth / BATTLE_FIELD_WIDTH, 0, 0, pixelHeight / BATTLE_FIELD_HEIGHT, 0, 0);
     return {
-      width: cssWidth,
-      height: cssHeight,
+      width: BATTLE_FIELD_WIDTH,
+      height: BATTLE_FIELD_HEIGHT,
       dpr,
-      visible: getVisibleCanvasArea(this.canvas, rect, cssWidth, cssHeight),
+      visible: getVisibleCanvasArea(this.canvas, displayRect, BATTLE_FIELD_WIDTH, BATTLE_FIELD_HEIGHT),
     };
   }
 
@@ -291,7 +298,7 @@ function drawPlayer(ctx, state, renderer) {
 
   ctx.fillStyle = '#29384b';
   ctx.beginPath();
-  ctx.moveTo(0, -player.radius - 12);
+  ctx.moveTo(0, -player.radius * 1.65);
   ctx.lineTo(player.radius * 0.85, -player.radius * 0.05);
   ctx.lineTo(-player.radius * 0.85, -player.radius * 0.05);
   ctx.closePath();
@@ -309,10 +316,10 @@ function drawPlayer(ctx, state, renderer) {
 }
 
 function drawPlayerHealthBar(ctx, player, visualSize) {
-  const width = Math.max(34, Math.min(52, visualSize * 0.72));
-  const height = 5;
+  const width = Math.max(18, Math.min(32, visualSize * 0.72));
+  const height = 3;
   const x = -width * 0.5;
-  const y = -visualSize * 0.5 - 10;
+  const y = -visualSize * 0.5 - 6;
   const ratio = player.maxHp > 0 ? player.hp / player.maxHp : 0;
   const clamped = Math.max(0, Math.min(1, ratio));
 
@@ -455,20 +462,32 @@ function samplePlayerTrailPoint(player, distanceBehind) {
 }
 
 function drawGameOver(ctx, width, height, state, renderer) {
+  const screen = getVisibleScreenRect(state.viewport, width, height);
+  const centerX = screen.x + screen.width * 0.5;
+  const centerY = screen.y + screen.height * 0.5;
+  const screenMin = Math.min(screen.width, screen.height);
+  const margin = clamp(screenMin * 0.035, 12, 32);
+  const statusFontSize = clamp(screenMin * 0.026, 13, 18);
+  const statusLineHeight = statusFontSize * 1.25;
+  const statusGap = clamp(screenMin * 0.028, 10, 24);
+
   ctx.fillStyle = 'rgba(0, 0, 0, 0.58)';
-  ctx.fillRect(0, 0, width, height);
+  ctx.fillRect(screen.x, screen.y, screen.width, screen.height);
 
   const remainingMs = Math.max(0, state.session.autoRestartRemainingMs ?? 3000);
   const remainingSeconds = Math.max(1, Math.ceil(remainingMs / 1000));
-  const centerX = width * 0.5;
-  const centerY = height * 0.5;
   const art = renderer.getSprite(gameOverScreenUrl);
-  const artSize = clamp(Math.min(width, height) * 0.44, 150, 260);
+  const artRect = art
+    ? getContainedImageRect(art, screen, {
+      margin,
+      reserveBottom: statusGap + statusLineHeight,
+    })
+    : null;
 
-  if (art) {
+  if (art && artRect) {
     const previousSmoothing = ctx.imageSmoothingEnabled;
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(art, centerX - artSize * 0.5, centerY - artSize * 0.62, artSize, artSize);
+    ctx.drawImage(art, artRect.x, artRect.y, artRect.width, artRect.height);
     ctx.imageSmoothingEnabled = previousSmoothing;
   } else {
     ctx.fillStyle = '#f4fbff';
@@ -480,23 +499,64 @@ function drawGameOver(ctx, width, height, state, renderer) {
 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = '500 15px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+  ctx.font = `500 ${statusFontSize}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
   ctx.fillStyle = 'rgba(244, 251, 255, 0.78)';
-  ctx.fillText(`Restarting in ${remainingSeconds}`, centerX, centerY + artSize * 0.48);
+  const statusY = artRect
+    ? artRect.y + artRect.height + statusGap + statusLineHeight * 0.5
+    : centerY + statusLineHeight * 1.4;
+  ctx.fillText(`Restarting in ${remainingSeconds}`, centerX, statusY);
   ctx.textAlign = 'start';
 }
 
-function getVisibleCanvasArea(canvas, rect, width, height) {
+export function getVisibleScreenRect(viewport = {}, fallbackWidth = 1, fallbackHeight = 1) {
+  const width = Math.max(1, fallbackWidth);
+  const height = Math.max(1, fallbackHeight);
+  const visible = viewport.visible || {};
+  const visibleWidth = clamp(visible.width ?? width, 1, width);
+  const visibleHeight = clamp(visible.height ?? height, 1, height);
+
+  return {
+    x: clamp(visible.x ?? 0, 0, width - visibleWidth),
+    y: clamp(visible.y ?? 0, 0, height - visibleHeight),
+    width: visibleWidth,
+    height: visibleHeight,
+  };
+}
+
+export function getContainedImageRect(image, screen, { margin = 0, reserveBottom = 0 } = {}) {
+  const sourceWidth = Math.max(1, image?.naturalWidth || image?.width || 1);
+  const sourceHeight = Math.max(1, image?.naturalHeight || image?.height || 1);
+  const safeMargin = Math.max(0, margin);
+  const safeReserveBottom = Math.max(0, reserveBottom);
+  const availableWidth = Math.max(1, screen.width - safeMargin * 2);
+  const availableHeight = Math.max(1, screen.height - safeMargin * 2 - safeReserveBottom);
+  const scale = Math.min(availableWidth / sourceWidth, availableHeight / sourceHeight);
+  const drawWidth = sourceWidth * scale;
+  const drawHeight = sourceHeight * scale;
+
+  return {
+    x: screen.x + (screen.width - drawWidth) * 0.5,
+    y: screen.y + safeMargin + (availableHeight - drawHeight) * 0.5,
+    width: drawWidth,
+    height: drawHeight,
+  };
+}
+
+export function getVisibleCanvasArea(canvas, rect, width, height) {
   const clipRect = canvas.parentElement?.getBoundingClientRect();
   const clipLeft = clipRect?.left ?? 0;
   const clipTop = clipRect?.top ?? 0;
   const clipRight = clipRect?.right ?? window.innerWidth;
   const clipBottom = clipRect?.bottom ?? window.innerHeight;
+  const rectWidth = Math.max(1, rect.width || width);
+  const rectHeight = Math.max(1, rect.height || height);
+  const logicalPerCssX = width / rectWidth;
+  const logicalPerCssY = height / rectHeight;
 
-  const left = clamp(clipLeft - rect.left, 0, width);
-  const top = clamp(clipTop - rect.top, 0, height);
-  const right = clamp(clipRight - rect.left, left, width);
-  const bottom = clamp(clipBottom - rect.top, top, height);
+  const left = clamp((clipLeft - rect.left) * logicalPerCssX, 0, width);
+  const top = clamp((clipTop - rect.top) * logicalPerCssY, 0, height);
+  const right = clamp((clipRight - rect.left) * logicalPerCssX, left, width);
+  const bottom = clamp((clipBottom - rect.top) * logicalPerCssY, top, height);
 
   return {
     x: Math.floor(left),

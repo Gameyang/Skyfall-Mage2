@@ -45,6 +45,10 @@ function createTitleOverlay() {
   art.decoding = 'async';
   art.draggable = false;
 
+  const artFrame = document.createElement('div');
+  artFrame.className = 'title-art-frame';
+  artFrame.append(art);
+
   const completedSteps = new Set();
   const loadingBar = document.createElement('div');
   loadingBar.className = 'title-loading-bar';
@@ -64,7 +68,7 @@ function createTitleOverlay() {
   prompt.hidden = true;
   let ready = false;
 
-  panel.append(art, loadingBar, prompt);
+  panel.append(artFrame, loadingBar, prompt);
   overlay.append(panel);
 
   return {
