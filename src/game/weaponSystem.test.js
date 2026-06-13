@@ -5,7 +5,7 @@ import { WEAPON_AFFIX_DEFINITIONS } from './content/weaponAffixes.js';
 import { STARTER_WEAPON_DEFINITION_IDS, WEAPON_DEFINITIONS } from './content/weapons.js';
 import { createGameState } from './GameState.js';
 import { startRevealShopAfterWave } from './shop/revealShopEncounter.js';
-import { getEquippedWeaponSlotAnchors } from './weapons/weaponAnchors.js';
+import { getWeaponSlotPosition } from './weapons/weaponAnchors.js';
 import { syncWeaponRuntimeState } from './weapons/weaponInventory.js';
 import { createRevealPanels } from './weapons/weaponRoller.js';
 import { updateAutoAttack, updateGame } from './systems.js';
@@ -196,17 +196,20 @@ describe('weapon auto attack sequence', () => {
       travelDistance: 1000,
       contactDamage: 0,
     });
-    const anchors = getEquippedWeaponSlotAnchors(state);
+    const origins = [];
 
     updateAutoAttack(state, 16, content);
+    origins.push(getWeaponSlotPosition(state, 0));
     updateAutoAttack(state, 16, content);
+    origins.push(getWeaponSlotPosition(state, 1));
     updateAutoAttack(state, 16, content);
+    origins.push(getWeaponSlotPosition(state, 2));
 
     expect(state.entities.projectiles).toHaveLength(3);
     for (let index = 0; index < 3; index += 1) {
       expect(state.entities.projectiles[index]).toEqual(expect.objectContaining({
-        x: anchors[index].x,
-        y: anchors[index].y,
+        x: origins[index].x,
+        y: origins[index].y,
       }));
     }
   });

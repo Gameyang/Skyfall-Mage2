@@ -1,5 +1,5 @@
 import { BATTLE_FIELD_HEIGHT, BATTLE_FIELD_WIDTH } from '../battlefield.js';
-import { getEquippedWeaponSlotAnchors, getPlayerFacing } from '../weapons/weaponAnchors.js';
+import { getEquippedWeaponSlotPositions, getPlayerFacing } from '../weapons/weaponAnchors.js';
 import gameOverScreenUrl from '../../assets/generated/game-over-screen.webp?url';
 
 const DISTANT_BACKGROUND_PARALLAX = 0.18;
@@ -373,7 +373,7 @@ function drawPlayerHealthBar(ctx, player, visualSize) {
 function drawEquippedWeapons(ctx, state, renderer) {
   if (!state.weapons || state.revealShop?.status === 'revealing') return;
 
-  const anchors = getEquippedWeaponSlotAnchors(state);
+  const positions = getEquippedWeaponSlotPositions(state);
   const facing = getPlayerFacing(state.player);
   ctx.save();
   for (let index = 0; index < 3; index += 1) {
@@ -381,48 +381,44 @@ function drawEquippedWeapons(ctx, state, renderer) {
     const weapon = instanceId ? state.weapons.weaponInstancesById[instanceId] : null;
     if (!weapon) continue;
 
-    const anchor = anchors[index];
+    const position = positions[index];
     const runtime = state.weapons.equippedRuntime?.[index];
-    const cooldownMs = runtime?.cooldownRemainingMs || 0;
-    const maxCooldownMs = Math.max(cooldownMs, weapon?.rolledStats?.cooldownMs || 1);
-    const readyRatio = clamp(1 - cooldownMs / maxCooldownMs, 0, 1);
+    const attackPulseRatio = clamp((runtime?.follower?.attackPulseMs || 0) / 180, 0, 1);
     const sprite = renderer.getSprite(weapon.spriteUrl);
     const size = weapon.spriteSize ?? 30;
     drawEquippedWeapon(ctx, {
-      anchor,
+      position,
       facing,
       weapon,
       sprite,
       size,
-      readyRatio,
-      active: index === state.weapons.attackSequenceIndex,
+      attackPulseRatio,
     });
   }
   ctx.restore();
 }
 
-function drawEquippedWeapon(ctx, { anchor, facing, weapon, sprite, size, readyRatio, active }) {
-  const outerRadius = Math.max(17, size * 0.62);
+function drawEquippedWeapon(ctx, { position, facing, weapon, sprite, size, attackPulseRatio }) {
   const angle = Math.atan2(facing.y, facing.x) + Math.PI * 0.5;
+  const pulseScale = 1 + attackPulseRatio * 0.16;
+  const glowRadius = size * (0.88 + attackPulseRatio * 0.52);
 
   ctx.save();
-  ctx.translate(anchor.x, anchor.y);
+  ctx.translate(position.x, position.y);
+  ctx.scale(pulseScale, pulseScale);
 
-  const glow = ctx.createRadialGradient(0, 0, 3, 0, 0, outerRadius * 1.7);
-  glow.addColorStop(0, active ? 'rgba(255, 241, 163, 0.34)' : 'rgba(116, 220, 255, 0.18)');
+  const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, glowRadius * 1.8);
+  glow.addColorStop(0, attackPulseRatio > 0 ? 'rgba(255, 241, 163, 0.46)' : 'rgba(116, 220, 255, 0.18)');
   glow.addColorStop(1, 'rgba(116, 220, 255, 0)');
   ctx.fillStyle = glow;
   ctx.beginPath();
-  ctx.arc(0, 0, outerRadius * 1.7, 0, Math.PI * 2);
+  ctx.arc(0, 0, glowRadius * 1.8, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = 'rgba(3, 7, 14, 0.58)';
-  ctx.strokeStyle = active ? 'rgba(255, 241, 163, 0.92)' : 'rgba(215, 228, 255, 0.36)';
-  ctx.lineWidth = active ? 2 : 1.25;
+  ctx.fillStyle = 'rgba(5, 9, 18, 0.26)';
   ctx.beginPath();
-  ctx.arc(0, 0, outerRadius, 0, Math.PI * 2);
+  ctx.ellipse(1, size * 0.38, size * 0.35, size * 0.11, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.stroke();
 
   ctx.save();
   ctx.rotate(angle);
@@ -433,16 +429,14 @@ function drawEquippedWeapon(ctx, { anchor, facing, weapon, sprite, size, readyRa
   }
   ctx.restore();
 
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = 'rgba(5, 9, 18, 0.74)';
-  ctx.beginPath();
-  ctx.arc(0, 0, outerRadius + 4, -Math.PI * 0.5, Math.PI * 1.5);
-  ctx.stroke();
-
-  ctx.strokeStyle = getRarityColor(weapon.rarity);
-  ctx.beginPath();
-  ctx.arc(0, 0, outerRadius + 4, -Math.PI * 0.5, -Math.PI * 0.5 + Math.PI * 2 * readyRatio);
-  ctx.stroke();
+  if (attackPulseRatio > 0) {
+    ctx.globalAlpha = attackPulseRatio;
+    ctx.strokeStyle = getRarityColor(weapon.rarity);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, size * (0.62 + attackPulseRatio * 0.22), 0, Math.PI * 2);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 

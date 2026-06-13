@@ -4,7 +4,7 @@ import { hasEnemyReachedExit, updateEnemyPathPosition } from './enemyPaths.js';
 import { getSkillSequenceDelayMs } from './skillSequence.js';
 import { updateRevealShop } from './shop/revealProgressSystem.js';
 import { startRevealShopAfterWave } from './shop/revealShopEncounter.js';
-import { getWeaponSlotAnchor } from './weapons/weaponAnchors.js';
+import { getWeaponSlotPosition, updateWeaponFollowerPositions } from './weapons/weaponAnchors.js';
 import { consumeWeaponCommandInput, syncWeaponRuntimeState } from './weapons/weaponInventory.js';
 import { createRuntimeSkillMapForWeapons } from './weapons/weaponRuntimeBuilder.js';
 import {
@@ -321,6 +321,7 @@ export function updateAutoSkills(state, dtMs, content = DEFAULT_SYSTEM_CONTENT) 
 
 function updateAutoWeapons(state, dtMs, content = DEFAULT_SYSTEM_CONTENT) {
   syncWeaponRuntimeState(state);
+  updateWeaponFollowerPositions(state, dtMs);
   const runtimeSkills = createRuntimeSkillMapForWeapons(state, content);
   updateWeaponCooldowns(state, dtMs);
 
@@ -357,7 +358,7 @@ function updateAutoWeapons(state, dtMs, content = DEFAULT_SYSTEM_CONTENT) {
     }
 
     const projectiles = spawnProjectilesFromSkill(state, skill, target, instanceId, {
-      origin: getWeaponSlotAnchor(state, sequenceIndex),
+      origin: getWeaponSlotPosition(state, sequenceIndex),
     });
     if (!projectiles.length) {
       state.weapons.attackSequenceIndex = sequenceIndex;
@@ -365,6 +366,9 @@ function updateAutoWeapons(state, dtMs, content = DEFAULT_SYSTEM_CONTENT) {
     }
 
     runtime.cooldownRemainingMs += skill.cooldownMs ?? DEFAULT_SKILL_COOLDOWN_MS;
+    if (runtime.follower) {
+      runtime.follower.attackPulseMs = 180;
+    }
     state.weapons.attackSequenceIndex = (sequenceIndex + 1) % equipped.length;
     return;
   }

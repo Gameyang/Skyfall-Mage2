@@ -10,12 +10,16 @@ export function syncWeaponRuntimeState(state) {
   const existingRuntime = state.weapons.equippedRuntime || [];
   state.weapons.equippedRuntime = equipped.map((instanceId, slotIndex) => {
     const previous = existingRuntime.find((runtime) => runtime.slotIndex === slotIndex);
+    const previousFollower = previous?.weaponInstanceId === instanceId
+      ? previous.follower
+      : existingRuntime.find((runtime) => runtime.weaponInstanceId === instanceId)?.follower;
     return {
       slotIndex,
       weaponInstanceId: instanceId,
       cooldownRemainingMs: previous?.weaponInstanceId === instanceId
         ? Math.max(0, previous.cooldownRemainingMs || 0)
         : 0,
+      follower: previousFollower ? { ...previousFollower } : null,
     };
   });
   state.weapons.inventoryWeaponInstanceIds = uniqueIds(

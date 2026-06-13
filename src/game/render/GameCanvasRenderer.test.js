@@ -6,7 +6,12 @@ import {
   getVisibleCanvasArea,
   getVisibleScreenRect,
 } from './GameCanvasRenderer.js';
-import { getEquippedWeaponSlotAnchors } from '../weapons/weaponAnchors.js';
+import {
+  getEquippedWeaponSlotAnchors,
+  getWeaponSlotAnchor,
+  getWeaponSlotPosition,
+  updateWeaponFollowerPositions,
+} from '../weapons/weaponAnchors.js';
 
 describe('game canvas screen art layout', () => {
   it('maps a scaled fixed battlefield crop back into logical combat coordinates', () => {
@@ -115,5 +120,37 @@ describe('game canvas screen art layout', () => {
       { slotIndex: 1, role: 'upper', x: 418, y: 362 },
       { slotIndex: 2, role: 'lower', x: 418, y: 438 },
     ]);
+  });
+
+  it('lets equipped weapon followers lag behind their target anchors', () => {
+    const state = {
+      player: {
+        x: 400,
+        y: 400,
+        facing: {
+          x: 1,
+          y: 0,
+        },
+      },
+      weapons: {
+        equippedRuntime: [
+          {
+            slotIndex: 0,
+            weaponInstanceId: 'weapon-1',
+          },
+        ],
+      },
+    };
+
+    updateWeaponFollowerPositions(state, 16);
+    const previous = getWeaponSlotPosition(state, 0);
+    state.player.x = 600;
+    const nextTarget = getWeaponSlotAnchor(state, 0);
+
+    updateWeaponFollowerPositions(state, 16);
+    const next = getWeaponSlotPosition(state, 0);
+
+    expect(next.x).toBeGreaterThan(previous.x);
+    expect(next.x).toBeLessThan(nextTarget.x);
   });
 });
