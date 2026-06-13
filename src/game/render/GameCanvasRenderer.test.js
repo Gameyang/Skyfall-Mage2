@@ -8,22 +8,22 @@ describe('game canvas screen art layout', () => {
         getBoundingClientRect: () => ({
           left: 0,
           top: 0,
-          right: 640,
-          bottom: 960,
+          right: 512,
+          bottom: 1024,
         }),
       },
     };
 
     expect(getVisibleCanvasArea(canvas, {
-      left: -160,
+      left: -256,
       top: 0,
-      width: 960,
-      height: 960,
-    }, 1920, 1920)).toEqual({
-      x: 320,
+      width: 1024,
+      height: 1024,
+    }, 512, 512)).toEqual({
+      x: 128,
       y: 0,
-      width: 1280,
-      height: 1920,
+      width: 256,
+      height: 512,
     });
   });
 
