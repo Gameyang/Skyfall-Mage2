@@ -1,4 +1,5 @@
 import { BATTLE_FIELD_HEIGHT, BATTLE_FIELD_WIDTH } from '../battlefield.js';
+import { getEquippedWeaponSlotAnchors, getPlayerFacing } from '../weapons/weaponAnchors.js';
 import gameOverScreenUrl from '../../assets/generated/game-over-screen.webp?url';
 
 const DISTANT_BACKGROUND_PARALLAX = 0.18;
@@ -74,7 +75,7 @@ class GameCanvasRenderer {
     drawCollectedItemTrail(ctx, state, this);
     drawLostItems(ctx, state, this);
     drawPlayer(ctx, state, this);
-    drawWeaponHud(ctx, state);
+    drawEquippedWeapons(ctx, state, this);
     drawRevealShopOverlay(ctx, state);
 
     if (state.session.gameOver) {
@@ -369,54 +370,104 @@ function drawPlayerHealthBar(ctx, player, visualSize) {
   ctx.strokeRect(x - 0.5, y - 0.5, width + 1, height + 1);
 }
 
-function drawWeaponHud(ctx, state) {
+function drawEquippedWeapons(ctx, state, renderer) {
   if (!state.weapons || state.revealShop?.status === 'revealing') return;
 
-  const screen = getVisibleScreenRect(state.viewport, state.viewport.width, state.viewport.height);
-  const x = screen.x + 12;
-  const y = screen.y + 12;
-  const slotWidth = clamp(screen.width * 0.2, 92, 150);
-  const slotHeight = 34;
-  const gap = 6;
-  const coin = getCollectedQuantity(state, 'coin');
-
+  const anchors = getEquippedWeaponSlotAnchors(state);
+  const facing = getPlayerFacing(state.player);
   ctx.save();
-  ctx.font = '700 12px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-  ctx.textBaseline = 'middle';
-  ctx.textAlign = 'left';
-  drawHudPill(ctx, x, y, 86, slotHeight, `Coin ${coin}`);
-
-  const startX = x + 94;
   for (let index = 0; index < 3; index += 1) {
-    const slotX = startX + index * (slotWidth + gap);
     const instanceId = state.weapons.equippedWeaponInstanceIds[index];
     const weapon = instanceId ? state.weapons.weaponInstancesById[instanceId] : null;
+    if (!weapon) continue;
+
+    const anchor = anchors[index];
     const runtime = state.weapons.equippedRuntime?.[index];
     const cooldownMs = runtime?.cooldownRemainingMs || 0;
     const maxCooldownMs = Math.max(cooldownMs, weapon?.rolledStats?.cooldownMs || 1);
     const readyRatio = clamp(1 - cooldownMs / maxCooldownMs, 0, 1);
-
-    ctx.fillStyle = 'rgba(5, 9, 18, 0.72)';
-    ctx.strokeStyle = index === state.weapons.attackSequenceIndex
-      ? 'rgba(255, 241, 163, 0.9)'
-      : 'rgba(215, 228, 255, 0.24)';
-    ctx.lineWidth = 1.5;
-    roundRect(ctx, slotX, y, slotWidth, slotHeight, 6);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = 'rgba(116, 220, 255, 0.24)';
-    ctx.fillRect(slotX + 1, y + slotHeight - 4, (slotWidth - 2) * readyRatio, 3);
-
-    ctx.fillStyle = '#f4fbff';
-    const label = weapon ? `${index + 1} ${weapon.displayName}` : `${index + 1} Empty`;
-    ctx.fillText(truncateText(ctx, label, slotWidth - 14), slotX + 7, y + slotHeight * 0.5);
+    const sprite = renderer.getSprite(weapon.spriteUrl);
+    const size = weapon.spriteSize ?? 30;
+    drawEquippedWeapon(ctx, {
+      anchor,
+      facing,
+      weapon,
+      sprite,
+      size,
+      readyRatio,
+      active: index === state.weapons.attackSequenceIndex,
+    });
   }
-
-  ctx.fillStyle = 'rgba(215, 228, 255, 0.72)';
-  ctx.font = '600 11px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-  ctx.fillText('Q/E reorder', startX, y + slotHeight + 12);
   ctx.restore();
+}
+
+function drawEquippedWeapon(ctx, { anchor, facing, weapon, sprite, size, readyRatio, active }) {
+  const outerRadius = Math.max(17, size * 0.62);
+  const angle = Math.atan2(facing.y, facing.x) + Math.PI * 0.5;
+
+  ctx.save();
+  ctx.translate(anchor.x, anchor.y);
+
+  const glow = ctx.createRadialGradient(0, 0, 3, 0, 0, outerRadius * 1.7);
+  glow.addColorStop(0, active ? 'rgba(255, 241, 163, 0.34)' : 'rgba(116, 220, 255, 0.18)');
+  glow.addColorStop(1, 'rgba(116, 220, 255, 0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(0, 0, outerRadius * 1.7, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = 'rgba(3, 7, 14, 0.58)';
+  ctx.strokeStyle = active ? 'rgba(255, 241, 163, 0.92)' : 'rgba(215, 228, 255, 0.36)';
+  ctx.lineWidth = active ? 2 : 1.25;
+  ctx.beginPath();
+  ctx.arc(0, 0, outerRadius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.save();
+  ctx.rotate(angle);
+  if (sprite) {
+    drawPixelSprite(ctx, sprite, size);
+  } else {
+    drawWeaponFallback(ctx, size, weapon.rarity);
+  }
+  ctx.restore();
+
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = 'rgba(5, 9, 18, 0.74)';
+  ctx.beginPath();
+  ctx.arc(0, 0, outerRadius + 4, -Math.PI * 0.5, Math.PI * 1.5);
+  ctx.stroke();
+
+  ctx.strokeStyle = getRarityColor(weapon.rarity);
+  ctx.beginPath();
+  ctx.arc(0, 0, outerRadius + 4, -Math.PI * 0.5, -Math.PI * 0.5 + Math.PI * 2 * readyRatio);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawWeaponFallback(ctx, size, rarity) {
+  const accent = getRarityColor(rarity);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = 'rgba(244, 251, 255, 0.86)';
+  ctx.lineWidth = Math.max(3, size * 0.12);
+  ctx.beginPath();
+  ctx.moveTo(0, -size * 0.42);
+  ctx.lineTo(0, size * 0.36);
+  ctx.stroke();
+
+  ctx.fillStyle = accent;
+  ctx.strokeStyle = 'rgba(5, 9, 18, 0.72)';
+  ctx.lineWidth = Math.max(1.5, size * 0.06);
+  ctx.beginPath();
+  ctx.moveTo(0, -size * 0.55);
+  ctx.lineTo(size * 0.22, -size * 0.32);
+  ctx.lineTo(0, -size * 0.12);
+  ctx.lineTo(-size * 0.22, -size * 0.32);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
 }
 
 function drawRevealShopOverlay(ctx, state) {
@@ -563,17 +614,6 @@ function getPanelFooterText(panel) {
   if (panel.claimState === 'claimed') return 'Claimed';
   if (panel.claimState === 'claimable') return 'Claim ready';
   return 'Reveal all basics';
-}
-
-function drawHudPill(ctx, x, y, width, height, text) {
-  ctx.fillStyle = 'rgba(5, 9, 18, 0.72)';
-  ctx.strokeStyle = 'rgba(215, 228, 255, 0.24)';
-  ctx.lineWidth = 1.5;
-  roundRect(ctx, x, y, width, height, 6);
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = '#fff1a3';
-  ctx.fillText(text, x + 9, y + height * 0.5);
 }
 
 function getCollectedQuantity(state, itemId) {

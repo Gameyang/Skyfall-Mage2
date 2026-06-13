@@ -4,6 +4,7 @@ import { hasEnemyReachedExit, updateEnemyPathPosition } from './enemyPaths.js';
 import { getSkillSequenceDelayMs } from './skillSequence.js';
 import { updateRevealShop } from './shop/revealProgressSystem.js';
 import { startRevealShopAfterWave } from './shop/revealShopEncounter.js';
+import { getWeaponSlotAnchor } from './weapons/weaponAnchors.js';
 import { consumeWeaponCommandInput, syncWeaponRuntimeState } from './weapons/weaponInventory.js';
 import { createRuntimeSkillMapForWeapons } from './weapons/weaponRuntimeBuilder.js';
 import {
@@ -212,6 +213,7 @@ export function updatePlayer(state, dtMs) {
 
   const distance = state.player.speed * (dtMs / 1000);
   const bounds = getPlayerMovementBounds(state);
+  state.player.facing = normalize(inputX, inputY);
   state.player.x = clamp(
     state.player.x + inputX * distance,
     bounds.minX,
@@ -354,7 +356,9 @@ function updateAutoWeapons(state, dtMs, content = DEFAULT_SYSTEM_CONTENT) {
       return;
     }
 
-    const projectiles = spawnProjectilesFromSkill(state, skill, target, instanceId);
+    const projectiles = spawnProjectilesFromSkill(state, skill, target, instanceId, {
+      origin: getWeaponSlotAnchor(state, sequenceIndex),
+    });
     if (!projectiles.length) {
       state.weapons.attackSequenceIndex = sequenceIndex;
       return;
@@ -444,20 +448,23 @@ export function selectProgressRiskTarget(state) {
   return selectNearestTarget(state);
 }
 
-export function spawnProjectileFromSkill(state, skill, target, skillId = skill.id) {
-  return spawnProjectilesFromSkill(state, skill, target, skillId)[0] || null;
+export function spawnProjectileFromSkill(state, skill, target, skillId = skill.id, options = {}) {
+  return spawnProjectilesFromSkill(state, skill, target, skillId, options)[0] || null;
 }
 
-export function spawnProjectilesFromSkill(state, skill, target, skillId = skill.id) {
+export function spawnProjectilesFromSkill(state, skill, target, skillId = skill.id, options = {}) {
   if (!skill.projectile) return [];
 
   const projectileDefinition = skill.projectile;
   const pattern = projectileDefinition.pattern || {};
+  const origin = getProjectileSpawnOrigin(state, options.origin);
   if (pattern.type === 'fallingRain') {
-    return spawnFallingRainProjectiles(state, skill, target, skillId, projectileDefinition, pattern);
+    return spawnFallingRainProjectiles(state, skill, target, skillId, projectileDefinition, pattern, {
+      castOrigin: options.origin ? origin : null,
+    });
   }
 
-  const baseDirection = normalize(target.x - state.player.x, target.y - state.player.y);
+  const baseDirection = normalize(target.x - origin.x, target.y - origin.y);
   const count = Math.max(1, Math.round(pattern.count ?? 1));
   const spreadRadians = Math.max(0, Number(pattern.spreadRadians) || 0);
   const projectiles = [];
@@ -467,8 +474,8 @@ export function spawnProjectilesFromSkill(state, skill, target, skillId = skill.
     const angle = ratio * spreadRadians;
     const direction = rotateVector(baseDirection, angle);
     projectiles.push(spawnProjectileEntity(state, skill, target, skillId, projectileDefinition, {
-      x: state.player.x,
-      y: state.player.y,
+      x: origin.x,
+      y: origin.y,
       direction,
       patternIndex: index,
     }));
@@ -477,7 +484,7 @@ export function spawnProjectilesFromSkill(state, skill, target, skillId = skill.
   return projectiles;
 }
 
-function spawnFallingRainProjectiles(state, skill, target, skillId, projectileDefinition, pattern) {
+function spawnFallingRainProjectiles(state, skill, target, skillId, projectileDefinition, pattern, options = {}) {
   const count = Math.max(1, Math.round(pattern.count ?? 1));
   const width = Math.max(0, Number(pattern.width) || 0);
   const offsetY = Number(pattern.offsetY) || 0;
@@ -495,10 +502,26 @@ function spawnFallingRainProjectiles(state, skill, target, skillId, projectileDe
       y,
       direction,
       patternIndex: index,
+      castSource: options.castOrigin,
+      suppressCastEffects: Boolean(options.castOrigin) && index > 0,
     }));
   }
 
   return projectiles;
+}
+
+function getProjectileSpawnOrigin(state, origin) {
+  if (origin && Number.isFinite(origin.x) && Number.isFinite(origin.y)) {
+    return {
+      x: origin.x,
+      y: origin.y,
+    };
+  }
+
+  return {
+    x: state.player.x,
+    y: state.player.y,
+  };
 }
 
 function spawnProjectileEntity(state, skill, target, skillId, projectileDefinition, spawn) {
@@ -530,7 +553,9 @@ function spawnProjectileEntity(state, skill, target, skillId, projectileDefiniti
     projectileId: projectile.id,
     targetId: target.id,
   });
-  pushSkillEffects(state, skill, 'cast', projectile);
+  if (!spawn.suppressCastEffects) {
+    pushSkillEffects(state, skill, 'cast', spawn.castSource || projectile);
+  }
   return projectile;
 }
 

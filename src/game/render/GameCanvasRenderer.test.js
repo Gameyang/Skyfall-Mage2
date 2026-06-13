@@ -6,6 +6,7 @@ import {
   getVisibleCanvasArea,
   getVisibleScreenRect,
 } from './GameCanvasRenderer.js';
+import { getEquippedWeaponSlotAnchors } from '../weapons/weaponAnchors.js';
 
 describe('game canvas screen art layout', () => {
   it('maps a scaled fixed battlefield crop back into logical combat coordinates', () => {
@@ -95,5 +96,24 @@ describe('game canvas screen art layout', () => {
       width: 760,
       height: 380,
     });
+  });
+
+  it('places equipped weapons ahead of the player using the current facing vector', () => {
+    const anchors = getEquippedWeaponSlotAnchors({
+      player: {
+        x: 400,
+        y: 400,
+        facing: {
+          x: 1,
+          y: 0,
+        },
+      },
+    });
+
+    expect(anchors).toEqual([
+      { slotIndex: 0, role: 'front', x: 442, y: 400 },
+      { slotIndex: 1, role: 'upper', x: 418, y: 362 },
+      { slotIndex: 2, role: 'lower', x: 418, y: 438 },
+    ]);
   });
 });

@@ -1,10 +1,26 @@
+import { WEAPON_SPRITES } from './spriteAssets.js';
+
+const WEAPON_ELEMENT_FALLBACK_SPRITE_IDS = Object.freeze({
+  fire: 'fire_staff',
+  water: 'blizzard_staff',
+  electric: 'lightning_strike_staff',
+});
+
 function weapon(definition) {
   return Object.freeze({
     ...definition,
+    spriteUrl: getWeaponSpriteUrl(definition),
+    spriteSize: definition.spriteSize ?? 30,
     tags: Object.freeze(definition.tags || []),
     allowedAffixTags: Object.freeze(definition.allowedAffixTags || []),
     baseStats: freezeRanges(definition.baseStats),
   });
+}
+
+function getWeaponSpriteUrl(definition) {
+  const directSprite = WEAPON_SPRITES[definition.spriteId];
+  const fallbackSpriteId = WEAPON_ELEMENT_FALLBACK_SPRITE_IDS[definition.baseElement];
+  return definition.spriteUrl ?? directSprite ?? WEAPON_SPRITES[fallbackSpriteId] ?? null;
 }
 
 function freezeRanges(ranges) {

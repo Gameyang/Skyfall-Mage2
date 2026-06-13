@@ -147,6 +147,29 @@ describe('viewport sizing', () => {
     expect(state.player.y).toBeCloseTo(708);
   });
 
+  it('updates the player facing only while movement input is active', () => {
+    const content = createTestContent();
+    const state = createGameState({ width: 1000, height: 1000, content });
+    state.input.vectorX = 0.6;
+    state.input.vectorY = 0.8;
+
+    updatePlayer(state, 16);
+
+    expect(state.player.facing).toEqual({
+      x: 0.6,
+      y: 0.8,
+    });
+
+    state.input.vectorX = 0;
+    state.input.vectorY = 0;
+    updatePlayer(state, 16);
+
+    expect(state.player.facing).toEqual({
+      x: 0.6,
+      y: 0.8,
+    });
+  });
+
   it('keeps the player position and clamps the camera when the visible layout changes', () => {
     const content = createTestContent();
     const state = createGameState({ width: 800, height: 800, content });

@@ -146,6 +146,7 @@ function preloadImage(url) {
 function collectGameResourceUrls(content, state) {
   const enemySpriteUrls = Object.values(content.enemies || {}).map((enemy) => enemy.spriteUrl);
   const itemSpriteUrls = Object.values(content.items || {}).map((item) => item.spriteUrl);
+  const weaponSpriteUrls = Object.values(content.weapons || {}).map((weapon) => weapon.spriteUrl);
   return [
     nightGardenPanoramaUrl,
     titleScreenUrl,
@@ -153,6 +154,7 @@ function collectGameResourceUrls(content, state) {
     state.player?.spriteUrl,
     ...enemySpriteUrls,
     ...itemSpriteUrls,
+    ...weaponSpriteUrls,
   ];
 }
 

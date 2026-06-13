@@ -57,6 +57,10 @@ export function createGameState({ width = 1280, height = 720, content = DEFAULT_
       x: width * 0.5,
       y: height * 0.55,
       radius: 16,
+      facing: {
+        x: 0,
+        y: -1,
+      },
       spriteUrl: playerSkinUrl,
       spriteSize: 32,
       speed: 260,

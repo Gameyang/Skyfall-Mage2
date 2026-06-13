@@ -5,8 +5,10 @@ import { WEAPON_AFFIX_DEFINITIONS } from './content/weaponAffixes.js';
 import { STARTER_WEAPON_DEFINITION_IDS, WEAPON_DEFINITIONS } from './content/weapons.js';
 import { createGameState } from './GameState.js';
 import { startRevealShopAfterWave } from './shop/revealShopEncounter.js';
+import { getEquippedWeaponSlotAnchors } from './weapons/weaponAnchors.js';
+import { syncWeaponRuntimeState } from './weapons/weaponInventory.js';
 import { createRevealPanels } from './weapons/weaponRoller.js';
-import { updateGame } from './systems.js';
+import { updateAutoAttack, updateGame } from './systems.js';
 
 function createWeaponTestContent(overrides = {}) {
   return {
@@ -108,6 +110,23 @@ describe('weapon reveal progress', () => {
 });
 
 describe('weapon auto attack sequence', () => {
+  it('normalizes the equipped loadout to three weapon slots', () => {
+    const content = createWeaponTestContent();
+    const state = createGameState({ width: 800, height: 800, content });
+    const equipped = [...state.weapons.equippedWeaponInstanceIds];
+    state.weapons.weaponInstancesById.extraWeapon = {
+      ...state.weapons.weaponInstancesById[equipped[0]],
+      instanceId: 'extraWeapon',
+    };
+    state.weapons.equippedWeaponInstanceIds = [...equipped, 'extraWeapon'];
+
+    syncWeaponRuntimeState(state);
+
+    expect(state.weapons.equippedWeaponInstanceIds).toHaveLength(3);
+    expect(state.weapons.equippedWeaponInstanceIds).toEqual(equipped);
+    expect(state.weapons.equippedRuntime).toHaveLength(3);
+  });
+
   it('fires equipped weapon instances in strict slot order', () => {
     const content = createWeaponTestContent({
       enemies: {
@@ -146,5 +165,49 @@ describe('weapon auto attack sequence', () => {
       'starter-1-water_bolt_staff',
       'starter-2-electric_bolt_staff',
     ]);
+  });
+
+  it('spawns each equipped weapon projectile from its in-world slot anchor', () => {
+    const content = createWeaponTestContent({
+      enemies: {
+        testEnemy: {
+          id: 'testEnemy',
+          hp: 500,
+          speed: 0,
+          radius: 18,
+          contactDamage: 0,
+        },
+      },
+    });
+    const state = createGameState({ width: 800, height: 800, content });
+    state.player.recenter = null;
+    state.player.x = 400;
+    state.player.y = 400;
+    state.player.facing = { x: 1, y: 0 };
+    state.entities.enemies.push({
+      id: 1,
+      type: 'testEnemy',
+      hp: 500,
+      maxHp: 500,
+      x: 720,
+      y: 400,
+      radius: 18,
+      progress: 0,
+      travelDistance: 1000,
+      contactDamage: 0,
+    });
+    const anchors = getEquippedWeaponSlotAnchors(state);
+
+    updateAutoAttack(state, 16, content);
+    updateAutoAttack(state, 16, content);
+    updateAutoAttack(state, 16, content);
+
+    expect(state.entities.projectiles).toHaveLength(3);
+    for (let index = 0; index < 3; index += 1) {
+      expect(state.entities.projectiles[index]).toEqual(expect.objectContaining({
+        x: anchors[index].x,
+        y: anchors[index].y,
+      }));
+    }
   });
 });
