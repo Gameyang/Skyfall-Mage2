@@ -258,9 +258,7 @@ const SAND_BOLT_SKILL = freezeSkill({
     damage: 11,
   }),
   materialEffects: Object.freeze({
-    cast: Object.freeze([
-      effect({ material: 'sand', radius: 5, strength: 190, frames: 2 }),
-    ]),
+    cast: Object.freeze([]),
     hit: Object.freeze([
       effect({
         material: 'sand',

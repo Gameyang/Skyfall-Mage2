@@ -472,9 +472,10 @@ describe('fireball skill', () => {
     }));
   });
 
-  it('keeps sand bolt flight dry while bursting sand radially on hit', () => {
+  it('keeps sand bolt cast and flight dry while bursting sand radially on hit', () => {
     const sandBolt = SKILL_DEFINITIONS.sand_bolt;
 
+    expect(sandBolt.materialEffects.cast).toEqual([]);
     expect(sandBolt.projectile.energy.trailEffects).toEqual([]);
     expect(sandBolt.materialEffects.hit[0]).toEqual(expect.objectContaining({
       material: 'sand',
