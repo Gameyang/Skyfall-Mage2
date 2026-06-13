@@ -76,6 +76,7 @@ export function updateRevealShop(state, dtMs, content = {}) {
       row.revealed = true;
       activePanel.activeRowIndex = getNextHiddenRowIndex(activePanel);
       updatePanelClaimState(activePanel);
+      shop.coinSpendAccumulatorMs = 0;
       shop.statusMessage = row.type === 'affix' ? 'Affix revealed' : 'Stat revealed';
       state.frameEvents.push({
         type: 'RevealRowRevealed',

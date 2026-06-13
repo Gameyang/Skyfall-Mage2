@@ -67,6 +67,17 @@ export const WEAPON_AFFIX_DEFINITIONS = Object.freeze({
     },
     summary: ({ modifiers }) => `Range +${formatPercent(modifiers.attackRangeMultiplier - 1)}`,
   }),
+  suffix_steady: freezeAffix({
+    id: 'suffix_steady',
+    name: 'of Rhythm',
+    kind: 'suffix',
+    minRarity: 'Common',
+    tags: ['cooldown'],
+    modifiers: {
+      cooldownMultiplier: [0.94, 0.97],
+    },
+    summary: ({ modifiers }) => `Cooldown -${formatPercent(1 - modifiers.cooldownMultiplier)}`,
+  }),
   prefix_blooming: freezeAffix({
     id: 'prefix_blooming',
     name: 'Blooming',

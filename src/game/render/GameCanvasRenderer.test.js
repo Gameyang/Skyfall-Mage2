@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { getContainedImageRect, getVisibleCanvasArea, getVisibleScreenRect } from './GameCanvasRenderer.js';
+import {
+  getCameraPanOffset,
+  getContainedImageRect,
+  getVisibleCanvasArea,
+  getVisibleScreenRect,
+} from './GameCanvasRenderer.js';
 
 describe('game canvas screen art layout', () => {
   it('maps a scaled fixed battlefield crop back into logical combat coordinates', () => {
@@ -40,6 +45,17 @@ describe('game canvas screen art layout', () => {
       y: 280,
       width: 1280,
       height: 720,
+    });
+  });
+
+  it('converts camera movement into a shared CSS pan offset', () => {
+    expect(getCameraPanOffset(
+      { x: 0, y: 112, width: 512, height: 288 },
+      { x: 0, y: 224, width: 512, height: 288 },
+      { x: 2.5, y: 2.5 },
+    )).toEqual({
+      x: 0,
+      y: -280,
     });
   });
 

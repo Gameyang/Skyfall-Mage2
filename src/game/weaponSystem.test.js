@@ -1,0 +1,150 @@
+import { describe, expect, it } from 'vitest';
+import { ATTACK_PATTERN_DEFINITIONS } from './content/attackPatterns.js';
+import { ITEM_DEFINITIONS } from './content/items.js';
+import { WEAPON_AFFIX_DEFINITIONS } from './content/weaponAffixes.js';
+import { STARTER_WEAPON_DEFINITION_IDS, WEAPON_DEFINITIONS } from './content/weapons.js';
+import { createGameState } from './GameState.js';
+import { startRevealShopAfterWave } from './shop/revealShopEncounter.js';
+import { createRevealPanels } from './weapons/weaponRoller.js';
+import { updateGame } from './systems.js';
+
+function createWeaponTestContent(overrides = {}) {
+  return {
+    enemies: overrides.enemies ?? {},
+    skills: overrides.skills ?? {},
+    waves: overrides.waves ?? [],
+    items: overrides.items ?? { coin: ITEM_DEFINITIONS.coin },
+    loot: overrides.loot ?? { enemyDrops: [] },
+    weapons: overrides.weapons ?? WEAPON_DEFINITIONS,
+    weaponAffixes: overrides.weaponAffixes ?? WEAPON_AFFIX_DEFINITIONS,
+    attackPatterns: overrides.attackPatterns ?? ATTACK_PATTERN_DEFINITIONS,
+    starterWeaponDefinitionIds: overrides.starterWeaponDefinitionIds ?? STARTER_WEAPON_DEFINITION_IDS,
+    runSeed: overrides.runSeed ?? 'weapon-test-seed',
+  };
+}
+
+describe('weapon reveal panel rolling', () => {
+  it('is stable for the same seed and wave but changes across seeds', () => {
+    const content = createWeaponTestContent();
+    const first = createRevealPanels({ waveIndex: 5, seed: 'same', content });
+    const second = createRevealPanels({ waveIndex: 5, seed: 'same', content });
+    const different = createRevealPanels({ waveIndex: 5, seed: 'different', content });
+
+    expect(first.map((panel) => panel.weaponInstance)).toEqual(second.map((panel) => panel.weaponInstance));
+    expect(first.map((panel) => panel.weaponInstance.definitionId))
+      .not.toEqual(different.map((panel) => panel.weaponInstance.definitionId));
+  });
+
+  it('does not roll higher rarity weapons before their wave gates', () => {
+    const content = createWeaponTestContent();
+    const panels = createRevealPanels({ waveIndex: 1, seed: 'intro', content });
+
+    expect(panels).toHaveLength(4);
+    expect(panels.every((panel) => panel.weaponInstance.rarity === 'Common')).toBe(true);
+    expect(panels.every((panel) => panel.rows.filter((row) => row.type === 'affix').length >= 4)).toBe(true);
+  });
+});
+
+describe('weapon reveal progress', () => {
+  it('spends one coin per reveal tick only while the player is standing still inside a panel', () => {
+    const content = createWeaponTestContent();
+    const state = createGameState({ width: 800, height: 800, content });
+    state.player.recenter = null;
+    state.player.x = 100;
+    state.player.y = 100;
+    startRevealShopAfterWave(state, content, { waveIndex: 1, waveId: 'test-wave' });
+    const panel = state.revealShop.panels.find((candidate) => candidate.quadrant === 'topLeft');
+    const firstRow = panel.rows[0];
+
+    updateGame(state, state.revealShop.minStationaryMs + firstRow.revealCost * state.revealShop.coinSpendIntervalMs, content);
+
+    expect(firstRow.revealed).toBe(true);
+    expect(firstRow.revealProgress).toBe(firstRow.revealCost);
+    expect(state.frameEvents).toContainEqual(expect.objectContaining({
+      type: 'RevealRowRevealed',
+      panelId: panel.panelId,
+      rowId: firstRow.rowId,
+    }));
+
+    const secondRow = panel.rows[1];
+    updateGame(state, state.revealShop.coinSpendIntervalMs, content);
+    expect(secondRow.revealProgress).toBe(1);
+
+    state.input.right = true;
+    state.input.vectorX = 1;
+    updateGame(state, 16, content);
+
+    expect(secondRow.revealProgress).toBe(0);
+  });
+
+  it('claims a weapon after all basic rows are revealed and equips it into the loadout', () => {
+    const content = createWeaponTestContent();
+    const state = createGameState({ width: 800, height: 800, content });
+    state.player.recenter = null;
+    state.player.x = 100;
+    state.player.y = 100;
+    startRevealShopAfterWave(state, content, { waveIndex: 1, waveId: 'test-wave' });
+    const panel = state.revealShop.panels.find((candidate) => candidate.quadrant === 'topLeft');
+    const previousEquipped = [...state.weapons.equippedWeaponInstanceIds];
+
+    for (const row of panel.rows.filter((candidate) => candidate.type === 'basicStat')) {
+      row.revealed = true;
+      row.revealProgress = row.revealCost;
+    }
+    panel.rows.find((row) => row.type === 'affix').revealed = true;
+    state.input.confirmPressed = true;
+
+    updateGame(state, 16, content);
+
+    expect(state.revealShop).toBeNull();
+    expect(state.frameEvents).toContainEqual(expect.objectContaining({
+      type: 'WeaponClaimed',
+      weaponInstanceId: panel.weaponInstanceId,
+      affixCount: 1,
+    }));
+    expect(state.weapons.equippedWeaponInstanceIds).not.toEqual(previousEquipped);
+    expect(state.weapons.weaponInstancesById[panel.weaponInstanceId].affixes).toHaveLength(1);
+  });
+});
+
+describe('weapon auto attack sequence', () => {
+  it('fires equipped weapon instances in strict slot order', () => {
+    const content = createWeaponTestContent({
+      enemies: {
+        testEnemy: {
+          id: 'testEnemy',
+          hp: 500,
+          speed: 0,
+          radius: 18,
+          contactDamage: 0,
+        },
+      },
+    });
+    const state = createGameState({ width: 800, height: 800, content });
+    state.player.recenter = null;
+    state.player.x = 400;
+    state.player.y = 400;
+    state.entities.enemies.push({
+      id: 1,
+      type: 'testEnemy',
+      hp: 500,
+      maxHp: 500,
+      x: 720,
+      y: 400,
+      radius: 18,
+      progress: 0,
+      travelDistance: 1000,
+      contactDamage: 0,
+    });
+
+    updateGame(state, 16, content);
+    updateGame(state, 16, content);
+    updateGame(state, 16, content);
+
+    expect(state.entities.projectiles.map((projectile) => projectile.skillId)).toEqual([
+      'starter-0-fire_bolt_staff',
+      'starter-1-water_bolt_staff',
+      'starter-2-electric_bolt_staff',
+    ]);
+  });
+});

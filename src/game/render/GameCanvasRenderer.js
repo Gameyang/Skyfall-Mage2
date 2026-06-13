@@ -10,6 +10,16 @@ class GameCanvasRenderer {
     this.canvas = canvas;
     this.context = canvas.getContext('2d', { alpha: true });
     this.spriteCache = new Map();
+    this.centeredVisible = {
+      x: 0,
+      y: 0,
+      width: BATTLE_FIELD_WIDTH,
+      height: BATTLE_FIELD_HEIGHT,
+    };
+    this.cssScale = {
+      x: 1,
+      y: 1,
+    };
     if (!this.context) {
       throw new Error('The game canvas could not create a 2D context.');
     }
@@ -26,6 +36,7 @@ class GameCanvasRenderer {
       width: rect.width || cssWidth,
       height: rect.height || cssHeight,
     };
+    const centeredRect = getCenteredCanvasRect(this.canvas, displayRect);
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const pixelWidth = Math.max(1, Math.floor(cssWidth * dpr));
     const pixelHeight = Math.max(1, Math.floor(cssHeight * dpr));
@@ -36,15 +47,21 @@ class GameCanvasRenderer {
     }
 
     this.context.setTransform(pixelWidth / BATTLE_FIELD_WIDTH, 0, 0, pixelHeight / BATTLE_FIELD_HEIGHT, 0, 0);
+    this.centeredVisible = getVisibleCanvasArea(this.canvas, centeredRect, BATTLE_FIELD_WIDTH, BATTLE_FIELD_HEIGHT);
+    this.cssScale = {
+      x: displayRect.width / BATTLE_FIELD_WIDTH,
+      y: displayRect.height / BATTLE_FIELD_HEIGHT,
+    };
     return {
       width: BATTLE_FIELD_WIDTH,
       height: BATTLE_FIELD_HEIGHT,
       dpr,
-      visible: getVisibleCanvasArea(this.canvas, displayRect, BATTLE_FIELD_WIDTH, BATTLE_FIELD_HEIGHT),
+      visible: this.centeredVisible,
     };
   }
 
   render(state) {
+    this.syncCameraPan(state.viewport);
     const ctx = this.context;
     const { width, height } = state.viewport;
     ctx.clearRect(0, 0, width, height);
@@ -64,8 +81,19 @@ class GameCanvasRenderer {
   }
 
   destroy() {
+    this.syncCameraPan(null);
     this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.spriteCache.clear();
+  }
+
+  syncCameraPan(viewport) {
+    const host = this.canvas.parentElement;
+    if (!host?.style) return;
+
+    const cameraVisible = viewport?.visible || this.centeredVisible;
+    const pan = getCameraPanOffset(this.centeredVisible, cameraVisible, this.cssScale);
+    host.style.setProperty('--camera-pan-x', `${pan.x.toFixed(2)}px`);
+    host.style.setProperty('--camera-pan-y', `${pan.y.toFixed(2)}px`);
   }
 
   getSprite(url) {
@@ -810,6 +838,32 @@ export function getVisibleCanvasArea(canvas, rect, width, height) {
     y: Math.floor(top),
     width: Math.max(1, Math.ceil(right - left)),
     height: Math.max(1, Math.ceil(bottom - top)),
+  };
+}
+
+export function getCenteredCanvasRect(canvas, rect) {
+  const clipRect = canvas.parentElement?.getBoundingClientRect();
+  if (!clipRect) return rect;
+
+  return {
+    left: clipRect.left + (clipRect.width - rect.width) * 0.5,
+    top: clipRect.top + (clipRect.height - rect.height) * 0.5,
+    width: rect.width,
+    height: rect.height,
+  };
+}
+
+export function getCameraPanOffset(centeredVisible = {}, cameraVisible = {}, cssScale = {}) {
+  const scaleX = Number.isFinite(cssScale.x) ? cssScale.x : 1;
+  const scaleY = Number.isFinite(cssScale.y) ? cssScale.y : 1;
+  const centeredX = Number.isFinite(centeredVisible.x) ? centeredVisible.x : 0;
+  const centeredY = Number.isFinite(centeredVisible.y) ? centeredVisible.y : 0;
+  const cameraX = Number.isFinite(cameraVisible.x) ? cameraVisible.x : centeredX;
+  const cameraY = Number.isFinite(cameraVisible.y) ? cameraVisible.y : centeredY;
+
+  return {
+    x: (centeredX - cameraX) * scaleX,
+    y: (centeredY - cameraY) * scaleY,
   };
 }
 

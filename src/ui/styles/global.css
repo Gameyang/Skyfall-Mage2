@@ -29,6 +29,8 @@ button {
   --battle-field-size: 100vmax;
   --screen-shake-x: 0px;
   --screen-shake-y: 0px;
+  --camera-pan-x: 0px;
+  --camera-pan-y: 0px;
 }
 
 canvas {
@@ -62,7 +64,10 @@ canvas {
   left: 50%;
   width: var(--battle-field-size);
   height: var(--battle-field-size);
-  transform: translate(calc(-50% + var(--screen-shake-x)), calc(-50% + var(--screen-shake-y)));
+  transform: translate(
+    calc(-50% + var(--screen-shake-x) + var(--camera-pan-x)),
+    calc(-50% + var(--screen-shake-y) + var(--camera-pan-y))
+  );
   will-change: transform;
 }
 

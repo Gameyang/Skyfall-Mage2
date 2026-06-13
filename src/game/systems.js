@@ -18,7 +18,6 @@ const DEFAULT_SKILL_COOLDOWN_MS = 1000;
 const DEFAULT_HAZARD_TICK_MS = 250;
 const DEFAULT_HAZARD_LIFETIME_MS = 1000;
 const DEFAULT_PROJECTILE_TRAIL_INTERVAL_MS = 50;
-const PLAYER_RECENTER_DURATION_MS = 180;
 const ITEM_MAX_WIND_SPEED = 18;
 const ITEM_MAX_NOISE_SPEED = 10;
 const ITEM_TRAIL_HISTORY_SPACING = 4;
@@ -56,6 +55,7 @@ export function updateGame(state, dtMs, content = DEFAULT_SYSTEM_CONTENT) {
   syncRuntimeCollections(state, content);
   consumeWeaponCommandInput(state);
   updatePlayer(state, dt);
+  updateCameraToPlayer(state);
   updatePlayerTrailHistory(state);
 
   if (state.revealShop?.status === 'revealing') {
@@ -141,25 +141,21 @@ export function syncRuntimeCollections(state, content = DEFAULT_SYSTEM_CONTENT) 
 export function updateViewport(state, width, height, visible) {
   const nextWidth = Math.max(1, width);
   const nextHeight = Math.max(1, height);
-  const nextVisible = normalizeVisibleArea(visible, nextWidth, nextHeight);
-  const layoutChanged = hasViewportLayoutChanged(state.viewport, nextWidth, nextHeight, nextVisible);
+  const nextVisible = normalizeVisibleArea(visible, nextWidth, nextHeight, state.viewport?.visible);
 
   state.viewport.width = nextWidth;
   state.viewport.height = nextHeight;
   state.viewport.visible = nextVisible;
-
-  if (layoutChanged) {
-    queuePlayerRecenter(state);
-  } else {
-    clampPlayerToVisibleArea(state);
-  }
+  state.player.recenter = null;
+  clampPlayerToField(state);
+  updateCameraToPlayer(state);
 }
 
-function normalizeVisibleArea(visible, width, height) {
-  const visibleWidth = clamp(Math.floor(visible?.width ?? width), 1, width);
-  const visibleHeight = clamp(Math.floor(visible?.height ?? height), 1, height);
-  const x = clamp(Math.floor(visible?.x ?? 0), 0, Math.max(0, width - visibleWidth));
-  const y = clamp(Math.floor(visible?.y ?? 0), 0, Math.max(0, height - visibleHeight));
+function normalizeVisibleArea(visible, width, height, currentVisible = null) {
+  const visibleWidth = clamp(Math.floor(visible?.width ?? currentVisible?.width ?? width), 1, width);
+  const visibleHeight = clamp(Math.floor(visible?.height ?? currentVisible?.height ?? height), 1, height);
+  const x = clamp(currentVisible?.x ?? visible?.x ?? 0, 0, Math.max(0, width - visibleWidth));
+  const y = clamp(currentVisible?.y ?? visible?.y ?? 0, 0, Math.max(0, height - visibleHeight));
 
   return {
     x,
@@ -169,94 +165,48 @@ function normalizeVisibleArea(visible, width, height) {
   };
 }
 
-function hasViewportLayoutChanged(viewport, width, height, visible) {
-  return (
-    viewport.width !== width ||
-    viewport.height !== height ||
-    viewport.visible?.x !== visible.x ||
-    viewport.visible?.y !== visible.y ||
-    viewport.visible?.width !== visible.width ||
-    viewport.visible?.height !== visible.height
-  );
-}
+export function updateCameraToPlayer(state) {
+  const viewport = state.viewport;
+  if (!viewport || !state.player) return;
 
-function getVisibleCenter(viewport) {
-  const visible = viewport.visible || {
-    x: 0,
-    y: 0,
-    width: viewport.width,
-    height: viewport.height,
-  };
+  const width = Math.max(1, viewport.width || 1);
+  const height = Math.max(1, viewport.height || 1);
+  const currentVisible = viewport.visible || {};
+  const visibleWidth = clamp(Math.floor(currentVisible.width ?? width), 1, width);
+  const visibleHeight = clamp(Math.floor(currentVisible.height ?? height), 1, height);
 
-  return {
-    x: visible.x + visible.width * 0.5,
-    y: visible.y + visible.height * 0.5,
+  viewport.visible = {
+    x: clamp(state.player.x - visibleWidth * 0.5, 0, Math.max(0, width - visibleWidth)),
+    y: clamp(state.player.y - visibleHeight * 0.5, 0, Math.max(0, height - visibleHeight)),
+    width: visibleWidth,
+    height: visibleHeight,
   };
 }
 
-function queuePlayerRecenter(state) {
-  const target = getVisibleCenter(state.viewport);
-  state.player.recenter = {
-    startX: state.player.x,
-    startY: state.player.y,
-    targetX: target.x,
-    targetY: target.y,
-    elapsedMs: 0,
-    durationMs: PLAYER_RECENTER_DURATION_MS,
-  };
-}
-
-function updatePlayerRecenter(state, dtMs) {
-  const recenter = state.player.recenter;
-  if (!recenter) return false;
-
-  recenter.elapsedMs += dtMs;
-  const ratio = clamp(recenter.elapsedMs / Math.max(1, recenter.durationMs), 0, 1);
-  const eased = easeOutCubic(ratio);
-  state.player.x = lerp(recenter.startX, recenter.targetX, eased);
-  state.player.y = lerp(recenter.startY, recenter.targetY, eased);
-  clampPlayerToVisibleArea(state);
-
-  if (ratio >= 1) {
-    state.player.recenter = null;
-  }
-
-  return true;
-}
-
-function clampPlayerToVisibleArea(state) {
+function clampPlayerToField(state) {
   const bounds = getPlayerMovementBounds(state);
   state.player.x = clamp(state.player.x, bounds.minX, bounds.maxX);
   state.player.y = clamp(state.player.y, bounds.minY, bounds.maxY);
 }
 
 function getPlayerMovementBounds(state) {
-  const visible = state.viewport.visible || {
-    x: 0,
-    y: 0,
-    width: state.viewport.width,
-    height: state.viewport.height,
-  };
+  const radius = Math.max(0, state.player?.radius ?? 0);
+  const width = Math.max(radius * 2, state.viewport.width || 1);
+  const height = Math.max(radius * 2, state.viewport.height || 1);
 
   return {
-    minX: visible.x,
-    maxX: visible.x + visible.width,
-    minY: visible.y,
-    maxY: visible.y + visible.height,
+    minX: radius,
+    maxX: width - radius,
+    minY: radius,
+    maxY: height - radius,
   };
-}
-
-function easeOutCubic(ratio) {
-  return 1 - ((1 - ratio) ** 3);
 }
 
 export function updatePlayer(state, dtMs) {
-  if (updatePlayerRecenter(state, dtMs)) return;
-
   const { x: inputX, y: inputY } = getMovementInputVector(state.input);
   const moving = inputX !== 0 || inputY !== 0;
   if (!moving) {
-    clampPlayerToVisibleArea(state);
+    clampPlayerToField(state);
     return;
   }
 

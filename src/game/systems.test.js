@@ -107,7 +107,7 @@ describe('viewport sizing', () => {
     });
   });
 
-  it('limits player movement to the visible crop of the square combat field', () => {
+  it('limits player movement to the whole square field instead of the visible crop', () => {
     const content = createTestContent();
     const state = createGameState({ width: 844, height: 844, content });
     updateViewport(state, 844, 844, {
@@ -122,12 +122,14 @@ describe('viewport sizing', () => {
 
     state.input.left = true;
     updateGame(state, 2000, content);
-    expect(state.player.x).toBe(227);
+    expect(state.player.x).toBe(16);
+    expect(state.viewport.visible.x).toBe(0);
 
     state.input.left = false;
     state.input.right = true;
-    updateGame(state, 2000, content);
-    expect(state.player.x).toBe(617);
+    updateGame(state, 4000, content);
+    expect(state.player.x).toBe(828);
+    expect(state.viewport.visible.x).toBe(454);
   });
 
   it('moves the player with analog input vectors for free-angle mobile control', () => {
@@ -145,7 +147,7 @@ describe('viewport sizing', () => {
     expect(state.player.y).toBeCloseTo(708);
   });
 
-  it('recenters the player when the visible layout changes during play', () => {
+  it('keeps the player position and clamps the camera when the visible layout changes', () => {
     const content = createTestContent();
     const state = createGameState({ width: 800, height: 800, content });
     updateViewport(state, 800, 800, {
@@ -165,8 +167,14 @@ describe('viewport sizing', () => {
     });
     updateGame(state, 180, content);
 
-    expect(state.player.x).toBeCloseTo(422);
-    expect(state.player.y).toBeCloseTo(422);
+    expect(state.player.x).toBe(80);
+    expect(state.player.y).toBe(720);
+    expect(state.viewport.visible).toEqual({
+      x: 0,
+      y: 0,
+      width: 390,
+      height: 844,
+    });
     expect(state.player.recenter).toBeNull();
   });
 });
