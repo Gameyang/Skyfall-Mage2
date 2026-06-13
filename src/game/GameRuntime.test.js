@@ -3,7 +3,7 @@ import { computeScreenShakeOffset } from './GameRuntime.js';
 import { BASE_ELEMENT_WEAPON_IDS, createBaseElementSkillLoadout, SKILL_DEFINITIONS } from './content/skills.js';
 import { createGameState } from './GameState.js';
 import { createRunContent } from './runContent.js';
-import { SKILL_SEQUENCE_STEP_MS } from './skillSequence.js';
+import { getSkillSequenceDelayMs } from './skillSequence.js';
 
 function createState({ contactFlashMs = 0, elapsedMs = 120, gameOver = false } = {}) {
   return {
@@ -86,9 +86,14 @@ describe('run skill loadouts', () => {
 
     const runContent = createRunContent(content, { runSeed: 'stagger-seed' });
     const state = createGameState({ content: runContent });
+    let expectedCooldownMs = 0;
 
     expect(runContent.equippedSkillIds.map((skillId) => state.skills[skillId].cooldownRemainingMs))
-      .toEqual(BASE_ELEMENT_WEAPON_IDS.map((_, index) => index * SKILL_SEQUENCE_STEP_MS));
+      .toEqual(runContent.equippedSkillIds.map((skillId) => {
+        const cooldownMs = expectedCooldownMs;
+        expectedCooldownMs += getSkillSequenceDelayMs(runContent.skills[skillId]);
+        return cooldownMs;
+      }));
   });
 
   it('honors skill loadout overrides for focused skill testing', () => {

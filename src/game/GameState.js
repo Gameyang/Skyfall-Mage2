@@ -1,5 +1,5 @@
 import { createWaveRuntimeState } from './waveDirector.js';
-import { SKILL_SEQUENCE_STEP_MS } from './skillSequence.js';
+import { getSkillSequenceDelayMs } from './skillSequence.js';
 
 const DEFAULT_STATE_CONTENT = Object.freeze({
   player: Object.freeze({
@@ -99,9 +99,13 @@ function createInitialSkillCooldowns(skillDefinitions, orderedSkillIds) {
   const initialCooldowns = new Map();
   if (!Array.isArray(orderedSkillIds) || orderedSkillIds.length <= 1) return initialCooldowns;
 
+  let nextCooldownMs = 0;
   orderedSkillIds.forEach((skillId, index) => {
     if (!skillDefinitions[skillId]) return;
-    initialCooldowns.set(skillId, index * SKILL_SEQUENCE_STEP_MS);
+    initialCooldowns.set(skillId, nextCooldownMs);
+    if (index < orderedSkillIds.length - 1) {
+      nextCooldownMs += getSkillSequenceDelayMs(skillDefinitions[skillId]);
+    }
   });
   return initialCooldowns;
 }

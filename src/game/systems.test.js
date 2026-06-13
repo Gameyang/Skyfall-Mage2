@@ -5,7 +5,7 @@ import { ITEM_DEFINITIONS } from './content/items.js';
 import { SKILL_DEFINITIONS } from './content/skills.js';
 import { createEnemyFromWave, createSCurvePath, sampleSCurvePath } from './enemyPaths.js';
 import { createGameState } from './GameState.js';
-import { SKILL_SEQUENCE_STEP_MS } from './skillSequence.js';
+import { getSkillSequenceDelayMs } from './skillSequence.js';
 import {
   applyGpuDamageFeedback,
   losePlayerRibbonItems,
@@ -281,7 +281,7 @@ describe('fireball skill', () => {
         speed: 0,
         damage: 1,
         radius: 4,
-        lifetimeMs: 1000,
+        lifetimeMs: 5000,
       },
     });
     const content = createTestContent({
@@ -306,10 +306,13 @@ describe('fireball skill', () => {
     updateGame(state, 16, content);
     expect(state.entities.projectiles.map((projectile) => projectile.skillId)).toEqual(['firebolt']);
 
-    updateGame(state, SKILL_SEQUENCE_STEP_MS, content);
+    updateGame(state, getSkillSequenceDelayMs(content.skills.firebolt) - 1, content);
+    expect(state.entities.projectiles.map((projectile) => projectile.skillId)).toEqual(['firebolt']);
+
+    updateGame(state, 1, content);
     expect(state.entities.projectiles.map((projectile) => projectile.skillId)).toEqual(['firebolt', 'sparkbolt']);
 
-    updateGame(state, SKILL_SEQUENCE_STEP_MS, content);
+    updateGame(state, getSkillSequenceDelayMs(content.skills.sparkbolt), content);
     expect(state.entities.projectiles.map((projectile) => projectile.skillId)).toEqual([
       'firebolt',
       'sparkbolt',

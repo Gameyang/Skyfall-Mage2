@@ -1,7 +1,7 @@
 import { GAS_FLOW_CONFIG } from '../features/material-field/config.js';
 import { circlesIntersect, clamp, distance, hash01, normalize } from './math.js';
 import { hasEnemyReachedExit, updateEnemyPathPosition } from './enemyPaths.js';
-import { SKILL_SEQUENCE_STEP_MS } from './skillSequence.js';
+import { getSkillSequenceDelayMs } from './skillSequence.js';
 import {
   createWaveRuntimeState,
   isWaveRuntimeStateCurrent,
@@ -364,7 +364,7 @@ function updateSequencedAutoSkill(state, dtMs, skills, sequencedSkillIds) {
 
   skillState.cooldownRemainingMs += skill.cooldownMs ?? DEFAULT_SKILL_COOLDOWN_MS;
   state.session.autoSkillSequenceIndex = (sequenceIndex + 1) % sequencedSkillIds.length;
-  state.session.autoSkillSequenceCooldownMs = SKILL_SEQUENCE_STEP_MS;
+  state.session.autoSkillSequenceCooldownMs = getSkillSequenceDelayMs(skill);
 }
 
 function normalizeSequenceIndex(index, sequenceLength) {
