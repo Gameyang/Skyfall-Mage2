@@ -1,5 +1,6 @@
 import { createMaterialFieldApp } from '../features/material-field/MaterialFieldApp.js';
 import gameOverScreenUrl from '../assets/generated/game-over-screen.webp?url';
+import nightGardenPanoramaUrl from '../assets/generated/night-garden-panorama.webp?url';
 import titleScreenUrl from '../assets/generated/title-screen.webp?url';
 import { GAME_CONTENT } from '../game/content/index.js';
 import { createGameRuntime } from '../game/GameRuntime.js';
@@ -146,6 +147,7 @@ function collectGameResourceUrls(content, state) {
   const enemySpriteUrls = Object.values(content.enemies || {}).map((enemy) => enemy.spriteUrl);
   const itemSpriteUrls = Object.values(content.items || {}).map((item) => item.spriteUrl);
   return [
+    nightGardenPanoramaUrl,
     titleScreenUrl,
     gameOverScreenUrl,
     state.player?.spriteUrl,
@@ -202,6 +204,14 @@ export function createApp({ root }) {
   skyCanvas.className = 'sky-canvas';
   skyCanvas.setAttribute('aria-hidden', 'true');
 
+  const distantBackground = document.createElement('img');
+  distantBackground.className = 'distant-background';
+  distantBackground.src = nightGardenPanoramaUrl;
+  distantBackground.alt = '';
+  distantBackground.decoding = 'async';
+  distantBackground.draggable = false;
+  distantBackground.setAttribute('aria-hidden', 'true');
+
   const canvas = document.createElement('canvas');
   canvas.id = 'fieldCanvas';
   canvas.className = 'material-canvas';
@@ -219,7 +229,7 @@ export function createApp({ root }) {
 
   const fatal = createFatalMessage();
   const titleOverlay = createTitleOverlay();
-  shell.append(skyCanvas, canvas, gameCanvas, screenEffectsCanvas, fatal, titleOverlay.element);
+  shell.append(skyCanvas, distantBackground, canvas, gameCanvas, screenEffectsCanvas, fatal, titleOverlay.element);
   root.append(shell);
 
   const skyRenderer = createNightSkyRenderer({

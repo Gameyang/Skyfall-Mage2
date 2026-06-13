@@ -1,6 +1,8 @@
 import { BATTLE_FIELD_HEIGHT, BATTLE_FIELD_WIDTH } from '../battlefield.js';
 import gameOverScreenUrl from '../../assets/generated/game-over-screen.webp?url';
 
+const DISTANT_BACKGROUND_PARALLAX = 0.18;
+
 export function createGameCanvasRenderer({ canvas }) {
   return new GameCanvasRenderer({ canvas });
 }
@@ -92,8 +94,11 @@ class GameCanvasRenderer {
 
     const cameraVisible = viewport?.visible || this.centeredVisible;
     const pan = getCameraPanOffset(this.centeredVisible, cameraVisible, this.cssScale);
+    const distantPan = getDistantBackgroundPanOffset(pan);
     host.style.setProperty('--camera-pan-x', `${pan.x.toFixed(2)}px`);
     host.style.setProperty('--camera-pan-y', `${pan.y.toFixed(2)}px`);
+    host.style.setProperty('--distant-pan-x', `${distantPan.x.toFixed(2)}px`);
+    host.style.setProperty('--distant-pan-y', `${distantPan.y.toFixed(2)}px`);
   }
 
   getSprite(url) {
@@ -864,6 +869,16 @@ export function getCameraPanOffset(centeredVisible = {}, cameraVisible = {}, css
   return {
     x: (centeredX - cameraX) * scaleX,
     y: (centeredY - cameraY) * scaleY,
+  };
+}
+
+export function getDistantBackgroundPanOffset(cameraPan = {}, factor = DISTANT_BACKGROUND_PARALLAX) {
+  const x = Number.isFinite(cameraPan.x) ? cameraPan.x : 0;
+  const y = Number.isFinite(cameraPan.y) ? cameraPan.y : 0;
+
+  return {
+    x: x * factor,
+    y: y * factor,
   };
 }
 

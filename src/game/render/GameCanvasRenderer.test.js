@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getCameraPanOffset,
   getContainedImageRect,
+  getDistantBackgroundPanOffset,
   getVisibleCanvasArea,
   getVisibleScreenRect,
 } from './GameCanvasRenderer.js';
@@ -57,6 +58,13 @@ describe('game canvas screen art layout', () => {
       x: 0,
       y: -280,
     });
+  });
+
+  it('uses a slower parallax offset for the distant background', () => {
+    const pan = getDistantBackgroundPanOffset({ x: 80, y: -280 });
+
+    expect(pan.x).toBeCloseTo(14.4);
+    expect(pan.y).toBeCloseTo(-50.4);
   });
 
   it('fits square game-over art as large as possible while reserving status text space', () => {

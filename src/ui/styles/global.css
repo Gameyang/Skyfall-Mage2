@@ -31,6 +31,8 @@ button {
   --screen-shake-y: 0px;
   --camera-pan-x: 0px;
   --camera-pan-y: 0px;
+  --distant-pan-x: 0px;
+  --distant-pan-y: 0px;
 }
 
 canvas {
@@ -73,6 +75,24 @@ canvas {
 
 .sky-canvas {
   z-index: 0;
+}
+
+.distant-background {
+  position: absolute;
+  top: -64px;
+  left: -64px;
+  z-index: 0;
+  width: calc(var(--screen-width) + 128px);
+  height: calc(var(--screen-height) + 128px);
+  object-fit: cover;
+  pointer-events: none;
+  opacity: 0.72;
+  filter: saturate(1.18) contrast(1.06);
+  transform: translate(
+    calc(var(--screen-shake-x) + var(--distant-pan-x)),
+    calc(var(--screen-shake-y) + var(--distant-pan-y))
+  );
+  will-change: transform;
 }
 
 .material-canvas {
