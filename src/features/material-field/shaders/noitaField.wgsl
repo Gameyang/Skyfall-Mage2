@@ -1890,7 +1890,7 @@ fn electricStrandColor(cell: u32, x: u32, y: u32, local: vec2<f32>, base: vec4<f
   }
 
   let flicker = 0.82 + f32(hash(x, y, params.frame + 211u) & 63u) / 63.0 * 0.24;
-  let strand = vec3<f32>(0.32, 1.1, 1.85) * strength * flicker;
+  let strand = vec3<f32>(0.46, 1.42, 2.32) * strength * flicker;
   return vec4<f32>(base.rgb + strand, max(base.a, min(1.0, strength * 1.45)));
 }
 

@@ -287,8 +287,8 @@ describe('material field shader profiles', () => {
 
   it('keeps bloom restrained so electric particles do not overwhelm strand shapes', () => {
     expect(BLOOM_CONFIG).toEqual(expect.objectContaining({
-      threshold: 1.18,
-      intensity: 0.48,
+      threshold: 1.1,
+      intensity: 0.56,
       radius: 0.9,
       levels: 5,
     }));
@@ -305,6 +305,7 @@ describe('material field shader profiles', () => {
     expect(materialFieldShaderSource).toContain('isElectricVisualSourceAt(x - 1, y) && isElectricVisualSourceAt(x + 1, y)');
     expect(materialFieldShaderSource).toContain('isElectricVisualSourceAt(x + dx * 3, y + dy * 3)');
     expect(materialFieldShaderSource).toContain('electricDirectionalBridgeStrength(local, ix, iy, 1, 0');
+    expect(materialFieldShaderSource).toContain('vec3<f32>(0.46, 1.42, 2.32) * strength * flicker');
     expect(materialFieldShaderSource).toContain('let gridLocal = fract(gridPosition)');
     expect(materialFieldShaderSource).toContain('return electricStrandColor(cell, gx, gy, gridLocal, materialColor(cell, gx, gy))');
   });
