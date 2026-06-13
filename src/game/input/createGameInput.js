@@ -14,6 +14,13 @@ const KEY_TO_INPUT = Object.freeze({
   ArrowRight: 'right',
 });
 
+const KEY_TO_ACTION = Object.freeze({
+  Enter: 'confirm',
+  Space: 'confirm',
+  KeyQ: 'rotateLoadoutLeft',
+  KeyE: 'rotateLoadoutRight',
+});
+
 export function createGameInput({ canvas, state }) {
   const keyboardInput = createInputSnapshot();
   const touchInput = createInputSnapshot();
@@ -40,10 +47,21 @@ export function createGameInput({ canvas, state }) {
 
   const setKeyboardInput = (event, isPressed) => {
     const input = KEY_TO_INPUT[event.code];
-    if (!input) return;
+    const action = KEY_TO_ACTION[event.code];
+    if (!input && !action) return;
 
     event.preventDefault();
-    keyboardInput[input] = isPressed;
+    if (input) {
+      keyboardInput[input] = isPressed;
+    }
+    if (action) {
+      state.input[action] = isPressed;
+      if (isPressed && !event.repeat) {
+        if (action === 'confirm') state.input.confirmPressed = true;
+        if (action === 'rotateLoadoutLeft') state.input.rotateLoadoutLeftPressed = true;
+        if (action === 'rotateLoadoutRight') state.input.rotateLoadoutRightPressed = true;
+      }
+    }
     syncInput();
   };
 
@@ -120,6 +138,12 @@ export function createGameInput({ canvas, state }) {
 
   const onBlur = () => {
     clearInputSnapshot(keyboardInput);
+    state.input.confirm = false;
+    state.input.confirmPressed = false;
+    state.input.rotateLoadoutLeft = false;
+    state.input.rotateLoadoutLeftPressed = false;
+    state.input.rotateLoadoutRight = false;
+    state.input.rotateLoadoutRightPressed = false;
     resetTouchInput();
   };
 

@@ -1,5 +1,6 @@
 import { createWaveRuntimeState } from './waveDirector.js';
 import { getSkillSequenceDelayMs } from './skillSequence.js';
+import { createStarterWeaponState } from './weapons/weaponRoller.js';
 
 const DEFAULT_STATE_CONTENT = Object.freeze({
   player: Object.freeze({
@@ -47,6 +48,10 @@ export function createGameState({ width = 1280, height = 720, content = DEFAULT_
       right: false,
       vectorX: 0,
       vectorY: 0,
+      confirm: false,
+      confirmPressed: false,
+      rotateLoadoutLeftPressed: false,
+      rotateLoadoutRightPressed: false,
     },
     player: {
       x: width * 0.5,
@@ -68,6 +73,10 @@ export function createGameState({ width = 1280, height = 720, content = DEFAULT_
       itemDrops: [],
       lostItems: [],
     },
+    weapons: content.weapons
+      ? createStarterWeaponState({ content, seed: content.runSeed || 'starter' })
+      : null,
+    revealShop: null,
     skills: createSkillState(content.skills, orderedInitialSkillIds),
     waves: createWaveState(content.waves),
     frameEvents: [],

@@ -2,6 +2,10 @@ import { GAS_FLOW_CONFIG } from '../features/material-field/config.js';
 import { circlesIntersect, clamp, distance, distanceSq, hash01, normalize } from './math.js';
 import { hasEnemyReachedExit, updateEnemyPathPosition } from './enemyPaths.js';
 import { getSkillSequenceDelayMs } from './skillSequence.js';
+import { updateRevealShop } from './shop/revealProgressSystem.js';
+import { startRevealShopAfterWave } from './shop/revealShopEncounter.js';
+import { consumeWeaponCommandInput, syncWeaponRuntimeState } from './weapons/weaponInventory.js';
+import { createRuntimeSkillMapForWeapons } from './weapons/weaponRuntimeBuilder.js';
 import {
   createWaveRuntimeState,
   isWaveRuntimeStateCurrent,
@@ -34,6 +38,7 @@ const DEFAULT_SYSTEM_CONTENT = Object.freeze({
   skills: Object.freeze({}),
   waves: Object.freeze([]),
   items: Object.freeze({}),
+  weapons: null,
   loot: Object.freeze({
     enemyDrops: Object.freeze([]),
   }),
@@ -49,9 +54,33 @@ export function updateGame(state, dtMs, content = DEFAULT_SYSTEM_CONTENT) {
   state.session.contactFlashMs = Math.max(0, state.session.contactFlashMs - dt);
 
   syncRuntimeCollections(state, content);
+  consumeWeaponCommandInput(state);
   updatePlayer(state, dt);
   updatePlayerTrailHistory(state);
+
+  if (state.revealShop?.status === 'revealing') {
+    updateItemDrops(state, dt, content);
+    updateLostItems(state, dt);
+    resolveItemPickups(state, content);
+    updateRevealShop(state, dt, content);
+    autoUsePlayerConsumables(state, content);
+    cleanupEntities(state);
+    clearCommandInput(state);
+    return state;
+  }
+
   updateWaveSpawns(state, content);
+  const completedWaveEvent = state.frameEvents.find((event) => event.type === 'WaveCompleted');
+  if (completedWaveEvent && content.weapons && state.weapons) {
+    startRevealShopAfterWave(state, content, completedWaveEvent);
+    updateItemDrops(state, dt, content);
+    updateLostItems(state, dt);
+    resolveItemPickups(state, content);
+    autoUsePlayerConsumables(state, content);
+    clearCommandInput(state);
+    return state;
+  }
+
   updateEnemies(state, dt);
   updateItemDrops(state, dt, content);
   updateLostItems(state, dt);
@@ -63,6 +92,7 @@ export function updateGame(state, dtMs, content = DEFAULT_SYSTEM_CONTENT) {
   resolvePlayerContacts(state, content);
   autoUsePlayerConsumables(state, content);
   cleanupEntities(state);
+  clearCommandInput(state);
 
   return state;
 }
@@ -91,6 +121,9 @@ export function syncRuntimeCollections(state, content = DEFAULT_SYSTEM_CONTENT) 
   }
   if (!state.player.collectedItems) {
     state.player.collectedItems = [];
+  }
+  if (state.weapons) {
+    syncWeaponRuntimeState(state);
   }
 
   for (const skillId of Object.keys(content.skills || {})) {
@@ -306,6 +339,11 @@ export function updateAutoAttack(state, dtMs, content = DEFAULT_SYSTEM_CONTENT) 
 }
 
 export function updateAutoSkills(state, dtMs, content = DEFAULT_SYSTEM_CONTENT) {
+  if (content.weapons && state.weapons) {
+    updateAutoWeapons(state, dtMs, content);
+    return;
+  }
+
   const skills = content.skills || {};
   updateSkillCooldowns(state, dtMs, skills);
 
@@ -326,6 +364,63 @@ export function updateAutoSkills(state, dtMs, content = DEFAULT_SYSTEM_CONTENT) 
     if (!projectiles.length) continue;
 
     skillState.cooldownRemainingMs += skill.cooldownMs ?? DEFAULT_SKILL_COOLDOWN_MS;
+  }
+}
+
+function updateAutoWeapons(state, dtMs, content = DEFAULT_SYSTEM_CONTENT) {
+  syncWeaponRuntimeState(state);
+  const runtimeSkills = createRuntimeSkillMapForWeapons(state, content);
+  updateWeaponCooldowns(state, dtMs);
+
+  const equipped = state.weapons.equippedWeaponInstanceIds || [];
+  if (!equipped.some(Boolean)) return;
+
+  let sequenceIndex = normalizeSequenceIndex(state.weapons.attackSequenceIndex, equipped.length);
+  let attempts = 0;
+  while (attempts < equipped.length) {
+    const instanceId = equipped[sequenceIndex];
+    if (!instanceId) {
+      sequenceIndex = (sequenceIndex + 1) % equipped.length;
+      attempts += 1;
+      continue;
+    }
+
+    const runtime = state.weapons.equippedRuntime[sequenceIndex];
+    if (!runtime || runtime.cooldownRemainingMs > 0) {
+      state.weapons.attackSequenceIndex = sequenceIndex;
+      return;
+    }
+
+    const skill = runtimeSkills[instanceId];
+    if (!skill) {
+      sequenceIndex = (sequenceIndex + 1) % equipped.length;
+      attempts += 1;
+      continue;
+    }
+
+    const target = selectTargetForSkill(state, skill);
+    if (!target) {
+      state.weapons.attackSequenceIndex = sequenceIndex;
+      return;
+    }
+
+    const projectiles = spawnProjectilesFromSkill(state, skill, target, instanceId);
+    if (!projectiles.length) {
+      state.weapons.attackSequenceIndex = sequenceIndex;
+      return;
+    }
+
+    runtime.cooldownRemainingMs += skill.cooldownMs ?? DEFAULT_SKILL_COOLDOWN_MS;
+    state.weapons.attackSequenceIndex = (sequenceIndex + 1) % equipped.length;
+    return;
+  }
+
+  state.weapons.attackSequenceIndex = sequenceIndex;
+}
+
+function updateWeaponCooldowns(state, dtMs) {
+  for (const runtime of state.weapons?.equippedRuntime || []) {
+    runtime.cooldownRemainingMs = Math.max(0, (runtime.cooldownRemainingMs || 0) - dtMs);
   }
 }
 
@@ -462,6 +557,7 @@ function spawnProjectileEntity(state, skill, target, skillId, projectileDefiniti
     id: state.session.nextProjectileId,
     skillId,
     definitionId: skill.id,
+    skillSnapshot: skill,
     x: spawn.x,
     y: spawn.y,
     vx: direction.x * projectileDefinition.speed,
@@ -470,6 +566,7 @@ function spawnProjectileEntity(state, skill, target, skillId, projectileDefiniti
     damage: projectileDefinition.damage,
     lifetimeMs: projectileDefinition.lifetimeMs,
     ageMs: 0,
+    homing: projectileDefinition.homing,
     energy: createProjectileEnergyState(projectileDefinition.energy),
     visual: projectileDefinition.visual,
     patternIndex: spawn.patternIndex ?? 0,
@@ -501,11 +598,51 @@ function rotateVector(vector, angle) {
 export function updateProjectiles(state, dtMs) {
   const dt = dtMs / 1000;
   for (const projectile of state.entities.projectiles) {
+    updateProjectileHoming(state, projectile, dtMs);
     projectile.x += projectile.vx * dt;
     projectile.y += projectile.vy * dt;
     projectile.ageMs += dtMs;
     updateProjectileEnergy(state, projectile, dtMs);
   }
+}
+
+function updateProjectileHoming(state, projectile, dtMs) {
+  const homing = projectile.homing;
+  if (!homing) return;
+
+  const target = selectNearestProjectileTarget(state, projectile);
+  if (!target) return;
+
+  const speed = Math.max(1, Math.hypot(projectile.vx, projectile.vy));
+  const currentAngle = Math.atan2(projectile.vy, projectile.vx);
+  const targetAngle = Math.atan2(target.y - projectile.y, target.x - projectile.x);
+  const maxTurn = (homing.turnRateRadiansPerSecond ?? 6) * (dtMs / 1000);
+  const delta = clamp(normalizeAngle(targetAngle - currentAngle), -maxTurn, maxTurn);
+  const strength = clamp((homing.strengthPerSecond ?? 4) * (dtMs / 1000), 0, 1);
+  const nextAngle = currentAngle + delta * strength;
+  projectile.vx = Math.cos(nextAngle) * speed;
+  projectile.vy = Math.sin(nextAngle) * speed;
+}
+
+function selectNearestProjectileTarget(state, projectile) {
+  let bestTarget = null;
+  let bestDistanceSq = Infinity;
+  for (const enemy of state.entities.enemies) {
+    if (enemy.hp <= 0) continue;
+    const currentDistanceSq = distanceSq(projectile, enemy);
+    if (currentDistanceSq < bestDistanceSq) {
+      bestDistanceSq = currentDistanceSq;
+      bestTarget = enemy;
+    }
+  }
+  return bestTarget;
+}
+
+function normalizeAngle(angle) {
+  let value = angle;
+  while (value > Math.PI) value -= Math.PI * 2;
+  while (value < -Math.PI) value += Math.PI * 2;
+  return value;
 }
 
 export function updateItemDrops(state, dtMs, content = DEFAULT_SYSTEM_CONTENT) {
@@ -1300,9 +1437,17 @@ function getSkillMaterialEffects(skill, phase) {
 }
 
 function getSkillForProjectile(content, projectile) {
+  if (projectile.skillSnapshot) return projectile.skillSnapshot;
   const skills = content.skills || {};
   if (skills[projectile.skillId]) return skills[projectile.skillId];
   return Object.values(skills).find((skill) => skill.id === projectile.skillId) || null;
+}
+
+function clearCommandInput(state) {
+  if (!state.input) return;
+  state.input.confirmPressed = false;
+  state.input.rotateLoadoutLeftPressed = false;
+  state.input.rotateLoadoutRightPressed = false;
 }
 
 function lerp(min, max, ratio) {

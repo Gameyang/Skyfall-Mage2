@@ -55,6 +55,8 @@ class GameCanvasRenderer {
     drawCollectedItemTrail(ctx, state, this);
     drawLostItems(ctx, state, this);
     drawPlayer(ctx, state, this);
+    drawWeaponHud(ctx, state);
+    drawRevealShopOverlay(ctx, state);
 
     if (state.session.gameOver) {
       drawGameOver(ctx, width, height, state, this);
@@ -332,6 +334,251 @@ function drawPlayerHealthBar(ctx, player, visualSize) {
   ctx.strokeStyle = 'rgba(236, 246, 255, 0.76)';
   ctx.lineWidth = 1;
   ctx.strokeRect(x - 0.5, y - 0.5, width + 1, height + 1);
+}
+
+function drawWeaponHud(ctx, state) {
+  if (!state.weapons || state.revealShop?.status === 'revealing') return;
+
+  const screen = getVisibleScreenRect(state.viewport, state.viewport.width, state.viewport.height);
+  const x = screen.x + 12;
+  const y = screen.y + 12;
+  const slotWidth = clamp(screen.width * 0.2, 92, 150);
+  const slotHeight = 34;
+  const gap = 6;
+  const coin = getCollectedQuantity(state, 'coin');
+
+  ctx.save();
+  ctx.font = '700 12px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  drawHudPill(ctx, x, y, 86, slotHeight, `Coin ${coin}`);
+
+  const startX = x + 94;
+  for (let index = 0; index < 3; index += 1) {
+    const slotX = startX + index * (slotWidth + gap);
+    const instanceId = state.weapons.equippedWeaponInstanceIds[index];
+    const weapon = instanceId ? state.weapons.weaponInstancesById[instanceId] : null;
+    const runtime = state.weapons.equippedRuntime?.[index];
+    const cooldownMs = runtime?.cooldownRemainingMs || 0;
+    const maxCooldownMs = Math.max(cooldownMs, weapon?.rolledStats?.cooldownMs || 1);
+    const readyRatio = clamp(1 - cooldownMs / maxCooldownMs, 0, 1);
+
+    ctx.fillStyle = 'rgba(5, 9, 18, 0.72)';
+    ctx.strokeStyle = index === state.weapons.attackSequenceIndex
+      ? 'rgba(255, 241, 163, 0.9)'
+      : 'rgba(215, 228, 255, 0.24)';
+    ctx.lineWidth = 1.5;
+    roundRect(ctx, slotX, y, slotWidth, slotHeight, 6);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(116, 220, 255, 0.24)';
+    ctx.fillRect(slotX + 1, y + slotHeight - 4, (slotWidth - 2) * readyRatio, 3);
+
+    ctx.fillStyle = '#f4fbff';
+    const label = weapon ? `${index + 1} ${weapon.displayName}` : `${index + 1} Empty`;
+    ctx.fillText(truncateText(ctx, label, slotWidth - 14), slotX + 7, y + slotHeight * 0.5);
+  }
+
+  ctx.fillStyle = 'rgba(215, 228, 255, 0.72)';
+  ctx.font = '600 11px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+  ctx.fillText('Q/E reorder', startX, y + slotHeight + 12);
+  ctx.restore();
+}
+
+function drawRevealShopOverlay(ctx, state) {
+  const shop = state.revealShop;
+  if (!shop || shop.status !== 'revealing') return;
+
+  const screen = getVisibleScreenRect(state.viewport, state.viewport.width, state.viewport.height);
+  const margin = clamp(Math.min(screen.width, screen.height) * 0.018, 6, 14);
+  const headerHeight = clamp(screen.height * 0.07, 34, 54);
+  const panelGap = margin;
+  const panelWidth = (screen.width - margin * 2 - panelGap) * 0.5;
+  const panelHeight = (screen.height - headerHeight - margin * 2 - panelGap) * 0.5;
+  const originY = screen.y + headerHeight + margin;
+  const coin = getCollectedQuantity(state, 'coin');
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(2, 4, 10, 0.54)';
+  ctx.fillRect(screen.x, screen.y, screen.width, screen.height);
+
+  ctx.fillStyle = '#f4fbff';
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  ctx.font = `800 ${clamp(screen.width * 0.026, 13, 18)}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  ctx.fillText(`Weapon reveal - Wave ${shop.waveIndex}`, screen.x + margin, screen.y + headerHeight * 0.42);
+  ctx.textAlign = 'right';
+  ctx.fillText(`Coin ${coin}`, screen.x + screen.width - margin, screen.y + headerHeight * 0.42);
+
+  ctx.font = `600 ${clamp(screen.width * 0.018, 10, 13)}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  ctx.fillStyle = 'rgba(215, 228, 255, 0.78)';
+  ctx.textAlign = 'left';
+  ctx.fillText(
+    `${shop.statusMessage || 'Stand still to reveal'} | Enter claim`,
+    screen.x + margin,
+    screen.y + headerHeight * 0.78,
+  );
+
+  for (const panel of shop.panels) {
+    const rect = getRevealPanelRect(panel.quadrant, {
+      x: screen.x + margin,
+      y: originY,
+      panelWidth,
+      panelHeight,
+      panelGap,
+    });
+    drawRevealPanel(ctx, state, shop, panel, rect);
+  }
+
+  ctx.restore();
+}
+
+function drawRevealPanel(ctx, state, shop, panel, rect) {
+  const active = shop.activePanelId === panel.panelId;
+  const identity = panel.rows[0];
+  const title = identity?.revealed
+    ? `${panel.weaponInstance.rarity} ${identity.valueText}`
+    : `${panel.weaponInstance.rarity} ???`;
+  const headerHeight = clamp(rect.height * 0.17, 32, 50);
+  const footerHeight = clamp(rect.height * 0.12, 22, 34);
+  const rowAreaHeight = Math.max(1, rect.height - headerHeight - footerHeight - 10);
+  const rowHeight = Math.max(11, Math.min(20, rowAreaHeight / Math.max(1, panel.rows.length)));
+  const rowFontSize = clamp(rowHeight * 0.48, 7, 11);
+
+  ctx.fillStyle = active ? 'rgba(16, 31, 46, 0.88)' : 'rgba(7, 11, 22, 0.78)';
+  ctx.strokeStyle = active ? 'rgba(255, 241, 163, 0.95)' : 'rgba(215, 228, 255, 0.24)';
+  ctx.lineWidth = active ? 2.5 : 1.25;
+  roundRect(ctx, rect.x, rect.y, rect.width, rect.height, 8);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.font = `800 ${clamp(rect.width * 0.055, 12, 17)}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  ctx.fillStyle = '#f4fbff';
+  ctx.fillText(truncateText(ctx, title, rect.width - 20), rect.x + 10, rect.y + headerHeight * 0.38);
+  ctx.font = `700 ${clamp(rect.width * 0.04, 9, 12)}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  ctx.fillStyle = getRarityColor(panel.weaponInstance.rarity);
+  ctx.fillText(identity?.revealed ? panel.weaponInstance.displayName : 'Unidentified weapon', rect.x + 10, rect.y + headerHeight * 0.72);
+
+  const rowsStartY = rect.y + headerHeight;
+  ctx.font = `650 ${rowFontSize}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  for (let index = 0; index < panel.rows.length; index += 1) {
+    const row = panel.rows[index];
+    const y = rowsStartY + index * rowHeight;
+    const activeRow = active && index === panel.activeRowIndex && !row.revealed;
+    drawRevealRow(ctx, row, {
+      x: rect.x + 8,
+      y,
+      width: rect.width - 16,
+      height: rowHeight - 1,
+      active: activeRow,
+    });
+  }
+
+  const footerY = rect.y + rect.height - footerHeight * 0.5;
+  ctx.textAlign = 'center';
+  ctx.font = `800 ${clamp(rect.width * 0.042, 10, 13)}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  ctx.fillStyle = panel.claimState === 'claimable' ? '#fff1a3' : 'rgba(215, 228, 255, 0.58)';
+  ctx.fillText(getPanelFooterText(panel), rect.x + rect.width * 0.5, footerY);
+}
+
+function drawRevealRow(ctx, row, rect) {
+  if (rect.active) {
+    ctx.fillStyle = 'rgba(255, 241, 163, 0.12)';
+    roundRect(ctx, rect.x - 2, rect.y, rect.width + 4, rect.height, 4);
+    ctx.fill();
+  }
+
+  const progressText = row.revealed
+    ? 'open'
+    : `${row.revealProgress}/${row.revealCost}`;
+  const value = row.revealed ? row.valueText : row.labelWhenLocked;
+  const labelWidth = rect.width * 0.38;
+  const progressWidth = rect.width * 0.22;
+  const valueWidth = rect.width - labelWidth - progressWidth - 10;
+
+  ctx.textAlign = 'left';
+  ctx.fillStyle = row.revealed ? 'rgba(244, 251, 255, 0.94)' : 'rgba(215, 228, 255, 0.68)';
+  ctx.fillText(truncateText(ctx, row.label, labelWidth), rect.x, rect.y + rect.height * 0.5);
+
+  ctx.textAlign = 'right';
+  ctx.fillStyle = row.revealed ? '#9ff0c2' : 'rgba(255, 241, 163, 0.84)';
+  ctx.fillText(progressText, rect.x + labelWidth + progressWidth, rect.y + rect.height * 0.5);
+
+  ctx.fillStyle = row.revealed ? '#f4fbff' : 'rgba(244, 251, 255, 0.58)';
+  ctx.fillText(
+    truncateText(ctx, value, valueWidth),
+    rect.x + rect.width,
+    rect.y + rect.height * 0.5,
+  );
+}
+
+function getRevealPanelRect(quadrant, layout) {
+  const right = quadrant.endsWith('Right');
+  const bottom = quadrant.startsWith('bottom');
+  return {
+    x: layout.x + (right ? layout.panelWidth + layout.panelGap : 0),
+    y: layout.y + (bottom ? layout.panelHeight + layout.panelGap : 0),
+    width: layout.panelWidth,
+    height: layout.panelHeight,
+  };
+}
+
+function getPanelFooterText(panel) {
+  if (panel.claimState === 'claimed') return 'Claimed';
+  if (panel.claimState === 'claimable') return 'Claim ready';
+  return 'Reveal all basics';
+}
+
+function drawHudPill(ctx, x, y, width, height, text) {
+  ctx.fillStyle = 'rgba(5, 9, 18, 0.72)';
+  ctx.strokeStyle = 'rgba(215, 228, 255, 0.24)';
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, x, y, width, height, 6);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#fff1a3';
+  ctx.fillText(text, x + 9, y + height * 0.5);
+}
+
+function getCollectedQuantity(state, itemId) {
+  return (state.player.collectedItems || [])
+    .filter((item) => item.itemId === itemId)
+    .reduce((total, item) => total + Math.max(0, item.quantity || 0), 0);
+}
+
+function getRarityColor(rarity) {
+  if (rarity === 'Epic') return '#d9a6ff';
+  if (rarity === 'Rare') return '#74dcff';
+  if (rarity === 'Uncommon') return '#9ff0c2';
+  return '#d7e4ff';
+}
+
+function truncateText(ctx, text, maxWidth) {
+  const value = String(text || '');
+  if (ctx.measureText(value).width <= maxWidth) return value;
+  let truncated = value;
+  while (truncated.length > 1 && ctx.measureText(`${truncated}...`).width > maxWidth) {
+    truncated = truncated.slice(0, -1);
+  }
+  return `${truncated}...`;
+}
+
+function roundRect(ctx, x, y, width, height, radius) {
+  const r = Math.min(radius, width * 0.5, height * 0.5);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + width - r, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+  ctx.lineTo(x + width, y + height - r);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  ctx.lineTo(x + r, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
 }
 
 function drawBatFallback(ctx, enemy, angle, flap) {

@@ -3,6 +3,9 @@ import { ENEMY_PATH_PATTERN_DEFINITIONS } from './enemyPathPatterns.js';
 import { ENEMY_SPAWN_PATTERN_DEFINITIONS } from './enemySpawnPatterns.js';
 import { createBaseElementSkillLoadout, SKILL_DEFINITIONS } from './skills.js';
 import { WAVE_DEFINITIONS } from './waves.js';
+import { ATTACK_PATTERN_DEFINITIONS } from './attackPatterns.js';
+import { WEAPON_AFFIX_DEFINITIONS } from './weaponAffixes.js';
+import { STARTER_WEAPON_DEFINITION_IDS, WEAPON_DEFINITIONS } from './weapons.js';
 import { createSeededWaveSequence } from '../waveRandomizer.js';
 
 export const HEADLESS_ENEMY_DEFINITIONS = Object.freeze({
@@ -77,6 +80,10 @@ export const HEADLESS_GAME_CONTENT = Object.freeze({
     skinUrls: Object.freeze([]),
   }),
   skills: SKILL_DEFINITIONS,
+  weapons: WEAPON_DEFINITIONS,
+  weaponAffixes: WEAPON_AFFIX_DEFINITIONS,
+  attackPatterns: ATTACK_PATTERN_DEFINITIONS,
+  starterWeaponDefinitionIds: STARTER_WEAPON_DEFINITION_IDS,
   createSkillLoadout: createBaseElementSkillLoadout,
   waves: WAVE_DEFINITIONS,
   enemyDifficulty: ENEMY_DIFFICULTY_CONFIG,
