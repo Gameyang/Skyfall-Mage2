@@ -366,9 +366,6 @@ function updateAutoWeapons(state, dtMs, content = DEFAULT_SYSTEM_CONTENT) {
     }
 
     runtime.cooldownRemainingMs += skill.cooldownMs ?? DEFAULT_SKILL_COOLDOWN_MS;
-    if (runtime.follower) {
-      runtime.follower.attackPulseMs = 180;
-    }
     state.weapons.attackSequenceIndex = (sequenceIndex + 1) % equipped.length;
     return;
   }

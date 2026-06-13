@@ -7,6 +7,7 @@ import { createGameState } from './GameState.js';
 import { startRevealShopAfterWave } from './shop/revealShopEncounter.js';
 import { getWeaponSlotPosition } from './weapons/weaponAnchors.js';
 import { syncWeaponRuntimeState } from './weapons/weaponInventory.js';
+import { buildWeaponRuntimeSkill } from './weapons/weaponRuntimeBuilder.js';
 import { createRevealPanels } from './weapons/weaponRoller.js';
 import { updateAutoAttack, updateGame } from './systems.js';
 
@@ -212,5 +213,15 @@ describe('weapon auto attack sequence', () => {
         y: origins[index].y,
       }));
     }
+  });
+
+  it('does not attach cast material effects to weapon firing', () => {
+    const content = createWeaponTestContent();
+    const state = createGameState({ width: 800, height: 800, content });
+    const instanceId = state.weapons.equippedWeaponInstanceIds[0];
+    const skill = buildWeaponRuntimeSkill(state.weapons.weaponInstancesById[instanceId], content);
+
+    expect(skill.materialEffects.cast).toEqual([]);
+    expect(skill.materialEffects.hit.length).toBeGreaterThan(0);
   });
 });

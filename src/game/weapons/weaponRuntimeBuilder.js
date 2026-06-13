@@ -175,19 +175,6 @@ function createProjectileEnergy(element, patternId, visual) {
 
 function createMaterialEffects(element, patternId, visual) {
   const material = visual.material;
-  const cast = element === 'sand' && patternId === 'bolt'
-    ? []
-    : [
-      {
-        material,
-        profile: visual.trailProfile,
-        life: element === 'electric' ? 24 : 14,
-        radius: element === 'electric' ? 6 : 5,
-        strength: element === 'electric' ? 235 : 200,
-        frames: 2,
-      },
-    ];
-
   const hitRadius = patternId === 'meteor' ? 18 : 10;
   const hit = [
     {
@@ -204,7 +191,7 @@ function createMaterialEffects(element, patternId, visual) {
   ];
 
   return {
-    cast,
+    cast: [],
     hit,
   };
 }

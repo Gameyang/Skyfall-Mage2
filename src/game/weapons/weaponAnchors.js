@@ -75,7 +75,6 @@ export function updateWeaponFollowerPositions(state, dtMs = 0) {
     }
 
     follower.phaseMs = phaseMs;
-    follower.attackPulseMs = Math.max(0, (follower.attackPulseMs || 0) - safeDtMs);
     runtime.follower = follower;
   }
 }
@@ -109,7 +108,6 @@ function normalizeWeaponFollower(follower, anchor, slotIndex) {
       x: follower.x,
       y: follower.y,
       phaseMs: Number.isFinite(follower.phaseMs) ? follower.phaseMs : slotIndex * 431,
-      attackPulseMs: Number.isFinite(follower.attackPulseMs) ? follower.attackPulseMs : 0,
     };
   }
 
@@ -117,7 +115,6 @@ function normalizeWeaponFollower(follower, anchor, slotIndex) {
     x: anchor.x,
     y: anchor.y,
     phaseMs: slotIndex * 431,
-    attackPulseMs: 0,
   };
 }
 

@@ -383,7 +383,7 @@ function drawEquippedWeapons(ctx, state, renderer) {
 
     const position = positions[index];
     const runtime = state.weapons.equippedRuntime?.[index];
-    const attackPulseRatio = clamp((runtime?.follower?.attackPulseMs || 0) / 180, 0, 1);
+    const bounceScale = getWeaponBounceScale(runtime?.follower?.phaseMs, index);
     const sprite = renderer.getSprite(weapon.spriteUrl);
     const size = weapon.spriteSize ?? 30;
     drawEquippedWeapon(ctx, {
@@ -392,33 +392,18 @@ function drawEquippedWeapons(ctx, state, renderer) {
       weapon,
       sprite,
       size,
-      attackPulseRatio,
+      bounceScale,
     });
   }
   ctx.restore();
 }
 
-function drawEquippedWeapon(ctx, { position, facing, weapon, sprite, size, attackPulseRatio }) {
+function drawEquippedWeapon(ctx, { position, facing, weapon, sprite, size, bounceScale }) {
   const angle = Math.atan2(facing.y, facing.x) + Math.PI * 0.5;
-  const pulseScale = 1 + attackPulseRatio * 0.16;
-  const glowRadius = size * (0.88 + attackPulseRatio * 0.52);
 
   ctx.save();
   ctx.translate(position.x, position.y);
-  ctx.scale(pulseScale, pulseScale);
-
-  const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, glowRadius * 1.8);
-  glow.addColorStop(0, attackPulseRatio > 0 ? 'rgba(255, 241, 163, 0.46)' : 'rgba(116, 220, 255, 0.18)');
-  glow.addColorStop(1, 'rgba(116, 220, 255, 0)');
-  ctx.fillStyle = glow;
-  ctx.beginPath();
-  ctx.arc(0, 0, glowRadius * 1.8, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = 'rgba(5, 9, 18, 0.26)';
-  ctx.beginPath();
-  ctx.ellipse(1, size * 0.38, size * 0.35, size * 0.11, 0, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.scale(bounceScale, bounceScale);
 
   ctx.save();
   ctx.rotate(angle);
@@ -428,16 +413,12 @@ function drawEquippedWeapon(ctx, { position, facing, weapon, sprite, size, attac
     drawWeaponFallback(ctx, size, weapon.rarity);
   }
   ctx.restore();
-
-  if (attackPulseRatio > 0) {
-    ctx.globalAlpha = attackPulseRatio;
-    ctx.strokeStyle = getRarityColor(weapon.rarity);
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(0, 0, size * (0.62 + attackPulseRatio * 0.22), 0, Math.PI * 2);
-    ctx.stroke();
-  }
   ctx.restore();
+}
+
+function getWeaponBounceScale(phaseMs, slotIndex) {
+  const phase = (Number.isFinite(phaseMs) ? phaseMs : slotIndex * 431) / 1000;
+  return 1 + Math.sin(phase * 4.2 + slotIndex * 0.7) * 0.035;
 }
 
 function drawWeaponFallback(ctx, size, rarity) {
