@@ -167,7 +167,6 @@ canvas {
   --title-art-size: min(calc(var(--screen-width) - 48px), calc(var(--screen-height) - 96px));
   display: grid;
   place-items: center;
-  align-self: center;
   width: var(--title-art-size);
   height: var(--title-art-size);
   max-width: 100%;
