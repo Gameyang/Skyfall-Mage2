@@ -19,11 +19,11 @@ describe('game canvas screen art layout', () => {
       top: 0,
       width: 1024,
       height: 1024,
-    }, 1024, 1024)).toEqual({
-      x: 256,
+    }, 512, 512)).toEqual({
+      x: 128,
       y: 0,
-      width: 512,
-      height: 1024,
+      width: 256,
+      height: 512,
     });
   });
 

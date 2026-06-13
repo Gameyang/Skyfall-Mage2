@@ -1,5 +1,5 @@
-export const GRID_WIDTH = 192;
-export const GRID_HEIGHT = 192;
+export const GRID_WIDTH = 256;
+export const GRID_HEIGHT = 256;
 export const WORKGROUP_SIZE = 8;
 export const CELL_COUNT = GRID_WIDTH * GRID_HEIGHT;
 export const CELL_BYTES = Uint32Array.BYTES_PER_ELEMENT;
