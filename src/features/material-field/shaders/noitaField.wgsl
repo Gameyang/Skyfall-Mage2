@@ -755,7 +755,62 @@ fn sparkTarget(x: i32, y: i32) -> vec2<i32> {
   return sandTarget(x, y, SPARK);
 }
 
+fn isElectricArcSourceCell(cell: u32) -> bool {
+  let mat = material(cell);
+  return isElectricCarrier(mat) || isSparkCarrier(mat);
+}
+
+fn canElectricArcEnter(mat: u32) -> bool {
+  return mat == EMPTY ||
+    mat == SMOKE ||
+    mat == STEAM ||
+    mat == DUST ||
+    mat == FIXED_ZONE ||
+    mat == AMPLIFY_ZONE ||
+    mat == SLOW_ZONE ||
+    mat == GRAVITY_ZONE;
+}
+
+fn electricLinkCandidate(x: i32, y: i32, dx: i32, dy: i32) -> vec2<i32> {
+  let nearMat = material(getCell(x + dx, y + dy));
+  if (canElectricArcEnter(nearMat) && isElectricArcSourceCell(getCell(x + dx * 2, y + dy * 2))) {
+    return vec2<i32>(x + dx, y + dy);
+  }
+  return vec2<i32>(x, y);
+}
+
+fn electricLinkTarget(x: i32, y: i32) -> vec2<i32> {
+  let phase = randByte(x, y, 58u) & 7u;
+  if (phase == 0u) {
+    return electricLinkCandidate(x, y, 1, 0);
+  }
+  if (phase == 1u) {
+    return electricLinkCandidate(x, y, -1, 0);
+  }
+  if (phase == 2u) {
+    return electricLinkCandidate(x, y, 0, -1);
+  }
+  if (phase == 3u) {
+    return electricLinkCandidate(x, y, 0, 1);
+  }
+  if (phase == 4u) {
+    return electricLinkCandidate(x, y, 1, -1);
+  }
+  if (phase == 5u) {
+    return electricLinkCandidate(x, y, -1, -1);
+  }
+  if (phase == 6u) {
+    return electricLinkCandidate(x, y, 1, 1);
+  }
+  return electricLinkCandidate(x, y, -1, 1);
+}
+
 fn electricTarget(x: i32, y: i32) -> vec2<i32> {
+  let linkTo = electricLinkTarget(x, y);
+  if ((linkTo.x != x || linkTo.y != y) && randByte(x, y, 57u) < 184u) {
+    return linkTo;
+  }
+
   if (randByte(x, y, 59u) < 92u) {
     return vec2<i32>(x, y);
   }
@@ -1698,12 +1753,114 @@ fn materialColor(cell: u32, x: u32, y: u32) -> vec4<f32> {
   return vec4<f32>(0.0, 0.0, 0.0, 0.0);
 }
 
+fn distanceToSegment(point: vec2<f32>, start: vec2<f32>, end: vec2<f32>) -> f32 {
+  let segment = end - start;
+  let ratio = clamp(dot(point - start, segment) / max(dot(segment, segment), 0.0001), 0.0, 1.0);
+  return length((point - start) - segment * ratio);
+}
+
+fn electricSegmentStrength(local: vec2<f32>, start: vec2<f32>, end: vec2<f32>, width: f32) -> f32 {
+  let dist = distanceToSegment(local, start, end);
+  return 1.0 - smoothstep(width, width + 0.075, dist);
+}
+
+fn electricStrandJitter(x: i32, y: i32, salt: u32) -> f32 {
+  return (f32(randByte(x, y, salt)) / 255.0 - 0.5) * 0.28;
+}
+
+fn isElectricVisualSourceAt(x: i32, y: i32) -> bool {
+  return isElectricArcSourceCell(getCell(x, y));
+}
+
+fn isElectricBridgeMaterial(mat: u32) -> bool {
+  return mat == EMPTY ||
+    mat == SMOKE ||
+    mat == STEAM ||
+    mat == DUST ||
+    mat == FIXED_ZONE ||
+    mat == AMPLIFY_ZONE ||
+    mat == SLOW_ZONE ||
+    mat == GRAVITY_ZONE;
+}
+
+fn electricNeighborStrength(local: vec2<f32>, x: i32, y: i32, dx: i32, dy: i32, salt: u32) -> f32 {
+  if (!isElectricVisualSourceAt(x + dx, y + dy)) {
+    return 0.0;
+  }
+
+  let offset = vec2<f32>(f32(dx), f32(dy));
+  let perpendicular = normalize(vec2<f32>(-offset.y, offset.x));
+  let end = vec2<f32>(0.5, 0.5) + offset * 0.64 + perpendicular * electricStrandJitter(x, y, salt);
+  let width = 0.045 + f32(randByte(x, y, salt + 1u) & 15u) / 255.0;
+  return electricSegmentStrength(local, vec2<f32>(0.5, 0.5), end, width);
+}
+
+fn electricBridgeStrength(mat: u32, x: i32, y: i32, local: vec2<f32>) -> f32 {
+  if (!isElectricBridgeMaterial(mat)) {
+    return 0.0;
+  }
+
+  var strength = 0.0;
+  if (isElectricVisualSourceAt(x - 1, y) && isElectricVisualSourceAt(x + 1, y)) {
+    let left = vec2<f32>(-0.08, 0.5 + electricStrandJitter(x, y, 175u));
+    let right = vec2<f32>(1.08, 0.5 + electricStrandJitter(x, y, 176u));
+    strength = max(strength, electricSegmentStrength(local, left, right, 0.052));
+  }
+  if (isElectricVisualSourceAt(x, y - 1) && isElectricVisualSourceAt(x, y + 1)) {
+    let top = vec2<f32>(0.5 + electricStrandJitter(x, y, 177u), -0.08);
+    let bottom = vec2<f32>(0.5 + electricStrandJitter(x, y, 178u), 1.08);
+    strength = max(strength, electricSegmentStrength(local, top, bottom, 0.052));
+  }
+  if (isElectricVisualSourceAt(x - 1, y - 1) && isElectricVisualSourceAt(x + 1, y + 1)) {
+    let start = vec2<f32>(-0.08, -0.08) + vec2<f32>(electricStrandJitter(x, y, 179u), -electricStrandJitter(x, y, 180u));
+    let end = vec2<f32>(1.08, 1.08) + vec2<f32>(electricStrandJitter(x, y, 181u), -electricStrandJitter(x, y, 182u));
+    strength = max(strength, electricSegmentStrength(local, start, end, 0.048));
+  }
+  if (isElectricVisualSourceAt(x + 1, y - 1) && isElectricVisualSourceAt(x - 1, y + 1)) {
+    let start = vec2<f32>(1.08, -0.08) + vec2<f32>(electricStrandJitter(x, y, 183u), electricStrandJitter(x, y, 184u));
+    let end = vec2<f32>(-0.08, 1.08) + vec2<f32>(electricStrandJitter(x, y, 185u), electricStrandJitter(x, y, 186u));
+    strength = max(strength, electricSegmentStrength(local, start, end, 0.048));
+  }
+  return strength;
+}
+
+fn electricStrandColor(cell: u32, x: u32, y: u32, local: vec2<f32>, base: vec4<f32>) -> vec4<f32> {
+  let mat = material(cell);
+  let ix = i32(x);
+  let iy = i32(y);
+  var strength = electricBridgeStrength(mat, ix, iy, local);
+
+  if (isElectricArcSourceCell(cell)) {
+    strength = max(strength, electricNeighborStrength(local, ix, iy, 1, 0, 187u));
+    strength = max(strength, electricNeighborStrength(local, ix, iy, -1, 0, 189u));
+    strength = max(strength, electricNeighborStrength(local, ix, iy, 0, -1, 191u));
+    strength = max(strength, electricNeighborStrength(local, ix, iy, 0, 1, 193u));
+    strength = max(strength, electricNeighborStrength(local, ix, iy, 1, -1, 195u));
+    strength = max(strength, electricNeighborStrength(local, ix, iy, -1, -1, 197u));
+    strength = max(strength, electricNeighborStrength(local, ix, iy, 1, 1, 199u));
+    strength = max(strength, electricNeighborStrength(local, ix, iy, -1, 1, 201u));
+  }
+
+  if (strength <= 0.0) {
+    return base;
+  }
+
+  let flicker = 0.74 + f32(hash(x, y, params.frame + 211u) & 63u) / 63.0 * 0.46;
+  let strand = vec3<f32>(0.9, 3.05, 5.4) * strength * flicker;
+  return vec4<f32>(base.rgb + strand, max(base.a, min(1.0, strength * 1.35)));
+}
+
 @fragment
 fn fragmentMain(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
   let cw = max(params.canvasWidth, 1u);
   let ch = max(params.canvasHeight, 1u);
-  let gx = min(params.width - 1u, u32((position.x / f32(cw)) * f32(params.width)));
-  let gy = min(params.height - 1u, u32((position.y / f32(ch)) * f32(params.height)));
+  let gridPosition = vec2<f32>(
+    (position.x / f32(cw)) * f32(params.width),
+    (position.y / f32(ch)) * f32(params.height),
+  );
+  let gx = min(params.width - 1u, u32(gridPosition.x));
+  let gy = min(params.height - 1u, u32(gridPosition.y));
+  let gridLocal = fract(gridPosition);
   let cell = src[indexOf(gx, gy)];
-  return materialColor(cell, gx, gy);
+  return electricStrandColor(cell, gx, gy, gridLocal, materialColor(cell, gx, gy));
 }

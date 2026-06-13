@@ -274,11 +274,24 @@ describe('material field shader profiles', () => {
 
   it('preserves electric movement from every direction it can target', () => {
     expect(materialFieldShaderSource).toContain('fn electricTarget');
+    expect(materialFieldShaderSource).toContain('fn electricLinkTarget');
+    expect(materialFieldShaderSource).toContain('fn electricLinkCandidate');
+    expect(materialFieldShaderSource).toContain('canElectricArcEnter(nearMat)');
     expect(materialFieldShaderSource).toContain('targetMatches(electricTarget(x - 1, y), x, y)');
     expect(materialFieldShaderSource).toContain('targetMatches(electricTarget(x + 1, y), x, y)');
     expect(materialFieldShaderSource).toContain('targetMatches(electricTarget(x, y + 1), x, y)');
     expect(materialFieldShaderSource).not.toContain('AUX_ELECTRIC_RESIDUAL_SPARK');
     expect(materialFieldShaderSource).not.toContain('return pack(SPARK, 6u + (randByte(x, y, 56u) & 7u)');
     expect(materialFieldShaderSource).toContain('return pack(SPARK, life(sparkAbove) - 1u, aux(sparkAbove))');
+  });
+
+  it('renders electric carriers as connected strand segments instead of isolated dots', () => {
+    expect(materialFieldShaderSource).toContain('fn electricStrandColor');
+    expect(materialFieldShaderSource).toContain('fn electricBridgeStrength');
+    expect(materialFieldShaderSource).toContain('fn electricNeighborStrength');
+    expect(materialFieldShaderSource).toContain('fn distanceToSegment');
+    expect(materialFieldShaderSource).toContain('isElectricVisualSourceAt(x - 1, y) && isElectricVisualSourceAt(x + 1, y)');
+    expect(materialFieldShaderSource).toContain('let gridLocal = fract(gridPosition)');
+    expect(materialFieldShaderSource).toContain('return electricStrandColor(cell, gx, gy, gridLocal, materialColor(cell, gx, gy))');
   });
 });
